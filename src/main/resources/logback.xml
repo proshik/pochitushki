@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS Z} [%X{transaction.id},%X{trace.id}] [%thread] %-5level [%class{0}] : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+
+    <appender name="ConsoleAppender" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="ConsoleAppender"/>
+    </root>
+
+    <logger name="ru.proshik.pochitushki" level="DEBUG"/>
+
+    <!-- to suppress useless WARN: https://github.com/Netflix/Hystrix/issues/275 -->
+    <logger name="com.netflix.config.sources.URLConfigurationSource" level="ERROR"/>
+</configuration>

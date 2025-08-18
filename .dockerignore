@@ -1,0 +1,10 @@
+.git
+.idea
+build
+.gradle
+private
+README.md
+*.log
+Dockerfile
+docker-compose.yml
+.dockerignore

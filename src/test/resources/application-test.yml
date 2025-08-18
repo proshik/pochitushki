@@ -1,0 +1,23 @@
+spring:
+  jdbc:
+    template:
+      query-timeout: PT5S
+  datasource:
+    hikari:
+      auto-commit: true
+      pool-name: main-db-pool
+      minimum-idle: 1
+      maximum-pool-size: 3
+      connection-timeout: 2000
+      validation-timeout: 1000 # Должно быть меньше, чем connection-timeout
+      max-lifetime: 1795000  # 29 минут 55 сек (Настоятельно рекомендуется установить значение на несколько секунд
+      # меньше, чем таймаут хапрокси (30 мин по умолчанию))
+  liquibase:
+    change-log: classpath:liquibase/changelog-master.yml
+
+telegram:
+  enabled: false
+  token: some_token
+  token-name: test_token_name
+  base-url: some_base_url
+  webhook-url: ${telegram.base-url}/${telegram.token}

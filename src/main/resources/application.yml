@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: pochitushki
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pochitushki
+    username: postgres
+    password: postgres
+    hikari:
+      auto-commit: true
+      connection-timeout: 1000
+      idle-timeout: 30000
+      maximum-pool-size: 10
+      minimum-idle: 3
+      pool-name: main-db-pool
+      connection-test-query: SELECT 1
+      validation-timeout: 1000
+      max-lifetime: 300000
+  liquibase:
+    change-log: classpath:liquibase/changelog-master.yml
+
+telegram:
+  enabled: true
+
+logging:
+  level:
+    ru.proshik.pochitushki: DEBUG
