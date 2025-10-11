@@ -1,3 +1,5 @@
 databaseChangeLog:
   - include:
       file: liquibase/scripts/1_init_tables.sql
+#  - include:
+#      file: liquibase/scripts/2_url_index.sql

@@ -123,20 +123,31 @@ class TelegramService(
 
         val user = userService.getUserByChatId(chatId)
 
-        val storedPostTitle = postService.addPost(url, user.id)
+        val storedPost = postService.findPost(user.id, PostType.UNREAD,url)
+        if (storedPost == null){
+            val storedPostTitle = postService.addPost(url, user.id)
 
-        val message = if (storedPostTitle != null) {
-            "Post has been saved ✅: \"$storedPostTitle\""
+            val message = if (storedPostTitle != null) {
+                "Post has been saved ✅: \"$storedPostTitle\""
+            } else {
+                "Post has been saved ✅"
+            }
+
+            val result = botProvider.getBot().sendMessage(
+                chatId = ChatId.fromId(chatId),
+                text = message,
+                replyToMessageId = messageId
+            )
+            handleTgErrorResponse(result, chatId)
         } else {
-            "Post has been saved ✅"
-        }
+            val message =
+                buildPostMessage(url.toString(), storedPost.title, "Post already added early ✊: ")
+            val keyboard = buildFeedPostInlineKeyboard(storedPost.id)
 
-        val result = botProvider.getBot().sendMessage(
-            chatId = ChatId.fromId(chatId),
-            text = message,
-            replyToMessageId = messageId
-        )
-        handleTgErrorResponse(result, chatId)
+            val postFeedItem = PostFeedItem(message, keyboard)
+
+            sendPostMessage(chatId = chatId, postItem = postFeedItem)
+        }
     }
 
     fun addUser(chatId: Long, username: String?, firstName: String?, lastName: String?) {
@@ -328,11 +339,11 @@ class TelegramService(
         handleTgErrorResponse(result, chatId)
     }
 
-    private fun buildPostMessage(postUrl: String, postTitle: String?): String {
+    private fun buildPostMessage(postUrl: String, postTitle: String?, prefixMessage: String? = ""): String {
         val escapedUrl = escapeTextMarkdown2(postUrl)
         val escapedTitle = postTitle?.let { title -> escapeTextMarkdown2(title) } ?: escapedUrl
 
-        val message = "[${escapedTitle}]($escapedUrl)"
+        val message = "$prefixMessage[${escapedTitle}]($escapedUrl)"
 
         return message
     }

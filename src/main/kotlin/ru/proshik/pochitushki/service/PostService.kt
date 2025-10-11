@@ -35,6 +35,10 @@ class PostService(
         return postDao.getPosts(userId, postType, offset)
     }
 
+    fun findPost(userId: Long, postType: PostType, url: URL): PostData? {
+        return postDao.findPost(userId, postType, url.toString())
+    }
+
     private fun loadTitle(url: String): String? {
         val title = try {
             // Connect to the URL and parse the HTML document
