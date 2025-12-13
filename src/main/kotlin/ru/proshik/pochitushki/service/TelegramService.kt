@@ -149,7 +149,7 @@ class TelegramService(
 
             val message =
                 buildPostMessage(url.toString(), storedPost.title, "Post already added early ✊: ")
-            val keyboard = buildFeedPostInlineKeyboard(storedPost.id)
+            val keyboard = buildFeedPostInlineKeyboard(storedPost.id, PostType.UNREAD)
 
             val postFeedItem = PostFeedItem(message, keyboard)
 
@@ -221,12 +221,14 @@ class TelegramService(
         logger.info("deletePost success: chatId={}, postId={}", chatId, postId)
     }
 
-    fun getFeed(chatId: Long, messageId: Long, offset: Int = 0) {
+    fun getFeed(chatId: Long, messageId: Long, offset: Int = 0, postType: PostType) {
         logger.debug("getFeed: chatId={}, offset={}", chatId, offset)
 
         val userData = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        val posts = postService.getPosts(userData.id, PostType.UNREAD, offset)
+        val countOfPosts = postService.getPostCount(userData.id, postType)
+
+        val posts = postService.getPosts(userData.id, postType, POST_COUNT, offset)
         if (posts.isEmpty()) {
             sendMessageWithReplayKeyboard(
                 chatId = chatId,
@@ -237,22 +239,30 @@ class TelegramService(
             return
         }
 
-        val lastPosts = posts.take(POST_COUNT)
-
-        val message = lastPosts
+        val message = posts
             .map { post ->
                 val message = buildPostMessage(post.url, post.title)
-                val keyboard = buildFeedPostInlineKeyboard(post.id)
+                val keyboard = buildFeedPostInlineKeyboard(post.id, postType)
 
                 PostFeedItem(message, keyboard)
             }
+
+        if (offset == 0) {
+            val text = "Count of ${postType.value} posts: $countOfPosts \uD83D\uDD04"
+
+            val result = botProvider.getBot().sendMessage(
+                chatId = ChatId.fromId(chatId),
+                text = text,
+            )
+            handleTgErrorResponse(result, chatId)
+        }
 
         // в цикле выводим N сообщений с кнопками "Archive" и "Delete"
         message.forEach { postItem ->
             sendPostMessage(chatId = chatId, postItem = postItem)
         }
 
-        sendNavigationKeyboard(chatId, PostType.UNREAD, posts.size, offset)
+        sendNavigationKeyboard(chatId, postType, posts.size, offset, countOfPosts)
 
         logger.info("getFeed success: chatId={}, offset={}", chatId, offset)
     }
@@ -276,49 +286,12 @@ class TelegramService(
 
         val postItem = PostFeedItem(
             message = buildPostMessage(randomPost.url, randomPost.title),
-            keyboard = buildFeedPostInlineKeyboard(randomPost.id)
+            keyboard = buildFeedPostInlineKeyboard(randomPost.id, PostType.UNREAD)
         )
 
         sendPostMessage(chatId, messageId, postItem)
 
         logger.info("getRandomPost success: chatId={}, messageId={}", chatId, messageId)
-    }
-
-    fun getArchive(chatId: Long, messageId: Long, offset: Int = 0) {
-        logger.debug("getArchive: chatId={}, messageId={}", chatId, messageId)
-
-        val user = userService.findUserByChatId(chatId)
-            ?: throw RuntimeException("Can't find user data by chatId=$chatId")
-
-        val archivedPosts = postService.getPosts(user.id, PostType.ARCHIVE, offset)
-        if (archivedPosts.isEmpty()) {
-            sendMessageWithReplayKeyboard(
-                chatId = chatId,
-                text = "You don't have archived posts yet \uD83D\uDE14\uFE0F\uFE0F\uFE0F\uFE0F\uFE0F\uFE0F",
-                replyToMessageId = messageId
-            )
-
-            return
-        }
-
-        val lastPosts = archivedPosts.take(POST_COUNT)
-
-        val message = lastPosts
-            .map { post ->
-                val message = buildPostMessage(post.url, post.title)
-                val keyboard = buildArchivePostInlineKeyboard(post.id)
-
-                PostFeedItem(message, keyboard)
-            }
-
-        // в цикле выводим N сообщений с кнопками "Unread" и "Delete"
-        message.forEach { postItem ->
-            sendPostMessage(chatId = chatId, postItem = postItem)
-        }
-
-        sendNavigationKeyboard(chatId, PostType.UNREAD, archivedPosts.size, offset)
-
-        logger.info("getArchive success: chatId={}, messageId={}", chatId, messageId)
     }
 
     fun import(chatId: Long, fileId: String) {
@@ -382,37 +355,52 @@ class TelegramService(
         return message
     }
 
-    private fun buildFeedPostInlineKeyboard(postId: Long): InlineKeyboardMarkup = InlineKeyboardMarkup.create(
-        listOf(
-            listOf(
-                InlineKeyboardButton.CallbackData(
-                    text = "Archive \uD83D\uDDC4",
-                    callbackData = "${CALLBACK_ARCHIVE_POST}|$postId"
-                ),
-                InlineKeyboardButton.CallbackData(
-                    text = "Delete ❌",
-                    callbackData = "${CALLBACK_DELETE_POST}|$postId"
+    private fun buildFeedPostInlineKeyboard(postId: Long, postType: PostType): InlineKeyboardMarkup {
+        return when (postType) {
+            PostType.UNREAD -> {
+                InlineKeyboardMarkup.create(
+                    listOf(
+                        listOf(
+                            InlineKeyboardButton.CallbackData(
+                                text = "Archive \uD83D\uDDC4",
+                                callbackData = "${CALLBACK_ARCHIVE_POST}|$postId"
+                            ),
+                            InlineKeyboardButton.CallbackData(
+                                text = "Delete ❌",
+                                callbackData = "${CALLBACK_DELETE_POST}|$postId"
+                            )
+                        ),
+                    )
                 )
-            ),
-        )
-    )
+            }
 
-    private fun buildArchivePostInlineKeyboard(postId: Long): InlineKeyboardMarkup = InlineKeyboardMarkup.create(
-        listOf(
-            listOf(
-                InlineKeyboardButton.CallbackData(
-                    text = "Unread \uD83D\uDDC4",
-                    callbackData = "${CALLBACK_UNREAD_POST}|$postId"
-                ),
-                InlineKeyboardButton.CallbackData(
-                    text = "Delete ❌",
-                    callbackData = "${CALLBACK_DELETE_ARCHIVE_POST}|$postId"
+            PostType.ARCHIVE -> {
+                InlineKeyboardMarkup.create(
+                    listOf(
+                        listOf(
+                            InlineKeyboardButton.CallbackData(
+                                text = "Unread \uD83D\uDDC4",
+                                callbackData = "${CALLBACK_UNREAD_POST}|$postId"
+                            ),
+                            InlineKeyboardButton.CallbackData(
+                                text = "Delete ❌",
+                                callbackData = "${CALLBACK_DELETE_ARCHIVE_POST}|$postId"
+                            )
+                        ),
+                    )
                 )
-            ),
-        )
-    )
+            }
+        }
+    }
 
-    private fun sendNavigationKeyboard(chatId: Long, postType: PostType, postSize: Int, offset: Int) {
+    /**
+     * Build navigation InlineKeyboard.
+     *
+     * If offset=0, then print just "Next" button.
+     * If offset > 0 and (offset + postSize) > countOfPosts, then print "Next" and "Previous" button.
+     * if offset > 0 and (offset + postSize) = countOfPosts, then print just "Previous" button.
+     */
+    private fun sendNavigationKeyboard(chatId: Long, postType: PostType, postSize: Int, offset: Int, countOfPosts: Int) {
         var previousCallbackAction: String
         var nextCallbackAction: String
 
@@ -428,24 +416,16 @@ class TelegramService(
             }
         }
 
-        if (postSize > POST_COUNT && offset == 0) {
-            val pagingKeyboard = InlineKeyboardMarkup.create(
+        val navigationKeyboard = if (offset == 0 && postSize < countOfPosts) {
+            InlineKeyboardMarkup.create(
                 listOf(
                     listOf(
                         InlineKeyboardButton.CallbackData(text = "Next ➡\uFE0F", callbackData = "${nextCallbackAction}|${POST_COUNT}"),
                     ),
                 )
             )
-
-            val result = botProvider.getBot().sendMessage(
-                chatId = ChatId.fromId(chatId),
-                parseMode = ParseMode.MARKDOWN_V2,
-                text = NAVIGATION_TEXT_BUTTON,
-                replyMarkup = pagingKeyboard
-            )
-            handleTgErrorResponse(result, chatId)
-        } else if (postSize >= POST_COUNT && offset >= POST_COUNT) {
-            val pagingKeyboard = InlineKeyboardMarkup.create(
+        } else if (offset > 0 && ((offset + postSize) < countOfPosts)) {
+            InlineKeyboardMarkup.create(
                 listOf(
                     listOf(
                         InlineKeyboardButton.CallbackData(
@@ -459,16 +439,8 @@ class TelegramService(
                     ),
                 )
             )
-
-            val result = botProvider.getBot().sendMessage(
-                chatId = ChatId.fromId(chatId),
-                parseMode = ParseMode.MARKDOWN_V2,
-                text = NAVIGATION_TEXT_BUTTON,
-                replyMarkup = pagingKeyboard
-            )
-            handleTgErrorResponse(result, chatId)
-        } else if (postSize < POST_COUNT && offset >= POST_COUNT) {
-            val pagingKeyboard = InlineKeyboardMarkup.create(
+        } else if (offset > 0 && ((offset + postSize) == countOfPosts)) {
+            InlineKeyboardMarkup.create(
                 listOf(
                     listOf(
                         InlineKeyboardButton.CallbackData(
@@ -478,12 +450,16 @@ class TelegramService(
                     ),
                 )
             )
+        } else {
+            null
+        }
 
+        if (navigationKeyboard != null) {
             val result = botProvider.getBot().sendMessage(
                 chatId = ChatId.fromId(chatId),
                 parseMode = ParseMode.MARKDOWN_V2,
                 text = NAVIGATION_TEXT_BUTTON,
-                replyMarkup = pagingKeyboard
+                replyMarkup = navigationKeyboard
             )
             handleTgErrorResponse(result, chatId)
         }
@@ -510,12 +486,3 @@ class TelegramService(
             .replace(".", "\\.")
             .replace("!", "\\!")
 }
-
-//                val croppedTitle = if (escapedTitle.length < 80 ){
-//                    escapedTitle += " ".repeat(79 - escapedTitle.length) + "."
-//                    escapedTitle
-//                } else if (escapedTitle.length > 80){
-//                    escapedTitle.take(77) + " ..."
-//                } else {
-//                    escapedTitle
-//                }

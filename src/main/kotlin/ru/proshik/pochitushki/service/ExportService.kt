@@ -24,8 +24,8 @@ class ExportService(
     }
 
     fun export(userId: Long): String? {
-        val archivePosts = postDao.getPosts(userId = userId, postType = PostType.ARCHIVE, offset = 0)
-        val unreadPosts = postDao.getPosts(userId = userId, postType = PostType.UNREAD, offset = 0)
+        val archivePosts = postDao.getPosts(userId = userId, postType = PostType.ARCHIVE, 9999999, offset = 0)
+        val unreadPosts = postDao.getPosts(userId = userId, postType = PostType.UNREAD, 9999999, offset = 0)
 
         val posts = archivePosts + unreadPosts
 

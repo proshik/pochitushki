@@ -10,6 +10,8 @@ import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON
 import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON_FEED_SETTINGS_EN
 import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON_IMPORT_EN
 import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON_LANGUAGE_SETTINGS_EN
+import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON_NEXT
+import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON_PREV
 import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON_PROFILE_EN
 import ru.proshik.pochitushki.service.telegram.CommandHandler.Companion.R_BUTTON_RANDOM_POST_EN
 
@@ -28,6 +30,24 @@ class TelegramKeyboard {
 
         const val CALLBACK_NEXT_ARCHIVE_POSTS = "next_archive_posts"
         const val CALLBACK_PREVIOUS_ARCHIVE_POSTS = "previous_archive_posts"
+    }
+
+    fun nextReplayKeyboard(): List<List<KeyboardButton>> {
+        return listOf(
+            listOf(KeyboardButton(R_BUTTON_NEXT)),
+        )
+    }
+
+    fun nextPrevReplayKeyboard(): List<List<KeyboardButton>> {
+        return listOf(
+            listOf(KeyboardButton(R_BUTTON_NEXT), KeyboardButton(R_BUTTON_PREV)),
+        )
+    }
+
+    fun prevReplayKeyboard(): List<List<KeyboardButton>> {
+        return listOf(
+            listOf(KeyboardButton(R_BUTTON_PREV)),
+        )
     }
 
     /**

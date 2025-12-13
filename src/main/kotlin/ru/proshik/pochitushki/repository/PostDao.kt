@@ -36,7 +36,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         )
     }
 
-    fun getPosts(userId: Long, postType: PostType, offset: Int): List<PostData> {
+    fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
         val tableName = when (postType) {
             PostType.UNREAD -> "post"
             PostType.ARCHIVE -> "archive_post"
@@ -46,12 +46,13 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             SELECT id, title, url, user_id, tags::TEXT[], created_date, updated_date
             FROM $tableName
             WHERE user_id = :user_id
-            ORDER BY created_date DESC OFFSET :offset
+            ORDER BY created_date DESC OFFSET :offset LIMIT :limit
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("user_id", userId)
             .addValue("offset", offset)
+            .addValue("limit", limit)
 
         return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
     }
@@ -192,5 +193,23 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("user_id", userId)
 
         return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
+    }
+
+    fun getPostCount(userId: Long, postType: PostType): Int {
+        val tableName = when (postType) {
+            PostType.UNREAD -> "post"
+            PostType.ARCHIVE -> "archive_post"
+        }
+
+        val sql = """
+            SELECT count(*)
+            FROM $tableName
+            WHERE user_id = :user_id
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("user_id", userId)
+
+        return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java)!!
     }
 }

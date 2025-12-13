@@ -36,9 +36,9 @@ data class UserToPostData(
     val createdData: LocalDateTime
 )
 
-enum class PostType {
-    UNREAD,
-    ARCHIVE;
+enum class PostType(val value: String) {
+    UNREAD("unread"),
+    ARCHIVE("archive");
 
     companion object {
         private val stringToType = PostType.entries.associateBy { it.name }

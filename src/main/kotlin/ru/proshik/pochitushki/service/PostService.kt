@@ -31,8 +31,8 @@ class PostService(
         return title
     }
 
-    fun getPosts(userId: Long, postType: PostType, offset: Int): List<PostData> {
-        return postDao.getPosts(userId, postType, offset)
+    fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
+        return postDao.getPosts(userId, postType, limit, offset)
     }
 
     fun findPost(userId: Long, postType: PostType, url: URL): PostData? {
@@ -71,5 +71,9 @@ class PostService(
 
     fun getRandomPost(userId: Long): PostData? {
         return postDao.getRandomPost(userId)
+    }
+
+    fun getPostCount(userId: Long, postType: PostType): Int {
+        return postDao.getPostCount(userId, postType)
     }
 }

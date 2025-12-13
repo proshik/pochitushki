@@ -9,6 +9,7 @@ import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.Update
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.service.TelegramService
 
 /**
@@ -27,9 +28,16 @@ class CommandHandler(
     companion object {
         const val COMMAND_START = "start"
         const val COMMAND_HELP = "help"
+        const val COMMAND_FEED = "feed"
+        const val COMMAND_ARCHIVE = "archive"
+        const val COMMAND_RANDOM_POST = "random_post"
+        const val COMMAND_PROFILE = "profile"
 
         const val R_BUTTON_FEED_EN = "Feed"
         const val R_BUTTON_FEED_RU = "Лента"
+
+        const val R_BUTTON_NEXT = "Next"
+        const val R_BUTTON_PREV = "Prev"
 
         const val R_BUTTON_RANDOM_POST_EN = "Random post"
         const val R_BUTTON_RANDOM_POST_RU = "Случайный пост"
@@ -63,7 +71,11 @@ class CommandHandler(
 
         val COMMANDS = listOf(
             "/$COMMAND_START",
-            "/$COMMAND_HELP"
+            "/$COMMAND_HELP",
+            "/$COMMAND_FEED",
+            "/$COMMAND_ARCHIVE",
+            "/$COMMAND_RANDOM_POST",
+            "/$COMMAND_PROFILE",
         )
 
         val BUTTONS = listOf(
@@ -93,35 +105,46 @@ class CommandHandler(
     }
 
     override fun registerHandlers(dispatcher: Dispatcher) {
+        dispatcher.text { handleCommonText(message) }
+
         // Register command handlers
         dispatcher.command(COMMAND_START) { handleStartCommand(update) }
         dispatcher.command(COMMAND_HELP) { handleHelpCommand(update) }
 
+        dispatcher.command(COMMAND_FEED) { handleFeedOperation(message) }
+        dispatcher.command(COMMAND_RANDOM_POST) { handleRandomPostOperation(message) }
+        dispatcher.command(COMMAND_ARCHIVE) { handleArchivePostOperation(message) }
+        dispatcher.command(COMMAND_PROFILE) { handleProfileOperations(message) }
+
+
+//        dispatcher.command(COMMAND_FEED) { handleFeedOperation(message)}
+//        dispatcher.command(COMMAND_ARCHIVE) { handleArchivePostOperation(message)}
+//        dispatcher.command(COMMAND_RANDOM_POST) { handleRandomPostOperation(message)}
+//        dispatcher.command(COMMAND_PROFILE) { handleProfileOperations(message)}
+
         // Register text handlers
-        dispatcher.text(text = R_BUTTON_FEED_EN) { handleFeedButton(message) }
-        dispatcher.text(text = R_BUTTON_FEED_RU) { handleFeedButton(message) }
-
-        dispatcher.text(text = R_BUTTON_RANDOM_POST_EN) { handleRandomPostButton(message) }
-        dispatcher.text(text = R_BUTTON_RANDOM_POST_RU) { handleRandomPostButton(message) }
-
-        dispatcher.text(text = R_BUTTON_ARCHIVE_EN) { handleArchivePostButton(message) }
-        dispatcher.text(text = R_BUTTON_ARCHIVE_RU) { handleArchivePostButton(message) }
-
-        dispatcher.text(text = R_BUTTON_PROFILE_EN) { handleProfileButton(message) }
-        dispatcher.text(text = R_BUTTON_PROFILE_RU) { handleProfileButton(message) }
-
-        dispatcher.text(text = R_BUTTON_IMPORT_EN) { handleImportButton(message) }
-        dispatcher.text(text = R_BUTTON_IMPORT_RU) { handleImportButton(message) }
+//        dispatcher.text(text = R_BUTTON_FEED_EN) { handleFeedOperation(message) }
+//        dispatcher.text(text = R_BUTTON_FEED_RU) { handleFeedOperation(message) }
+//
+//        dispatcher.text(text = R_BUTTON_RANDOM_POST_EN) { handleRandomPostOperation(message) }
+//        dispatcher.text(text = R_BUTTON_RANDOM_POST_RU) { handleRandomPostOperation(message) }
+//
+//        dispatcher.text(text = R_BUTTON_ARCHIVE_EN) { handleArchivePostOperation(message) }
+//        dispatcher.text(text = R_BUTTON_ARCHIVE_RU) { handleArchivePostOperation(message) }
+//
+//        dispatcher.text(text = R_BUTTON_PROFILE_EN) { handleProfileOperations(message) }
+//        dispatcher.text(text = R_BUTTON_PROFILE_RU) { handleProfileOperations(message) }
+//
+//        dispatcher.text(text = R_BUTTON_IMPORT_EN) { handleImportButton(message) }
+//        dispatcher.text(text = R_BUTTON_IMPORT_RU) { handleImportButton(message) }
 
 //        dispatcher.text(text = R_BUTTON_EXPORT_EN) { handleExportButton(message) }
 //        dispatcher.text(text = R_BUTTON_EXPORT_RU) { handleExportButton(message) }
 
-        dispatcher.text(text = R_BUTTON_BACK_TO_MAIN_MENU_EN) { handleBackToMainMenuButton(message) }
-        dispatcher.text(text = R_BUTTON_BACK_TO_MAIN_MENU_RU) { handleBackToMainMenuButton(message) }
+//        dispatcher.text(text = R_BUTTON_BACK_TO_MAIN_MENU_EN) { handleBackToMainMenuButton(message) }
+//        dispatcher.text(text = R_BUTTON_BACK_TO_MAIN_MENU_RU) { handleBackToMainMenuButton(message) }
 
         dispatcher.message { handleFileUpload(message) }
-
-        dispatcher.text { handleCommonText(message) }
     }
 
     private fun handleStartCommand(update: Update) {
@@ -151,28 +174,28 @@ class CommandHandler(
         helpMessage(chatId)
     }
 
-    private fun handleFeedButton(message: Message) {
-        telegramService.getFeed(message.chat.id, message.messageId)
+    private fun handleFeedOperation(message: Message) {
+        telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.UNREAD)
     }
 
-    private fun handleRandomPostButton(message: Message) {
+    private fun handleRandomPostOperation(message: Message) {
         telegramService.getRandomPost(message.chat.id, message.messageId)
     }
 
-    private fun handleArchivePostButton(message: Message) {
-        telegramService.getArchive(message.chat.id, message.messageId)
+    private fun handleArchivePostOperation(message: Message) {
+        telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.ARCHIVE)
     }
 
-    private fun handleProfileButton(message: Message) {
+    private fun handleProfileOperations(message: Message) {
         val chatId = message.chat.id
 
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,
             text = "User Profile",
-            replyMarkup = KeyboardReplyMarkup(
-                keyboard = telegramKeyboard.profileKeyboard(),
-                resizeKeyboard = true
-            ),
+//            replyMarkup = KeyboardReplyMarkup(
+//                keyboard = telegramKeyboard.profileKeyboard(),
+//                resizeKeyboard = true
+//            ),
             replyToMessageId = message.messageId
         )
     }
@@ -208,10 +231,10 @@ class CommandHandler(
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,
             text = "Main menu",
-            replyMarkup = KeyboardReplyMarkup(
-                keyboard = telegramKeyboard.mainKeyboard(),
-                resizeKeyboard = true
-            ),
+//            replyMarkup = KeyboardReplyMarkup(
+//                keyboard = telegramKeyboard.mainKeyboard(),
+//                resizeKeyboard = true
+//            ),
             replyToMessageId = message.messageId
         )
     }
@@ -256,7 +279,7 @@ class CommandHandler(
 
                 I'm your personal bot for saving and reading web pages later. Just send me a link to get started! 📥
             """.trimIndent(),
-            replyMarkup = KeyboardReplyMarkup(keyboard = telegramKeyboard.mainKeyboard(), resizeKeyboard = true)
+//            replyMarkup = KeyboardReplyMarkup(keyboard = telegramKeyboard.mainKeyboard(), resizeKeyboard = true)
         )
     }
 
@@ -267,10 +290,14 @@ class CommandHandler(
                 Here's how I can help you:
 
                 To save a link: Just send me the URL.
-                To view your saved links: Use the keyboard, `Feed` button.
+                To view your saved links: Use the command, /feed button
+                Press `Archive` button to move post in Archive. Press `Delete` button to delete post from feed.
+                You can get random post: Use the command /random_post
+                Tow view archived posts use the command /archive
+
                 Need more help? Feel free to ask @proshik!
             """.trimIndent(),
-            replyMarkup = KeyboardReplyMarkup(keyboard = telegramKeyboard.mainKeyboard(), resizeKeyboard = true)
+//            replyMarkup = KeyboardReplyMarkup(keyboard = telegramKeyboard.mainKeyboard(), resizeKeyboard = true)
         )
     }
 }
