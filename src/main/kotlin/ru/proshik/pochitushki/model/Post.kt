@@ -43,7 +43,7 @@ enum class PostType(val value: String) {
     companion object {
         private val stringToType = PostType.entries.associateBy { it.name }
 
-        fun from(name: String): PostType = stringToType[name] ?: error("Unknown post status: $name")
+        fun from(name: String): PostType = stringToType[name] ?: error("unknown post status: $name")
     }
 }
 

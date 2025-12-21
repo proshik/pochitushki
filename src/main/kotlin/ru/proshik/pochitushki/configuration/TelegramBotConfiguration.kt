@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
 import ru.proshik.pochitushki.service.telegram.TelegramUpdateHandler
 
+
 @Configuration
 @EnableConfigurationProperties(value = [TelegramProperties::class])
 class TelegramBotConfiguration(
@@ -26,11 +27,11 @@ class TelegramBotConfiguration(
     @Bean
     fun telegramBot(): Bot {
         if (!telegramProperties.enabled) {
-            logger.info("Telegram bot is disabled")
+            logger.info("telegram bot is disabled")
             return bot { token = "disabled" }
         }
 
-        logger.info("Initializing Telegram bot")
+        logger.info("initializing telegram bot")
         val bot = bot {
             token = telegramProperties.token
             logLevel = LogLevel.Error
@@ -41,7 +42,7 @@ class TelegramBotConfiguration(
                 }
 
                 telegramError {
-                    logger.warn("Telegram error: {}", error.getErrorMessage())
+                    logger.warn("telegram bot error: {}", error.getErrorMessage())
                 }
             }
 
@@ -55,10 +56,10 @@ class TelegramBotConfiguration(
 
         if (telegramProperties.webhookUrl != null) {
             bot.startWebhook()
-            logger.info("Telegram bot started in webhook mode")
+            logger.info("telegram bot started in webhook mode")
         } else {
             bot.startPolling()
-            logger.info("Telegram bot started in polling mode")
+            logger.info("telegram bot started in polling mode")
         }
 
         // Set the bot instance in the provider

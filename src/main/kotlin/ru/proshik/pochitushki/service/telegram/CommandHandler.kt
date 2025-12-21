@@ -4,13 +4,15 @@ import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.dispatcher.text
-import com.github.kotlintelegrambot.entities.KeyboardReplyMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.Update
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import ru.proshik.pochitushki.model.PostType
+import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService
+import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_EN_CODE
+import ru.proshik.pochitushki.service.TelegramService.Companion.supportedLanguages
 
 /**
  * Handler for Telegram commands and text messages.
@@ -19,8 +21,8 @@ import ru.proshik.pochitushki.service.TelegramService
  */
 @Component
 class CommandHandler(
+    private val i18nService: I18nService,
     private val telegramService: TelegramService,
-    private val telegramKeyboard: TelegramKeyboard
 ) : TelegramUpdateHandler {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -33,42 +35,6 @@ class CommandHandler(
         const val COMMAND_RANDOM_POST = "random_post"
         const val COMMAND_PROFILE = "profile"
 
-        const val R_BUTTON_FEED_EN = "Feed"
-        const val R_BUTTON_FEED_RU = "Лента"
-
-        const val R_BUTTON_NEXT = "Next"
-        const val R_BUTTON_PREV = "Prev"
-
-        const val R_BUTTON_RANDOM_POST_EN = "Random post"
-        const val R_BUTTON_RANDOM_POST_RU = "Случайный пост"
-
-        const val R_BUTTON_ARCHIVE_EN = "Archive"
-        const val R_BUTTON_ARCHIVE_RU = "Архив"
-
-        const val R_BUTTON_PROFILE_EN = "Profile"
-        const val R_BUTTON_PROFILE_RU = "Профиль"
-
-        const val R_BUTTON_SETTINGS_EN = "Settings"
-        const val R_BUTTON_SETTINGS_RU = "Настройки"
-
-        const val R_BUTTON_IMPORT_EN = "Import"
-        const val R_BUTTON_IMPORT_RU = "Импорт"
-
-        const val R_BUTTON_EXPORT_EN = "Export"
-        const val R_BUTTON_EXPORT_RU = "Экспорт"
-
-        const val R_BUTTON_LANGUAGE_SETTINGS_EN = "Language settings"
-        const val R_BUTTON_LANGUAGE_SETTINGS_RU = "Настойки языка"
-
-        const val R_BUTTON_FEED_SETTINGS_EN = "Feed settings"
-        const val R_BUTTON_FEED_SETTINGS_RU = "Настройки ленты"
-
-        const val R_BUTTON_BACK_TO_MAIN_MENU_EN = "◀\uFE0F Main menu"
-        const val R_BUTTON_BACK_TO_MAIN_MENU_RU = "◀\uFE0F Основное меню"
-
-        const val R_BUTTON_BACK_TO_PROFILE_EN = "◀\uFE0F Profile"
-        const val R_BUTTON_BACK_TO_PROFILE_RU = "◀\uFE0F Профиль пользователя"
-
         val COMMANDS = listOf(
             "/$COMMAND_START",
             "/$COMMAND_HELP",
@@ -76,31 +42,6 @@ class CommandHandler(
             "/$COMMAND_ARCHIVE",
             "/$COMMAND_RANDOM_POST",
             "/$COMMAND_PROFILE",
-        )
-
-        val BUTTONS = listOf(
-            R_BUTTON_FEED_EN,
-            R_BUTTON_FEED_RU,
-            R_BUTTON_RANDOM_POST_EN,
-            R_BUTTON_RANDOM_POST_RU,
-            R_BUTTON_ARCHIVE_EN,
-            R_BUTTON_ARCHIVE_RU,
-            R_BUTTON_PROFILE_EN,
-            R_BUTTON_PROFILE_RU,
-            R_BUTTON_SETTINGS_EN,
-            R_BUTTON_SETTINGS_RU,
-            R_BUTTON_IMPORT_EN,
-            R_BUTTON_IMPORT_RU,
-            R_BUTTON_EXPORT_EN,
-            R_BUTTON_EXPORT_RU,
-            R_BUTTON_LANGUAGE_SETTINGS_EN,
-            R_BUTTON_LANGUAGE_SETTINGS_RU,
-            R_BUTTON_FEED_SETTINGS_EN,
-            R_BUTTON_FEED_SETTINGS_RU,
-            R_BUTTON_BACK_TO_MAIN_MENU_EN,
-            R_BUTTON_BACK_TO_MAIN_MENU_RU,
-            R_BUTTON_BACK_TO_PROFILE_EN,
-            R_BUTTON_BACK_TO_PROFILE_RU
         )
     }
 
@@ -116,34 +57,6 @@ class CommandHandler(
         dispatcher.command(COMMAND_ARCHIVE) { handleArchivePostOperation(message) }
         dispatcher.command(COMMAND_PROFILE) { handleProfileOperations(message) }
 
-
-//        dispatcher.command(COMMAND_FEED) { handleFeedOperation(message)}
-//        dispatcher.command(COMMAND_ARCHIVE) { handleArchivePostOperation(message)}
-//        dispatcher.command(COMMAND_RANDOM_POST) { handleRandomPostOperation(message)}
-//        dispatcher.command(COMMAND_PROFILE) { handleProfileOperations(message)}
-
-        // Register text handlers
-//        dispatcher.text(text = R_BUTTON_FEED_EN) { handleFeedOperation(message) }
-//        dispatcher.text(text = R_BUTTON_FEED_RU) { handleFeedOperation(message) }
-//
-//        dispatcher.text(text = R_BUTTON_RANDOM_POST_EN) { handleRandomPostOperation(message) }
-//        dispatcher.text(text = R_BUTTON_RANDOM_POST_RU) { handleRandomPostOperation(message) }
-//
-//        dispatcher.text(text = R_BUTTON_ARCHIVE_EN) { handleArchivePostOperation(message) }
-//        dispatcher.text(text = R_BUTTON_ARCHIVE_RU) { handleArchivePostOperation(message) }
-//
-//        dispatcher.text(text = R_BUTTON_PROFILE_EN) { handleProfileOperations(message) }
-//        dispatcher.text(text = R_BUTTON_PROFILE_RU) { handleProfileOperations(message) }
-//
-//        dispatcher.text(text = R_BUTTON_IMPORT_EN) { handleImportButton(message) }
-//        dispatcher.text(text = R_BUTTON_IMPORT_RU) { handleImportButton(message) }
-
-//        dispatcher.text(text = R_BUTTON_EXPORT_EN) { handleExportButton(message) }
-//        dispatcher.text(text = R_BUTTON_EXPORT_RU) { handleExportButton(message) }
-
-//        dispatcher.text(text = R_BUTTON_BACK_TO_MAIN_MENU_EN) { handleBackToMainMenuButton(message) }
-//        dispatcher.text(text = R_BUTTON_BACK_TO_MAIN_MENU_RU) { handleBackToMainMenuButton(message) }
-
         dispatcher.message { handleFileUpload(message) }
     }
 
@@ -152,16 +65,23 @@ class CommandHandler(
             throw RuntimeException("start command message shouldn't be null: updateId=${update.updateId}")
         }
 
-        telegramService.addUser(
-            update.message!!.chat.id,
-            update.message?.from?.username,
-            update.message?.from?.firstName,
-            update.message?.from?.lastName,
+        val tgLanguageCode = when (update.message?.from?.languageCode) {
+            null -> LANGUAGE_EN_CODE
+            !in supportedLanguages -> LANGUAGE_EN_CODE
+            else -> update.message!!.from!!.languageCode!!
+        }
+
+        val userSettings = telegramService.addUser(
+            chatId = update.message!!.chat.id,
+            username = update.message?.from?.username,
+            firstName = update.message?.from?.firstName,
+            lastName = update.message?.from?.lastName,
+            languageCode = tgLanguageCode
         )
 
         val chatId = update.message!!.chat.id
 
-        startWelcomeMessage(chatId)
+        startWelcomeMessage(chatId, userSettings.languageCode)
     }
 
     private fun handleHelpCommand(update: Update) {
@@ -171,7 +91,9 @@ class CommandHandler(
 
         val chatId = update.message!!.chat.id
 
-        helpMessage(chatId)
+        val userSettings = telegramService.getUserSettings(chatId)
+
+        helpMessage(chatId, userSettings.languageCode)
     }
 
     private fun handleFeedOperation(message: Message) {
@@ -186,28 +108,23 @@ class CommandHandler(
         telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.ARCHIVE)
     }
 
+    /**
+     * Profile operation
+     */
     private fun handleProfileOperations(message: Message) {
         val chatId = message.chat.id
 
-        telegramService.sendMessageWithReplayKeyboard(
-            chatId = chatId,
-            text = "User Profile",
-//            replyMarkup = KeyboardReplyMarkup(
-//                keyboard = telegramKeyboard.profileKeyboard(),
-//                resizeKeyboard = true
-//            ),
-            replyToMessageId = message.messageId
-        )
+        telegramService.showProfile(chatId, message.messageId)
     }
 
-    private fun handleImportButton(message: Message) {
-        val chatId = message.chat.id
-
-        telegramService.sendMessage(
-            chatId = chatId,
-            text = "Waiting an archive from https://getpocket.com/export in *.zip archive with *.csv files inside",
-        )
-    }
+//    private fun handleImportButton(message: Message) {
+//        val chatId = message.chat.id
+//
+//        telegramService.sendMessage(
+//            chatId = chatId,
+//            text = "Waiting an archive from https://getpocket.com/export in *.zip archive with *.csv files inside",
+//        )
+//    }
 
     private fun handleExportButton(message: Message) {
         val chatId = message.chat.id
@@ -225,22 +142,8 @@ class CommandHandler(
         }
     }
 
-    private fun handleBackToMainMenuButton(message: Message) {
-        val chatId = message.chat.id
-
-        telegramService.sendMessageWithReplayKeyboard(
-            chatId = chatId,
-            text = "Main menu",
-//            replyMarkup = KeyboardReplyMarkup(
-//                keyboard = telegramKeyboard.mainKeyboard(),
-//                resizeKeyboard = true
-//            ),
-            replyToMessageId = message.messageId
-        )
-    }
-
     private fun handleCommonText(message: Message) {
-        if (message.text != null && (message.text in COMMANDS || message.text in BUTTONS)) {
+        if (message.text != null && (message.text in COMMANDS)) {
             return
         }
 
@@ -253,51 +156,17 @@ class CommandHandler(
         logger.debug("unknown message type: chatId={}", message.chat.id)
     }
 
-//    private fun handleBackButton(message: Message) {
-//        val chatId = message.chat.id
-//
-//        val user = telegramService.findAuthenticatedUserByChatId(chatId)
-//        if (user != null) {
-//            telegramService.sendMessage(
-//                chatId = chatId,
-//                text = "Выберите раздел для подсчёта статистики или настройки профиля!",
-//                replyMarkup = KeyboardReplyMarkup(
-//                    keyboard = mainKeyboard(),
-//                    resizeKeyboard = true
-//                )
-//            )
-//        } else {
-//            greetingsMessage(chatId)
-//        }
-//    }
-
-    private fun startWelcomeMessage(chatId: Long) {
+    private fun startWelcomeMessage(chatId: Long, languageCode: String) {
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,
-            text = """
-                Welcome! 👋
-
-                I'm your personal bot for saving and reading web pages later. Just send me a link to get started! 📥
-            """.trimIndent(),
-//            replyMarkup = KeyboardReplyMarkup(keyboard = telegramKeyboard.mainKeyboard(), resizeKeyboard = true)
+            text = i18nService.getMessage("command.start.message", languageCode)
         )
     }
 
-    private fun helpMessage(chatId: Long) {
+    private fun helpMessage(chatId: Long, languageCode: String) {
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,
-            text = """
-                Here's how I can help you:
-
-                To save a link: Just send me the URL.
-                To view your saved links: Use the command, /feed button
-                Press `Archive` button to move post in Archive. Press `Delete` button to delete post from feed.
-                You can get random post: Use the command /random_post
-                Tow view archived posts use the command /archive
-
-                Need more help? Feel free to ask @proshik!
-            """.trimIndent(),
-//            replyMarkup = KeyboardReplyMarkup(keyboard = telegramKeyboard.mainKeyboard(), resizeKeyboard = true)
+            text = i18nService.getMessage("command.help.message", languageCode),
         )
     }
 }

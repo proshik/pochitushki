@@ -66,12 +66,12 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val sql = """
             SELECT id, title, url, user_id, tags::TEXT[], created_date, updated_date
             FROM $tableName
-            WHERE user_id = :user_id AND url = :url
+            WHERE user_id = :user_id AND url ilike :url
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("user_id", userId)
-            .addValue("url", url)
+            .addValue("url", "$url%")
 
         return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
     }

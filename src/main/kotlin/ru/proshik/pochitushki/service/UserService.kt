@@ -2,6 +2,7 @@ package ru.proshik.pochitushki.service
 
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.model.UserData
+import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserStoreData
 import ru.proshik.pochitushki.repository.UserDao
 
@@ -22,5 +23,9 @@ class UserService(private val userDao: UserDao) {
 
     fun getUserByUserId(userId: Long): UserData {
         return userDao.getUserById(userId)
+    }
+
+    fun updateUserSettings(userId: Long, updatedUserSettings: UserSettingsData) {
+        userDao.updateUserSettings(userId, updatedUserSettings)
     }
 }

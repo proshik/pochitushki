@@ -6,7 +6,9 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import ru.proshik.pochitushki.model.UserData
+import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserStoreData
+import ru.proshik.pochitushki.service.SerializationUtils
 
 @Repository
 class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate) {
@@ -18,6 +20,7 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             username = rs.getString("username"),
             firstName = rs.getString("first_name"),
             lastName = rs.getString("last_name"),
+            settings = SerializationUtils.fromJson(rs.getString("settings"), UserSettingsData::class),
             createdData = rs.getTimestamp("created_date").toLocalDateTime(),
             updatedData = rs.getTimestamp("updated_date").toLocalDateTime(),
         )
@@ -25,8 +28,8 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun addUser(userStoreData: UserStoreData) {
         val sql = """
-            INSERT INTO users(telegram_id, username, first_name, last_name)
-            VALUES (:telegram_id, :username, :first_name, :last_name)
+            INSERT INTO users(telegram_id, username, first_name, last_name, settings)
+            VALUES (:telegram_id, :username, :first_name, :last_name, :settings::JSONB)
         """.trimIndent()
 
         val params = MapSqlParameterSource()
@@ -34,13 +37,14 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("username", userStoreData.username)
             .addValue("first_name", userStoreData.firstName)
             .addValue("last_name", userStoreData.lastName)
+            .addValue("settings", SerializationUtils.toJson(userStoreData.settings))
 
         namedParameterJdbcTemplate.update(sql, params)
     }
 
     fun findUserByChatId(chatId: Long): UserData? {
         val sql = """
-            SELECT id, telegram_id, username, first_name, last_name, created_date, updated_date
+            SELECT id, telegram_id, username, first_name, last_name, settings, created_date, updated_date
             FROM users
             WHERE telegram_id = :telegram_id
         """.trimIndent()
@@ -53,7 +57,7 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getUserByChatId(chatId: Long): UserData {
         val sql = """
-            SELECT id, telegram_id, username, first_name, last_name, created_date, updated_date
+            SELECT id, telegram_id, username, first_name, last_name, settings, created_date, updated_date
             FROM users
             WHERE telegram_id = :telegram_id
         """.trimIndent()
@@ -66,7 +70,7 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getUserById(userId: Long): UserData {
         val sql = """
-            SELECT id, telegram_id, username, first_name, last_name, created_date, updated_date
+            SELECT id, telegram_id, username, first_name, last_name, settings, created_date, updated_date
             FROM users
             WHERE id = :user_id
         """.trimIndent()
@@ -75,6 +79,20 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("user_id", userId)
 
         return DataAccessUtils.requiredSingleResult(namedParameterJdbcTemplate.query(sql, params, usersRowMapper))
+    }
+
+    fun updateUserSettings(userId: Long, settingsData: UserSettingsData) {
+        val sql = """
+            UPDATE users
+            SET settings = :settings::JSONB
+            WHERE id = :user_id
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("user_id", userId)
+            .addValue("settings", SerializationUtils.toJson(settingsData))
+
+        namedParameterJdbcTemplate.update(sql, params)
     }
 
 }
