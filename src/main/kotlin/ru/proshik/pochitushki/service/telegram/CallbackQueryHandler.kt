@@ -64,6 +64,13 @@ class CallbackQueryHandler(
                 telegramService.toDeletePost(chatId, message.messageId, postId, PostType.ARCHIVE)
             }
             /**
+             * Next random post
+             */
+            TelegramKeyboard.CALLBACK_RANDOM_POST -> {
+                telegramService.getRandomPost(chatId, message.messageId, true)
+            }
+
+            /**
              * Unread feed navigation
              */
             TelegramKeyboard.CALLBACK_NEXT_POSTS -> {

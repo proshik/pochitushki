@@ -97,6 +97,28 @@ class TelegramService(
     }
 
     /**
+     * Edit message
+     */
+    fun editMessage(
+        chatId: Long,
+        messageId: Long,
+        text: String,
+        keyboard: ReplyMarkup,
+        disableWebPagePreview: Boolean? = null,
+        parseMode: ParseMode? = null
+    ) {
+        // TODO handle warning
+        botProvider.getBot().editMessageText(
+            chatId = ChatId.Id(chatId),
+            messageId = messageId,
+            text = text,
+            replyMarkup = keyboard,
+            disableWebPagePreview = disableWebPagePreview,
+            parseMode = parseMode,
+        )
+    }
+
+    /**
      * Handle Telegram error responses.
      */
     private fun handleTgErrorResponse(tgBotResult: TelegramBotResult<Message>, chatId: Long) {
@@ -308,7 +330,7 @@ class TelegramService(
         logger.info("getFeed success: chatId={}, offset={}", chatId, offset)
     }
 
-    fun getRandomPost(chatId: Long, messageId: Long) {
+    fun getRandomPost(chatId: Long, messageId: Long, isEditMessage: Boolean = false) {
         logger.debug("getRandomPost: chatId={}, messageId={}", chatId, messageId)
 
         val user = userService.findUserByChatId(chatId)
@@ -327,10 +349,21 @@ class TelegramService(
 
         val postItem = PostFeedItem(
             message = buildPostMessage(randomPost.url, randomPost.title),
-            keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(randomPost.id, PostType.UNREAD, user.settings.languageCode)
+            keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(randomPost.id, user.settings.languageCode)
         )
 
-        sendPostMessage(chatId, messageId, postItem)
+        if (isEditMessage) {
+            editMessage(
+                chatId = chatId,
+                messageId = messageId,
+                disableWebPagePreview = false,
+                parseMode = ParseMode.MARKDOWN_V2,
+                text = postItem.message,
+                keyboard = postItem.keyboard
+            )
+        } else {
+            sendPostMessage(chatId, messageId, postItem)
+        }
 
         logger.info("getRandomPost success: chatId={}, messageId={}", chatId, messageId)
     }
@@ -384,11 +417,11 @@ class TelegramService(
         val languageCode = user.settings.languageCode
 
         // TODO handle warning
-        botProvider.getBot().editMessageText(
-            chatId = ChatId.Id(chatId),
+        editMessage(
+            chatId = chatId,
             messageId = messageId,
             text = i18nService.getMessage("command.profile.settings.feed.message", languageCode),
-            replyMarkup = telegramKeyboard.buildSettingsFeedKeyboard(user.settings.tgFeedEntriesNumber, languageCode)
+            keyboard = telegramKeyboard.buildSettingsFeedKeyboard(user.settings.tgFeedEntriesNumber, languageCode)
         )
 
         logger.debug("getFeedSettings success: chatId={}, messageId={}", chatId, messageId)
@@ -401,11 +434,11 @@ class TelegramService(
             ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
         // TODO handle warning
-        botProvider.getBot().editMessageText(
-            chatId = ChatId.Id(chatId),
+        editMessage(
+            chatId = chatId,
             messageId = messageId,
             text = i18nService.getMessage("command.profile.settings.language.message", user.settings.languageCode),
-            replyMarkup = telegramKeyboard.buildSettingsLanguageKeyboard(user.settings.languageCode)
+            keyboard = telegramKeyboard.buildSettingsLanguageKeyboard(user.settings.languageCode)
         )
 
         logger.debug("getLanguageSettings success: chatId={}, messageId={}", chatId, messageId)
@@ -448,12 +481,11 @@ class TelegramService(
 
         userService.updateUserSettings(user.id, updatedUserSettings)
 
-        // TODO handle warning
-        botProvider.getBot().editMessageText(
-            chatId = ChatId.Id(chatId),
+        editMessage(
+            chatId = chatId,
             messageId = messageId,
             text = i18nService.getMessage("command.profile.settings.language.message", languageCode),
-            replyMarkup = telegramKeyboard.buildSettingsLanguageKeyboard(languageCode)
+            keyboard = telegramKeyboard.buildSettingsLanguageKeyboard(languageCode)
         )
 
         logger.info("updateUserSettingsLanguageCode success: chatId={}, messageId={}, languageCode={}", chatId, messageId, languageCode)
@@ -469,12 +501,11 @@ class TelegramService(
 
         userService.updateUserSettings(user.id, updatedUserSettings)
 
-        // TODO handle warning
-        botProvider.getBot().editMessageText(
-            chatId = ChatId.Id(chatId),
+        editMessage(
+            chatId = chatId,
             messageId = messageId,
             text = i18nService.getMessage("command.profile.settings.feed.message", user.settings.languageCode),
-            replyMarkup = telegramKeyboard.buildSettingsFeedKeyboard(tgFeedEntriesNumber, user.settings.languageCode)
+            keyboard = telegramKeyboard.buildSettingsFeedKeyboard(tgFeedEntriesNumber, user.settings.languageCode)
         )
 
         logger.info("updateUserSettingsFeedCount success: chatId={}, tgFeedEntriesNumber={}", chatId, tgFeedEntriesNumber)

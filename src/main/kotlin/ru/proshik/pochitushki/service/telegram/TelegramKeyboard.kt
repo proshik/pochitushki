@@ -22,6 +22,8 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         const val CALLBACK_NEXT_POSTS = "next_posts"
         const val CALLBACK_PREVIOUS_POSTS = "previous_posts"
 
+        const val CALLBACK_RANDOM_POST = "random_post"
+
         const val CALLBACK_NEXT_ARCHIVE_POSTS = "next_archive_posts"
         const val CALLBACK_PREVIOUS_ARCHIVE_POSTS = "previous_archive_posts"
 
@@ -59,6 +61,11 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         )
     }
 
+    /**
+     * Feed settings keyboard:
+     *
+     * [ 1 ][ 2 ][ 3 ][ 4 ][ 5 ]
+     */
     fun buildSettingsFeedKeyboard(feedEntriesNumber: Int, languageCode: String): InlineKeyboardMarkup {
         val countPostButtons = (1..5).map {
             val (text, value) = if (it == feedEntriesNumber) {
@@ -83,6 +90,12 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         )
     }
 
+    /**
+     * Keyboard Profile command:
+     *
+     * [ Feed settings ]
+     * [ Language settings ]
+     */
     fun buildProfileSettingsKeyboard(languageCode: String): InlineKeyboardMarkup {
         return InlineKeyboardMarkup.create(
             listOf(
@@ -102,6 +115,41 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         )
     }
 
+    /**
+     * Keyboard for item of UNREAD and ARCHIVE posts:
+     *
+     * [ Archive ] [ Delete ]
+     * [  Next random post  ]
+     */
+    fun buildRandomPostInlineKeyboard(postId: Long, languageCode: String): InlineKeyboardMarkup {
+        return InlineKeyboardMarkup.create(
+            listOf(
+                listOf(
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.feed.button.archive", languageCode),
+                        callbackData = "$CALLBACK_ARCHIVE_POST|$postId"
+                    ),
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.feed.button.delete", languageCode),
+                        callbackData = "$CALLBACK_DELETE_POST|$postId"
+                    )
+                ),
+                listOf(
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.random_post.button.next_random_post", languageCode),
+                        callbackData = "$CALLBACK_RANDOM_POST|_"
+                    ),
+                )
+            )
+        )
+    }
+
+    /**
+     * Keyboard for item of UNREAD and ARCHIVE posts:
+     *
+     * [ Unread ] [ Delete ]
+     * [ Archive ] [ Delete ]
+     */
     fun buildFeedPostInlineKeyboard(postId: Long, postType: PostType, languageCode: String): InlineKeyboardMarkup {
         val (unreadOrArchive, delete) = when (postType) {
             PostType.UNREAD -> {
@@ -141,6 +189,8 @@ class TelegramKeyboard(private val i18nService: I18nService) {
      * If offset=0, then print just "Next" button.
      * If offset > 0 and (offset + postSize) > countOfPosts, then print "Next" and "Previous" button.
      * if offset > 0 and (offset + postSize) = countOfPosts, then print just "Previous" button.
+     *
+     * [ Previous ][ Next ]
      */
     fun buildNavigationKeyboard(
         postType: PostType,
