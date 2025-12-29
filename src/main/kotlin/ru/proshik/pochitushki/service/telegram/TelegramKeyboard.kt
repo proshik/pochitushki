@@ -14,15 +14,17 @@ class TelegramKeyboard(private val i18nService: I18nService) {
 
     companion object {
         const val CALLBACK_ARCHIVE_POST = "archive_button"
-        const val CALLBACK_DELETE_POST = "delete_button"
-
         const val CALLBACK_UNREAD_POST = "unread_button"
+
+        const val CALLBACK_DELETE_POST = "delete_button"
         const val CALLBACK_DELETE_ARCHIVE_POST = "delete_archive_button"
 
         const val CALLBACK_NEXT_POSTS = "next_posts"
         const val CALLBACK_PREVIOUS_POSTS = "previous_posts"
 
-        const val CALLBACK_RANDOM_POST = "random_post"
+        const val CALLBACK_RANDOM_POST_ARCHIVE = "random_archive_button"
+        const val CALLBACK_RANDOM_POST_DELETE = "random_delete_button"
+        const val CALLBACK_NEXT_RANDOM_POST = "next_random_post"
 
         const val CALLBACK_NEXT_ARCHIVE_POSTS = "next_archive_posts"
         const val CALLBACK_PREVIOUS_ARCHIVE_POSTS = "previous_archive_posts"
@@ -119,7 +121,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
      * Keyboard for item of UNREAD and ARCHIVE posts:
      *
      * [ Archive ] [ Delete ]
-     * [  Next random post  ]
+     * [  Next Random Post  ]
      */
     fun buildRandomPostInlineKeyboard(postId: Long, languageCode: String): InlineKeyboardMarkup {
         return InlineKeyboardMarkup.create(
@@ -127,17 +129,17 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                 listOf(
                     InlineKeyboardButton.CallbackData(
                         text = i18nService.getMessage("command.feed.button.archive", languageCode),
-                        callbackData = "$CALLBACK_ARCHIVE_POST|$postId"
+                        callbackData = "$CALLBACK_RANDOM_POST_ARCHIVE|$postId"
                     ),
                     InlineKeyboardButton.CallbackData(
                         text = i18nService.getMessage("command.feed.button.delete", languageCode),
-                        callbackData = "$CALLBACK_DELETE_POST|$postId"
+                        callbackData = "$CALLBACK_RANDOM_POST_DELETE|$postId"
                     )
                 ),
                 listOf(
                     InlineKeyboardButton.CallbackData(
                         text = i18nService.getMessage("command.random_post.button.next_random_post", languageCode),
-                        callbackData = "$CALLBACK_RANDOM_POST|_"
+                        callbackData = "$CALLBACK_NEXT_RANDOM_POST|_"
                     ),
                 )
             )

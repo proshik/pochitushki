@@ -212,10 +212,10 @@ class TelegramService(
     }
 
     fun toArchivePost(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("archivePost: chatId={}, postId={}", chatId, postId)
+        logger.debug("toArchivePost: chatId={}, postId={}", chatId, postId)
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("archivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
+        logger.debug("toArchivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
         postService.archivePost(postId)
 
@@ -224,14 +224,25 @@ class TelegramService(
             messageId = messageId
         )
 
+        logger.info("toArchivePost success: chatId={}, postId={}", chatId, postId)
+    }
+
+    fun archivePost(chatId: Long, messageId: Long, postId: Long) {
+        logger.debug("archivePost: chatId={}, postId={}", chatId, postId)
+
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+        logger.debug("archivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
+
+        postService.archivePost(postId)
+
         logger.info("archivePost success: chatId={}, postId={}", chatId, postId)
     }
 
     fun toUnreadPost(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("unreadPost: chatId={}, postId={}", chatId, postId)
+        logger.debug("toUnreadPost: chatId={}, postId={}", chatId, postId)
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("unreadPost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
+        logger.debug("toUnreadPost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
         postService.unreadPost(postId)
 
@@ -240,14 +251,14 @@ class TelegramService(
             messageId = messageId
         )
 
-        logger.info("unreadPost success: chatId={}, postId={}", chatId, postId)
+        logger.info("toUnreadPost success: chatId={}, postId={}", chatId, postId)
     }
 
     fun toDeletePost(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
-        logger.debug("deletePost: chatId={}, postId={}, postType={}", chatId, postId, postType)
+        logger.debug("toDeletePost: chatId={}, postId={}, postType={}", chatId, postId, postType)
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("deletePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
+        logger.debug("toDeletePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
         postService.deletePost(postId, postType)
 
@@ -256,7 +267,18 @@ class TelegramService(
             messageId = messageId
         )
 
-        logger.info("deletePost success: chatId={}, postId={}", chatId, postId)
+        logger.info("toDeletePost success: chatId={}, postId={}", chatId, postId)
+    }
+
+    fun deletePost(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
+        logger.debug("deletePost: chatId={}, postId={}, postType={}", chatId, postId, postType)
+
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+        logger.debug("deletePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
+
+        postService.deletePost(postId, postType)
+
+        logger.info("deletePost success: chatId={}, postId={}, postType={}", chatId, postId, postType)
     }
 
     fun getFeed(chatId: Long, messageId: Long, offset: Int = 0, postType: PostType) {

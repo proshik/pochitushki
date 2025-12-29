@@ -64,12 +64,21 @@ class CallbackQueryHandler(
                 telegramService.toDeletePost(chatId, message.messageId, postId, PostType.ARCHIVE)
             }
             /**
-             * Next random post
+             * Random post
              */
-            TelegramKeyboard.CALLBACK_RANDOM_POST -> {
+            TelegramKeyboard.CALLBACK_RANDOM_POST_ARCHIVE -> {
+                val postId = data.toLong()
+                telegramService.archivePost(chatId, message.messageId, postId)
                 telegramService.getRandomPost(chatId, message.messageId, true)
             }
-
+            TelegramKeyboard.CALLBACK_RANDOM_POST_DELETE -> {
+                val postId = data.toLong()
+                telegramService.deletePost(chatId, message.messageId, postId, PostType.UNREAD)
+                telegramService.getRandomPost(chatId, message.messageId, true)
+            }
+            TelegramKeyboard.CALLBACK_NEXT_RANDOM_POST -> {
+                telegramService.getRandomPost(chatId, message.messageId, true)
+            }
             /**
              * Unread feed navigation
              */
