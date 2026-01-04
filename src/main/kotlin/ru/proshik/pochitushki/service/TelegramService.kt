@@ -168,19 +168,22 @@ class TelegramService(
         if (storedPost.isEmpty()) {
             logger.debug("post not found: chatId={}, url={}", chatId, url)
 
-            val storedPostTitle = postService.addPost(url, user.id)
+            val (storedPostId, storedPostTitle) = postService.addPost(url, user.id)
 
             val textMessage = i18nService.getMessage("command.feed.add_post", user.settings.languageCode)
             val message = if (storedPostTitle != null) {
-                "$textMessage: \"$storedPostTitle\""
+                "$textMessage\n\n$storedPostTitle"
             } else {
                 textMessage
             }
 
+            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(storedPostId, PostType.UNREAD, user.settings.languageCode)
+
             val result = botProvider.getBot().sendMessage(
                 chatId = ChatId.fromId(chatId),
                 text = message,
-                replyToMessageId = messageId
+                replyToMessageId = messageId,
+                replyMarkup = keyboard
             )
             handleTgErrorResponse(result, chatId)
         } else {

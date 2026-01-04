@@ -20,15 +20,15 @@ class PostService(
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    fun addPost(url: URL, userId: Long): String? {
+    fun addPost(url: URL, userId: Long): Pair<Long, String?> {
         val urlString = url.toString()
         val title = loadTitle(urlString)
 
         val postStoreData = PostStoreData(title, urlString, userId)
 
-        postDao.addPost(postStoreData)
+        val addedPostId = postDao.addPost(postStoreData)
 
-        return title
+        return Pair(addedPostId, title)
     }
 
     fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
