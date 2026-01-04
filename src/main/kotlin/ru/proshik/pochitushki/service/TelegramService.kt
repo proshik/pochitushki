@@ -128,6 +128,20 @@ class TelegramService(
         )
     }
 
+    fun showErrorMessage(chatId: Long) {
+        logger.info("showErrorMessage: chatId={}", chatId)
+
+        val user = userService.getUserByChatId(chatId)
+
+        val result = botProvider.getBot().sendMessage(
+            chatId = ChatId.fromId(chatId),
+            text = i18nService.getMessage("command.feed.add_post.error", user.settings.languageCode),
+        )
+        handleTgErrorResponse(result, chatId)
+
+        logger.info("showErrorMessage success: chatId={}", chatId)
+    }
+
     /**
      * Add post to unread feed
      */

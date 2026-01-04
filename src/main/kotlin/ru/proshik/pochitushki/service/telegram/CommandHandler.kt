@@ -3,9 +3,11 @@ package ru.proshik.pochitushki.service.telegram
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.dispatcher.message
+import com.github.kotlintelegrambot.dispatcher.telegramError
 import com.github.kotlintelegrambot.dispatcher.text
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.Update
+import com.github.kotlintelegrambot.errors.TelegramError
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import ru.proshik.pochitushki.model.PostType
@@ -58,6 +60,12 @@ class CommandHandler(
         dispatcher.command(COMMAND_PROFILE) { handleProfileOperations(message) }
 
         dispatcher.message { handleFileUpload(message) }
+
+        dispatcher.telegramError { handleError(error) }
+    }
+
+    private fun handleError(error: TelegramError) {
+        logger.warn("telegram error: {}", error)
     }
 
     private fun handleStartCommand(update: Update) {
@@ -148,8 +156,12 @@ class CommandHandler(
         }
 
         if (message.text != null) {
-            telegramService.addPost(message.chat.id, message.messageId, message.text!!)
-
+            try {
+                telegramService.addPost(message.chat.id, message.messageId, message.text!!)
+            } catch (ex: Exception) {
+                logger.warn("error adding post message=${message.chat.id}", ex)
+                telegramService.showErrorMessage(message.chat.id)
+            }
             return
         }
 
