@@ -165,7 +165,7 @@ class TelegramService(
         }
 
         val storedPost = postService.findPost(user.id, PostType.UNREAD, url)
-        if (storedPost == null) {
+        if (storedPost.isEmpty()) {
             logger.debug("post not found: chatId={}, url={}", chatId, url)
 
             val storedPostTitle = postService.addPost(url, user.id)
@@ -186,16 +186,18 @@ class TelegramService(
         } else {
             logger.debug("post already added: chatId={}, url={}", chatId, url)
 
-            val message = buildPostMessage(
-                url.toString(),
-                storedPost.title,
-                i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode)
-            )
-            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(storedPost.id, PostType.UNREAD, user.settings.languageCode)
+            storedPost.forEach { post ->
+                val message = buildPostMessage(
+                    url.toString(),
+                    post.title,
+                    i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode)
+                )
+                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.UNREAD, user.settings.languageCode)
 
-            val postFeedItem = PostFeedItem(message, keyboard)
+                val postFeedItem = PostFeedItem(message, keyboard)
 
-            sendPostMessage(chatId = chatId, postItem = postFeedItem)
+                sendPostMessage(chatId = chatId, postItem = postFeedItem)
+            }
         }
 
         logger.info("addPost success: chatId={}, messageId={}, rawUrl={}", chatId, messageId, rawUrl)

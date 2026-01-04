@@ -35,7 +35,7 @@ class PostService(
         return postDao.getPosts(userId, postType, limit, offset)
     }
 
-    fun findPost(userId: Long, postType: PostType, url: URL): PostData? {
+    fun findPost(userId: Long, postType: PostType, url: URL): List<PostData> {
         return postDao.findPost(userId, postType, url.toString())
     }
 

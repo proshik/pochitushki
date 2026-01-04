@@ -57,7 +57,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
     }
 
-    fun findPost(userId: Long, postType: PostType, url: String): PostData? {
+    fun findPost(userId: Long, postType: PostType, url: String): List<PostData> {
         val tableName = when (postType) {
             PostType.UNREAD -> "post"
             PostType.ARCHIVE -> "archive_post"
@@ -73,7 +73,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("user_id", userId)
             .addValue("url", "$url%")
 
-        return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
+        return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
     }
 
     fun getPostSequenceIds(from: Int, to: Int, postType: PostType): List<Long> {
