@@ -31,21 +31,41 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             url = rs.getString("url"),
             userId = rs.getLong("user_id"),
             tags = tags,
+            isFavorite = rs.getBoolean("is_favorite"),
             createdDate = rs.getTimestamp("created_date").toLocalDateTime(),
             updatedDate = rs.getTimestamp("updated_date").toLocalDateTime(),
         )
     }
 
-    fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
+    fun getPost(postId: Long, postType: PostType): PostData? {
         val tableName = when (postType) {
-            PostType.UNREAD -> "post"
+            PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
         }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, created_date, updated_date
             FROM $tableName
-            WHERE user_id = :user_id
+            WHERE id = :post_id
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("post_id", postId)
+
+        return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
+    }
+
+    fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
+        val tableName = when (postType) {
+            PostType.UNREAD, PostType.FAVORITES -> "post"
+            PostType.ARCHIVE -> "archive_post"
+        }
+        val favoriteFilter = if (postType == PostType.FAVORITES) "AND is_favorite = true" else ""
+
+        val sql = """
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, created_date, updated_date
+            FROM $tableName
+            WHERE user_id = :user_id $favoriteFilter
             ORDER BY created_date DESC OFFSET :offset LIMIT :limit
         """.trimIndent()
 
@@ -59,12 +79,12 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun findPost(userId: Long, postType: PostType, url: String): List<PostData> {
         val tableName = when (postType) {
-            PostType.UNREAD -> "post"
+            PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
         }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, created_date, updated_date
             FROM $tableName
             WHERE user_id = :user_id AND url ilike :url
         """.trimIndent()
@@ -78,7 +98,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getPostSequenceIds(from: Int, to: Int, postType: PostType): List<Long> {
         val seqName = when (postType) {
-            PostType.UNREAD -> "post_id_seq"
+            PostType.UNREAD, PostType.FAVORITES -> "post_id_seq"
             PostType.ARCHIVE -> "archive_post_id_seq"
         }
 
@@ -111,7 +131,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun addPosts(posts: List<PostStoreDataWithId>, postType: PostType) {
         val tableName = when (postType) {
-            PostType.UNREAD -> "post"
+            PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
         }
 
@@ -136,7 +156,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun deletePost(postId: Long, postType: PostType) {
         val tableName = when (postType) {
-            PostType.UNREAD -> "post"
+            PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
         }
 
@@ -154,8 +174,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun addToArchivePost(postId: Long) {
         val sql = """
-            INSERT INTO archive_post(title, url, tags, user_id)
-            SELECT title, url, tags, user_id
+            INSERT INTO archive_post(title, url, tags, user_id, is_favorite)
+            SELECT title, url, tags, user_id, is_favorite
             FROM post
             WHERE post.id = :post_id
         """.trimIndent()
@@ -168,8 +188,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun addToUnreadPost(postId: Long) {
         val sql = """
-            INSERT INTO post(title, url, tags, user_id)
-            SELECT title, url, tags, user_id
+            INSERT INTO post(title, url, tags, user_id, is_favorite)
+            SELECT title, url, tags, user_id, is_favorite
             FROM archive_post
             WHERE archive_post.id = :post_id
         """.trimIndent()
@@ -180,9 +200,28 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         namedParameterJdbcTemplate.update(sql, params)
     }
 
+    fun toggleFavorite(postId: Long, postType: PostType): Boolean {
+        val tableName = when (postType) {
+            PostType.UNREAD, PostType.FAVORITES -> "post"
+            PostType.ARCHIVE -> "archive_post"
+        }
+
+        val sql = """
+            UPDATE $tableName
+            SET is_favorite = NOT is_favorite
+            WHERE id = :post_id
+            RETURNING is_favorite
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("post_id", postId)
+
+        return namedParameterJdbcTemplate.queryForObject(sql, params, Boolean::class.java)!!
+    }
+
     fun getRandomPost(userId: Long): PostData? {
         val sql = """
-            SELECT id, title, url, user_id, tags, created_date, updated_date
+            SELECT id, title, url, user_id, tags, is_favorite, created_date, updated_date
             FROM post
             WHERE user_id = :user_id
             ORDER BY RANDOM()
@@ -197,14 +236,15 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getPostCount(userId: Long, postType: PostType): Int {
         val tableName = when (postType) {
-            PostType.UNREAD -> "post"
+            PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
         }
+        val favoriteFilter = if (postType == PostType.FAVORITES) "AND is_favorite = true" else ""
 
         val sql = """
             SELECT count(*)
             FROM $tableName
-            WHERE user_id = :user_id
+            WHERE user_id = :user_id $favoriteFilter
         """.trimIndent()
 
         val params = MapSqlParameterSource()

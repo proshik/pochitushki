@@ -80,6 +80,21 @@ class CallbackQueryHandler(
                 telegramService.getRandomPost(chatId, message.messageId, true)
             }
             /**
+             * Toggle favorite
+             */
+            TelegramKeyboard.CALLBACK_TOGGLE_UNREAD_FAVORITE -> {
+                val postId = data.toLong()
+                telegramService.toggleFavorite(chatId, message.messageId, postId, PostType.UNREAD)
+            }
+            TelegramKeyboard.CALLBACK_TOGGLE_ARCHIVE_FAVORITE -> {
+                val postId = data.toLong()
+                telegramService.toggleFavorite(chatId, message.messageId, postId, PostType.ARCHIVE)
+            }
+            TelegramKeyboard.CALLBACK_TOGGLE_RANDOM_FAVORITE -> {
+                val postId = data.toLong()
+                telegramService.toggleFavoriteForRandomPost(chatId, message.messageId, postId)
+            }
+            /**
              * Unread feed navigation
              */
             TelegramKeyboard.CALLBACK_NEXT_POSTS -> {
@@ -106,6 +121,18 @@ class CallbackQueryHandler(
                 val offset = data.toInt()
                 // TODO check exception
                 telegramService.getFeed(chatId, messageId, offset, PostType.ARCHIVE)
+            }
+            /**
+             * Favorites feed navigation
+             */
+            TelegramKeyboard.CALLBACK_NEXT_FAVORITES -> {
+                val offset = data.toInt()
+                telegramService.getFeed(chatId, messageId, offset, PostType.FAVORITES)
+            }
+
+            TelegramKeyboard.CALLBACK_PREVIOUS_FAVORITES -> {
+                val offset = data.toInt()
+                telegramService.getFeed(chatId, messageId, offset, PostType.FAVORITES)
             }
             /**
              * Profile settings block

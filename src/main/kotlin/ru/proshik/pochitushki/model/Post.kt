@@ -8,6 +8,7 @@ data class PostData(
     val url: String,
     val userId: Long,
     val tags: List<String>?,
+    val isFavorite: Boolean = false,
     val createdDate: LocalDateTime,
     val updatedDate: LocalDateTime
 )
@@ -38,7 +39,8 @@ data class UserToPostData(
 
 enum class PostType(val value: String) {
     UNREAD("unread"),
-    ARCHIVE("archive");
+    ARCHIVE("archive"),
+    FAVORITES("favorites");
 
     companion object {
         private val stringToType = PostType.entries.associateBy { it.name }
@@ -57,4 +59,3 @@ fun PostStoreData.toPostStoreDataWithId(id: Long) =
         createdDate = createdDate,
         updatedDate = updatedDate
     )
-

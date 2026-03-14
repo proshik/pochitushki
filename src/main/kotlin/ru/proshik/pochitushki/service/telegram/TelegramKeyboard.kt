@@ -29,6 +29,13 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         const val CALLBACK_NEXT_ARCHIVE_POSTS = "next_archive_posts"
         const val CALLBACK_PREVIOUS_ARCHIVE_POSTS = "previous_archive_posts"
 
+        const val CALLBACK_TOGGLE_UNREAD_FAVORITE = "toggle_unread_favorite"
+        const val CALLBACK_TOGGLE_ARCHIVE_FAVORITE = "toggle_archive_favorite"
+        const val CALLBACK_TOGGLE_RANDOM_FAVORITE = "toggle_random_favorite"
+
+        const val CALLBACK_NEXT_FAVORITES = "next_favorites"
+        const val CALLBACK_PREVIOUS_FAVORITES = "previous_favorites"
+
         const val CALLBACK_PROFILE_FEED_SETTINGS = "profile_feed_settings"
         const val CALLBACK_PROFILE_LANGUAGE_SETTINGS = "profile_language_settings"
 
@@ -118,12 +125,19 @@ class TelegramKeyboard(private val i18nService: I18nService) {
     }
 
     /**
-     * Keyboard for item of UNREAD and ARCHIVE posts:
+     * Keyboard for random post:
      *
      * [ Archive ] [ Delete ]
+     * [ ⭐ Favorite / ★ Unfavorite ]
      * [  Next Random Post  ]
      */
-    fun buildRandomPostInlineKeyboard(postId: Long, languageCode: String): InlineKeyboardMarkup {
+    fun buildRandomPostInlineKeyboard(postId: Long, isFavorite: Boolean, languageCode: String): InlineKeyboardMarkup {
+        val favoriteText = if (isFavorite) {
+            i18nService.getMessage("command.feed.button.unfavorite", languageCode)
+        } else {
+            i18nService.getMessage("command.feed.button.favorite", languageCode)
+        }
+
         return InlineKeyboardMarkup.create(
             listOf(
                 listOf(
@@ -138,6 +152,12 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                 ),
                 listOf(
                     InlineKeyboardButton.CallbackData(
+                        text = favoriteText,
+                        callbackData = "$CALLBACK_TOGGLE_RANDOM_FAVORITE|$postId"
+                    ),
+                ),
+                listOf(
+                    InlineKeyboardButton.CallbackData(
                         text = i18nService.getMessage("command.random_post.button.next_random_post", languageCode),
                         callbackData = "$CALLBACK_NEXT_RANDOM_POST|_"
                     ),
@@ -147,14 +167,19 @@ class TelegramKeyboard(private val i18nService: I18nService) {
     }
 
     /**
-     * Keyboard for item of UNREAD and ARCHIVE posts:
+     * Keyboard for item of UNREAD, ARCHIVE, and FAVORITES posts:
      *
-     * [ Unread ] [ Delete ]
-     * [ Archive ] [ Delete ]
+     * [ Archive / Unread ] [ Delete ]
+     * [ ⭐ Favorite / ★ Unfavorite ]
      */
-    fun buildFeedPostInlineKeyboard(postId: Long, postType: PostType, languageCode: String): InlineKeyboardMarkup {
+    fun buildFeedPostInlineKeyboard(
+        postId: Long,
+        postType: PostType,
+        isFavorite: Boolean,
+        languageCode: String
+    ): InlineKeyboardMarkup {
         val (unreadOrArchive, delete) = when (postType) {
-            PostType.UNREAD -> {
+            PostType.UNREAD, PostType.FAVORITES -> {
                 Pair(
                     Pair(i18nService.getMessage("command.feed.button.archive", languageCode), CALLBACK_ARCHIVE_POST),
                     Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_POST)
@@ -169,6 +194,16 @@ class TelegramKeyboard(private val i18nService: I18nService) {
             }
         }
 
+        val favoriteCallback = when (postType) {
+            PostType.ARCHIVE -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
+            else -> CALLBACK_TOGGLE_UNREAD_FAVORITE
+        }
+        val favoriteText = if (isFavorite) {
+            i18nService.getMessage("command.feed.button.unfavorite", languageCode)
+        } else {
+            i18nService.getMessage("command.feed.button.favorite", languageCode)
+        }
+
         return InlineKeyboardMarkup.create(
             listOf(
                 listOf(
@@ -179,6 +214,12 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                     InlineKeyboardButton.CallbackData(
                         text = delete.first,
                         callbackData = "${delete.second}|$postId"
+                    )
+                ),
+                listOf(
+                    InlineKeyboardButton.CallbackData(
+                        text = favoriteText,
+                        callbackData = "$favoriteCallback|$postId"
                     )
                 ),
             )
@@ -214,6 +255,11 @@ class TelegramKeyboard(private val i18nService: I18nService) {
             PostType.ARCHIVE -> {
                 previousCallbackAction = CALLBACK_NEXT_ARCHIVE_POSTS
                 nextCallbackAction = CALLBACK_PREVIOUS_ARCHIVE_POSTS
+            }
+
+            PostType.FAVORITES -> {
+                previousCallbackAction = CALLBACK_PREVIOUS_FAVORITES
+                nextCallbackAction = CALLBACK_NEXT_FAVORITES
             }
         }
 
@@ -260,15 +306,4 @@ class TelegramKeyboard(private val i18nService: I18nService) {
 
         return navigationKeyboard
     }
-
-    /**
-     * Create main keyboard.
-     */
-//    fun mainKeyboard(): List<List<KeyboardButton>> {
-//        return listOf(
-//            listOf(KeyboardButton(R_BUTTON_FEED_EN)),
-//            listOf(KeyboardButton(R_BUTTON_RANDOM_POST_EN), KeyboardButton(R_BUTTON_ARCHIVE_EN)),
-//            listOf(KeyboardButton(R_BUTTON_PROFILE_EN)),
-//        )
-//    }
 }

@@ -36,6 +36,7 @@ class CommandHandler(
         const val COMMAND_ARCHIVE = "archive"
         const val COMMAND_RANDOM_POST = "random_post"
         const val COMMAND_PROFILE = "profile"
+        const val COMMAND_FAVORITES = "favorites"
 
         val COMMANDS = listOf(
             "/$COMMAND_START",
@@ -44,6 +45,7 @@ class CommandHandler(
             "/$COMMAND_ARCHIVE",
             "/$COMMAND_RANDOM_POST",
             "/$COMMAND_PROFILE",
+            "/$COMMAND_FAVORITES",
         )
     }
 
@@ -58,6 +60,7 @@ class CommandHandler(
         dispatcher.command(COMMAND_RANDOM_POST) { handleRandomPostOperation(message) }
         dispatcher.command(COMMAND_ARCHIVE) { handleArchivePostOperation(message) }
         dispatcher.command(COMMAND_PROFILE) { handleProfileOperations(message) }
+        dispatcher.command(COMMAND_FAVORITES) { handleFavoritesOperation(message) }
 
         dispatcher.message { handleFileUpload(message) }
 
@@ -114,6 +117,10 @@ class CommandHandler(
 
     private fun handleArchivePostOperation(message: Message) {
         telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.ARCHIVE)
+    }
+
+    private fun handleFavoritesOperation(message: Message) {
+        telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.FAVORITES)
     }
 
     /**

@@ -177,7 +177,7 @@ class TelegramService(
                 textMessage
             }
 
-            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(storedPostId, PostType.UNREAD, user.settings.languageCode)
+            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(storedPostId, PostType.UNREAD, false, user.settings.languageCode)
 
             val result = botProvider.getBot().sendMessage(
                 chatId = ChatId.fromId(chatId),
@@ -195,7 +195,7 @@ class TelegramService(
                     post.title,
                     i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode)
                 )
-                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.UNREAD, user.settings.languageCode)
+                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.UNREAD, post.isFavorite, user.settings.languageCode)
 
                 val postFeedItem = PostFeedItem(message, keyboard)
 
@@ -312,9 +312,13 @@ class TelegramService(
 
         val posts = postService.getPosts(user.id, postType, user.settings.tgFeedEntriesNumber, offset)
         if (posts.isEmpty()) {
+            val notFoundCode = when (postType) {
+                PostType.FAVORITES -> "command.feed.not_found_favorites"
+                else -> "command.feed.not_found_post"
+            }
             sendMessageWithReplayKeyboard(
                 chatId = chatId,
-                text = i18nService.getMessage("command.feed.not_found_post", languageCode),
+                text = i18nService.getMessage(notFoundCode, languageCode),
                 replyToMessageId = messageId
             )
 
@@ -324,7 +328,7 @@ class TelegramService(
         val message = posts
             .map { post ->
                 val message = buildPostMessage(post.url, post.title)
-                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, postType, languageCode)
+                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, postType, post.isFavorite, languageCode)
 
                 PostFeedItem(message, keyboard)
             }
@@ -333,6 +337,7 @@ class TelegramService(
             val messageCode = when (postType) {
                 PostType.UNREAD -> "command.feed.unread_message"
                 PostType.ARCHIVE -> "command.feed.archive_message"
+                PostType.FAVORITES -> "command.favorites.message"
             }
 
             val text = i18nService.getMessage(messageCode, languageCode, arrayOf(countOfPosts))
@@ -390,7 +395,7 @@ class TelegramService(
 
         val postItem = PostFeedItem(
             message = buildPostMessage(randomPost.url, randomPost.title),
-            keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(randomPost.id, user.settings.languageCode)
+            keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(randomPost.id, randomPost.isFavorite, user.settings.languageCode)
         )
 
         if (isEditMessage) {
@@ -407,6 +412,60 @@ class TelegramService(
         }
 
         logger.info("getRandomPost success: chatId={}, messageId={}", chatId, messageId)
+    }
+
+    fun toggleFavorite(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
+        logger.debug("toggleFavorite: chatId={}, postId={}, postType={}", chatId, postId, postType)
+
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+
+        val newIsFavorite = postService.toggleFavorite(postId, postType)
+        val post = postService.getPost(postId, postType)
+        if (post == null) {
+            logger.warn("toggleFavorite: post not found postId={}", postId)
+            return
+        }
+
+        val messageText = buildPostMessage(post.url, post.title)
+        val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(postId, postType, newIsFavorite, user.settings.languageCode)
+
+        editMessage(
+            chatId = chatId,
+            messageId = messageId,
+            text = messageText,
+            keyboard = keyboard,
+            disableWebPagePreview = false,
+            parseMode = ParseMode.MARKDOWN_V2
+        )
+
+        logger.info("toggleFavorite success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
+    }
+
+    fun toggleFavoriteForRandomPost(chatId: Long, messageId: Long, postId: Long) {
+        logger.debug("toggleFavoriteForRandomPost: chatId={}, postId={}", chatId, postId)
+
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+
+        val newIsFavorite = postService.toggleFavorite(postId, PostType.UNREAD)
+        val post = postService.getPost(postId, PostType.UNREAD)
+        if (post == null) {
+            logger.warn("toggleFavoriteForRandomPost: post not found postId={}", postId)
+            return
+        }
+
+        val messageText = buildPostMessage(post.url, post.title)
+        val keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(postId, newIsFavorite, user.settings.languageCode)
+
+        editMessage(
+            chatId = chatId,
+            messageId = messageId,
+            text = messageText,
+            keyboard = keyboard,
+            disableWebPagePreview = false,
+            parseMode = ParseMode.MARKDOWN_V2
+        )
+
+        logger.info("toggleFavoriteForRandomPost success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
     }
 
     fun import(chatId: Long, fileId: String) {

@@ -76,4 +76,12 @@ class PostService(
     fun getPostCount(userId: Long, postType: PostType): Int {
         return postDao.getPostCount(userId, postType)
     }
+
+    fun toggleFavorite(postId: Long, postType: PostType): Boolean {
+        return postDao.toggleFavorite(postId, postType)
+    }
+
+    fun getPost(postId: Long, postType: PostType): PostData? {
+        return postDao.getPost(postId, postType)
+    }
 }

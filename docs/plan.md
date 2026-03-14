@@ -4,8 +4,8 @@
 
 | Фаза | Название | Статус |
 |------|----------|--------|
-| 1 | Тесты (актуализация + расширение) | ⏳ В очереди |
-| 2 | Favorites | ⏳ В очереди |
+| 1 | Тесты (актуализация + расширение) | 🔄 В процессе |
+| 2 | Favorites | ✅ Готово |
 | 3 | PDF | ⏳ В очереди |
 | 4 | Auth + Web Foundation | ⏳ В очереди |
 | 5 | Web UI | ⏳ В очереди |
@@ -20,14 +20,16 @@
 **Цель**: настоящие тесты с поднятием Spring-контекста, покрытие текущего функционала.
 
 ### Что сделать
-- `TelegramControllerTest` — реальный тест webhook endpoint (сейчас заглушка)
+- [x] `BaseIntegrationTest` — базовый класс с TestContainers + WireMock
+- [x] `TelegramBotIntegrationTest` — реальный тест webhook endpoint (`/start`, добавление поста по URL)
+- [ ] `TelegramControllerTest` — сейчас заглушка (println), заменить реальным тестом
 - Интеграционные тесты (extends `BaseIntegrationTest`):
-  - `PostServiceTest` — addPost, archivePost, unreadPost, getRandomPost, deletePost
-  - `UserServiceTest` — создание/получение пользователя, обновление настроек
-  - `PostDaoTest` — CRUD + пагинация + поиск по URL
-  - `ImportServiceTest` — разбор Pocket CSV/ZIP
+  - [ ] `PostServiceTest` — addPost, archivePost, unreadPost, getRandomPost, deletePost
+  - [ ] `UserServiceTest` — создание/получение пользователя, обновление настроек
+  - [ ] `PostDaoTest` — CRUD + пагинация + поиск по URL
+  - [ ] `ImportServiceTest` — разбор Pocket CSV/ZIP
 - Unit-тесты (без Spring):
-  - `I18nServiceTest` — fallback на EN при отсутствии перевода
+  - [ ] `I18nServiceTest` — fallback на EN при отсутствии перевода
 
 ### Ключевые файлы
 - `src/test/kotlin/ru/proshik/pochitushki/BaseIntegrationTest.kt` — переиспользовать
@@ -44,32 +46,32 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 ```
 
 ### Изменения
-- `PostData` — добавить поле `isFavorite: Boolean`
-- `PostDao` — метод `setFavorite(postId, postType, value)`, фильтр `is_favorite = true` в getPosts
-- `PostService` — метод `toggleFavorite(postId, postType)`
-- Telegram: callback `CALLBACK_TOGGLE_FAVORITE`, иконка ⭐, команда `/favorites`
+- [x] `PostData` — добавить поле `isFavorite: Boolean`
+- [x] `PostDao` — метод `toggleFavorite(postId, postType)`, фильтр `is_favorite = true` в getPosts/getPostCount, сохранение is_favorite при archive/unread
+- [x] `PostService` — метод `toggleFavorite(postId, postType)`, `getPost(postId, postType)`
+- [x] Telegram: callback `CALLBACK_TOGGLE_UNREAD/ARCHIVE/RANDOM_FAVORITE`, иконка ⭐, команда `/favorites`, PostType.FAVORITES
 
 ### Тесты
-- `PostServiceTest` — toggleFavorite, фильтрация
-- `PostDaoTest` — setFavorite, фильтр
+- [x] `PostServiceTest` — toggleFavorite, фильтрация, archivePost/unreadPost preserves is_favorite
+- [x] `PostDaoTest` — toggleFavorite, фильтр, archive/unread preserves is_favorite
 
 ---
 
 ## Фаза 3 — PDF
 
 ### Библиотека
-- Начать с **openhtmltopdf community fork** (lightweight):
+- [ ] Начать с **openhtmltopdf community fork** (lightweight):
   ```kotlin
   implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
   ```
 - Если качество плохое — переключиться на **Playwright Java**
 
 ### Новые файлы
-- `service/PdfService.kt` — `generate(url): ByteArray` (Jsoup → очистить HTML → PDF)
-- Опционально: кеш `post_pdf(post_id, content BYTEA, created_at)`
+- [ ] `service/PdfService.kt` — `generate(url): ByteArray` (Jsoup → очистить HTML → PDF)
+- [ ] Опционально: кеш `post_pdf(post_id, content BYTEA, created_at)`
 
 ### Telegram
-- Кнопка "📄 PDF" на карточке поста → `sendDocument(chatId, pdf, filename)`
+- [ ] Кнопка "📄 PDF" на карточке поста → `sendDocument(chatId, pdf, filename)`
 
 ---
 
@@ -88,12 +90,12 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 ```
 
 ### Новые файлы
-- `service/TelegramAuthService.kt`
-- `service/JwtService.kt`
-- `configuration/JwtAuthInterceptor.kt`
-- `configuration/WebConfig.kt`
-- `controller/AuthController.kt` — GET /login, GET /auth/telegram/callback, GET /logout
-- `templates/login.html`
+- [ ] `service/TelegramAuthService.kt`
+- [ ] `service/JwtService.kt`
+- [ ] `configuration/JwtAuthInterceptor.kt`
+- [ ] `configuration/WebConfig.kt`
+- [ ] `controller/AuthController.kt` — GET /login, GET /auth/telegram/callback, GET /logout
+- [ ] `templates/login.html`
 
 ### Dependencies
 ```kotlin
@@ -111,7 +113,7 @@ runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
 - CDN для HTMX и Tailwind
 
 ### Страницы
-- `/login`, `/feed`, `/archive`, `/favorites`, `/profile`
+- [ ] `/login`, `/feed`, `/archive`, `/favorites`, `/profile`
 
 ### REST API
 ```
@@ -154,9 +156,9 @@ CREATE TABLE archive_post_label (
 ```
 
 ### Новые файлы
-- `model/Label.kt`, `repository/LabelDao.kt`, `service/LabelService.kt`
-- `PostData` — добавить `labels: List<LabelData>`
-- В боте: метки текстом под постом (`#kotlin #work`)
+- [ ] `model/Label.kt`, `repository/LabelDao.kt`, `service/LabelService.kt`
+- [ ] `PostData` — добавить `labels: List<LabelData>`
+- [ ] В боте: метки текстом под постом (`#kotlin #work`)
 
 ### REST API
 ```
