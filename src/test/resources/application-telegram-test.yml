@@ -1,0 +1,5 @@
+telegram:
+  enabled: true
+  token: test_token
+  token-name: test_token_name
+  base-url: http://localhost:8080

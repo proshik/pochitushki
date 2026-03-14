@@ -34,6 +34,7 @@ class TelegramBotConfiguration(
         logger.info("initializing telegram bot")
         val bot = bot {
             token = telegramProperties.token
+            apiUrl = telegramProperties.apiUrl
             logLevel = LogLevel.Error
             dispatch {
                 // Register all handlers
@@ -46,7 +47,7 @@ class TelegramBotConfiguration(
                 }
             }
 
-            if (telegramProperties.webhookUrl != null) {
+            if (!telegramProperties.webhookUrl.isNullOrBlank()) {
                 webhook {
                     url = telegramProperties.webhookUrl
                     allowedUpdates = listOf("message")
@@ -54,7 +55,7 @@ class TelegramBotConfiguration(
             }
         }
 
-        if (telegramProperties.webhookUrl != null) {
+        if (!telegramProperties.webhookUrl.isNullOrBlank()) {
             bot.startWebhook()
             logger.info("telegram bot started in webhook mode")
         } else {

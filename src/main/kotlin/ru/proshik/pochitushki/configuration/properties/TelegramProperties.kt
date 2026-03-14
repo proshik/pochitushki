@@ -24,4 +24,8 @@ data class TelegramProperties(
      * Установка url до сервиса для режима webhook, одновременно и включает его. В url содержится ещё и token
      */
     val webhookUrl: String? = null,
+    /**
+     * Base URL для Telegram Bot API. Оставляем дефолт, но переопределяется в тестах для подмены через WireMock.
+     */
+    val apiUrl: String = "https://api.telegram.org/",
 )

@@ -58,9 +58,11 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.28.0")
 
     // TestContainers
-    testImplementation("org.testcontainers:testcontainers:1.21.3")
-    testImplementation("org.testcontainers:junit-jupiter:1.21.3")
-    testImplementation("org.testcontainers:postgresql:1.21.3")
+    testImplementation("org.testcontainers:testcontainers:2.0.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    testImplementation("org.testcontainers:postgresql:1.21.4")
+
+    testImplementation("org.wiremock:wiremock-standalone:3.13.0")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
