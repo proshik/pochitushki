@@ -95,6 +95,17 @@ class CallbackQueryHandler(
                 telegramService.toggleFavoriteForRandomPost(chatId, message.messageId, postId)
             }
             /**
+             * PDF generation
+             */
+            TelegramKeyboard.CALLBACK_PDF_UNREAD_POST -> {
+                val postId = data.toLong()
+                telegramService.sendPostPdf(chatId, postId, PostType.UNREAD)
+            }
+            TelegramKeyboard.CALLBACK_PDF_ARCHIVE_POST -> {
+                val postId = data.toLong()
+                telegramService.sendPostPdf(chatId, postId, PostType.ARCHIVE)
+            }
+            /**
              * Unread feed navigation
              */
             TelegramKeyboard.CALLBACK_NEXT_POSTS -> {

@@ -49,6 +49,8 @@ dependencies {
 
     implementation("org.jsoup:jsoup:1.21.1")
 
+    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
+
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")

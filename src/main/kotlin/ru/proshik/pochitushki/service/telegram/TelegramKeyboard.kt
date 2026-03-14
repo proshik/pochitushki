@@ -36,6 +36,9 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         const val CALLBACK_NEXT_FAVORITES = "next_favorites"
         const val CALLBACK_PREVIOUS_FAVORITES = "previous_favorites"
 
+        const val CALLBACK_PDF_UNREAD_POST = "pdf_unread_post"
+        const val CALLBACK_PDF_ARCHIVE_POST = "pdf_archive_post"
+
         const val CALLBACK_PROFILE_FEED_SETTINGS = "profile_feed_settings"
         const val CALLBACK_PROFILE_LANGUAGE_SETTINGS = "profile_language_settings"
 
@@ -128,7 +131,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
      * Keyboard for random post:
      *
      * [ Archive ] [ Delete ]
-     * [ ⭐ Favorite / ★ Unfavorite ]
+     * [ ⭐ Favorite / ★ Unfavorite ] [ 📄 PDF ]
      * [  Next Random Post  ]
      */
     fun buildRandomPostInlineKeyboard(postId: Long, isFavorite: Boolean, languageCode: String): InlineKeyboardMarkup {
@@ -155,6 +158,10 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                         text = favoriteText,
                         callbackData = "$CALLBACK_TOGGLE_RANDOM_FAVORITE|$postId"
                     ),
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.feed.button.pdf", languageCode),
+                        callbackData = "$CALLBACK_PDF_UNREAD_POST|$postId"
+                    ),
                 ),
                 listOf(
                     InlineKeyboardButton.CallbackData(
@@ -170,7 +177,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
      * Keyboard for item of UNREAD, ARCHIVE, and FAVORITES posts:
      *
      * [ Archive / Unread ] [ Delete ]
-     * [ ⭐ Favorite / ★ Unfavorite ]
+     * [ ⭐ Favorite / ★ Unfavorite ] [ 📄 PDF ]
      */
     fun buildFeedPostInlineKeyboard(
         postId: Long,
@@ -204,6 +211,11 @@ class TelegramKeyboard(private val i18nService: I18nService) {
             i18nService.getMessage("command.feed.button.favorite", languageCode)
         }
 
+        val pdfCallback = when (postType) {
+            PostType.ARCHIVE -> CALLBACK_PDF_ARCHIVE_POST
+            else -> CALLBACK_PDF_UNREAD_POST
+        }
+
         return InlineKeyboardMarkup.create(
             listOf(
                 listOf(
@@ -220,7 +232,11 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                     InlineKeyboardButton.CallbackData(
                         text = favoriteText,
                         callbackData = "$favoriteCallback|$postId"
-                    )
+                    ),
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.feed.button.pdf", languageCode),
+                        callbackData = "$pdfCallback|$postId"
+                    ),
                 ),
             )
         )

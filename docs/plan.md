@@ -6,7 +6,7 @@
 |------|----------|--------|
 | 1 | Тесты (актуализация + расширение) | 🔄 В процессе |
 | 2 | Favorites | ✅ Готово |
-| 3 | PDF | ⏳ В очереди |
+| 3 | PDF | ✅ Готово |
 | 4 | Auth + Web Foundation | ⏳ В очереди |
 | 5 | Web UI | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
@@ -60,18 +60,19 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 ## Фаза 3 — PDF
 
 ### Библиотека
-- [ ] Начать с **openhtmltopdf community fork** (lightweight):
-  ```kotlin
-  implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
-  ```
+- [x] **openhtmltopdf** (`io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37`)
 - Если качество плохое — переключиться на **Playwright Java**
 
 ### Новые файлы
-- [ ] `service/PdfService.kt` — `generate(url): ByteArray` (Jsoup → очистить HTML → PDF)
+- [x] `service/PdfService.kt` — `generatePdf(url): ByteArray` (Jsoup → Cleaner → XHTML → openhtmltopdf)
 - [ ] Опционально: кеш `post_pdf(post_id, content BYTEA, created_at)`
 
 ### Telegram
-- [ ] Кнопка "📄 PDF" на карточке поста → `sendDocument(chatId, pdf, filename)`
+- [x] Кнопка "📄 PDF" на карточке поста (в одном ряду с ⭐ Favorite) → `sendDocument(chatId, TelegramFile.ByByteArray, filename)`
+- [x] Callbacks: `CALLBACK_PDF_UNREAD_POST`, `CALLBACK_PDF_ARCHIVE_POST`
+
+### Тесты
+- [x] `PdfServiceTest` — генерация PDF из HTML, обработка скриптов/стилей, unicode, ошибки
 
 ---
 

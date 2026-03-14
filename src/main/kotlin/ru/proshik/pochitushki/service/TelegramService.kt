@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.ReplyMarkup
+import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.types.TelegramBotResult
 import java.io.File
 import java.net.URI
@@ -27,6 +28,7 @@ class TelegramService(
     private val userService: UserService,
     private val importService: ImportService,
     private val exportService: ExportService,
+    private val pdfService: PdfService,
     private val i18nService: I18nService,
     private val telegramKeyboard: TelegramKeyboard,
 ) {
@@ -466,6 +468,46 @@ class TelegramService(
         )
 
         logger.info("toggleFavoriteForRandomPost success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
+    }
+
+    fun sendPostPdf(chatId: Long, postId: Long, postType: PostType) {
+        logger.debug("sendPostPdf: chatId={}, postId={}, postType={}", chatId, postId, postType)
+
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+
+        val post = postService.getPost(postId, postType)
+        if (post == null) {
+            logger.warn("sendPostPdf: post not found postId={}", postId)
+            return
+        }
+
+        try {
+            val pdfBytes = pdfService.generatePdf(post.url)
+            val filename = generatePdfFilename(post.title, post.url)
+
+            botProvider.getBot().sendDocument(
+                chatId = ChatId.fromId(chatId),
+                document = TelegramFile.ByByteArray(pdfBytes, filename),
+                caption = post.title ?: post.url
+            )
+
+            logger.info("sendPostPdf success: chatId={}, postId={}", chatId, postId)
+        } catch (e: Exception) {
+            logger.warn("sendPostPdf error: postId={}, url={}", postId, post.url, e)
+            sendMessage(chatId, i18nService.getMessage("command.pdf.error", user.settings.languageCode))
+        }
+    }
+
+    private fun generatePdfFilename(title: String?, url: String): String {
+        val name = title
+            ?.take(50)
+            ?.replace(Regex("[^a-zA-Zа-яА-ЯёЁ0-9\\s-]"), "")
+            ?.trim()
+            ?.replace(Regex("\\s+"), "_")
+            ?.ifEmpty { null }
+            ?: URI.create(url).host?.replace(".", "_")
+            ?: "document"
+        return "$name.pdf"
     }
 
     fun import(chatId: Long, fileId: String) {
