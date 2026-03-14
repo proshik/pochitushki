@@ -6,6 +6,7 @@ import com.github.tomakehurst.wiremock.client.WireMock.get
 import com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor
 import com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
+import java.util.Base64
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,6 +17,13 @@ import org.springframework.beans.factory.annotation.Autowired
 import ru.proshik.pochitushki.BaseIntegrationTest
 
 class PdfServiceTest : BaseIntegrationTest() {
+
+    companion object {
+        // Minimal valid 1x1 red PNG (67 bytes)
+        val TINY_PNG: ByteArray = Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+        )
+    }
 
     @Autowired
     private lateinit var pdfService: PdfService
@@ -69,6 +77,16 @@ class PdfServiceTest : BaseIntegrationTest() {
 
     @Test
     fun `generatePdf handles page with scripts and styles`() {
+        // Stub a small 1x1 PNG for the image reference
+        wireMock.stubFor(
+            get(urlEqualTo("/test-image.png")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "image/png")
+                    .withBody(TINY_PNG)
+            )
+        )
+
         wireMock.stubFor(
             get(urlEqualTo("/complex")).willReturn(
                 aResponse()
@@ -86,7 +104,7 @@ class PdfServiceTest : BaseIntegrationTest() {
                             <nav>Navigation bar</nav>
                             <h1>Main Content</h1>
                             <p>Paragraph text here.</p>
-                            <img src="/nonexistent.png" alt="missing"/>
+                            <img src="/test-image.png" alt="test image"/>
                             <footer>Footer content</footer>
                         </body>
                         </html>
@@ -103,6 +121,93 @@ class PdfServiceTest : BaseIntegrationTest() {
 
         val header = String(pdfBytes.copyOfRange(0, 5))
         assertTrue(header == "%PDF-")
+
+        wireMock.verify(getRequestedFor(urlEqualTo("/test-image.png")))
+    }
+
+    @Test
+    fun `generatePdf includes images from the page`() {
+        wireMock.stubFor(
+            get(urlEqualTo("/photo.png")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "image/png")
+                    .withBody(TINY_PNG)
+            )
+        )
+
+        wireMock.stubFor(
+            get(urlEqualTo("/with-image")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody(
+                        """
+                        <html>
+                        <head><title>Article with Image</title></head>
+                        <body>
+                            <h1>Article</h1>
+                            <p>Text before image.</p>
+                            <img src="/photo.png" alt="A photo"/>
+                            <p>Text after image.</p>
+                        </body>
+                        </html>
+                        """.trimIndent()
+                    )
+            )
+        )
+
+        val url = "http://localhost:${wireMock.port()}/with-image"
+        val pdfBytes = pdfService.generatePdf(url)
+
+        assertNotNull(pdfBytes)
+        assertTrue(pdfBytes.size > 100)
+
+        val header = String(pdfBytes.copyOfRange(0, 5))
+        assertTrue(header == "%PDF-")
+
+        // Verify the image was requested (included in PDF rendering)
+        wireMock.verify(getRequestedFor(urlEqualTo("/photo.png")))
+    }
+
+    @Test
+    fun `generatePdf handles lazy-loaded images with data-src`() {
+        wireMock.stubFor(
+            get(urlEqualTo("/lazy-img.png")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "image/png")
+                    .withBody(TINY_PNG)
+            )
+        )
+
+        wireMock.stubFor(
+            get(urlEqualTo("/lazy-page")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody(
+                        """
+                        <html>
+                        <head><title>Lazy Images</title></head>
+                        <body>
+                            <h1>Lazy</h1>
+                            <img src="" data-src="/lazy-img.png" alt="lazy"/>
+                        </body>
+                        </html>
+                        """.trimIndent()
+                    )
+            )
+        )
+
+        val url = "http://localhost:${wireMock.port()}/lazy-page"
+        val pdfBytes = pdfService.generatePdf(url)
+
+        assertNotNull(pdfBytes)
+        val header = String(pdfBytes.copyOfRange(0, 5))
+        assertTrue(header == "%PDF-")
+
+        wireMock.verify(getRequestedFor(urlEqualTo("/lazy-img.png")))
     }
 
     @Test
