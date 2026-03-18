@@ -95,15 +95,25 @@ class CallbackQueryHandler(
                 telegramService.toggleFavoriteForRandomPost(chatId, message.messageId, postId)
             }
             /**
-             * PDF generation
+             * PDF generation — engine selection
              */
             TelegramKeyboard.CALLBACK_PDF_UNREAD_POST -> {
                 val postId = data.toLong()
-                telegramService.sendPostPdf(chatId, postId, PostType.UNREAD)
+                telegramService.showPdfEngineSelection(chatId, postId, PostType.UNREAD)
             }
             TelegramKeyboard.CALLBACK_PDF_ARCHIVE_POST -> {
                 val postId = data.toLong()
-                telegramService.sendPostPdf(chatId, postId, PostType.ARCHIVE)
+                telegramService.showPdfEngineSelection(chatId, postId, PostType.ARCHIVE)
+            }
+            /**
+             * PDF generation — with selected engine
+             */
+            TelegramKeyboard.CALLBACK_PDF_ENGINE -> {
+                val parts = data.split("_", limit = 3)
+                val postId = parts[0].toLong()
+                val postType = if (parts[1] == "a") PostType.ARCHIVE else PostType.UNREAD
+                val engine = parts[2]
+                telegramService.sendPostPdf(chatId, postId, postType, engine)
             }
             /**
              * Unread feed navigation

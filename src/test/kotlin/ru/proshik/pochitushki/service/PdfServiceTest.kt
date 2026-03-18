@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import ru.proshik.pochitushki.BaseIntegrationTest
 
 class PdfServiceTest : BaseIntegrationTest() {
@@ -31,6 +32,7 @@ class PdfServiceTest : BaseIntegrationTest() {
     }
 
     @Autowired
+    @Qualifier("openhtmlPdfGenerator")
     private lateinit var pdfGenerator: PdfGenerator
 
     private lateinit var wireMock: WireMockServer

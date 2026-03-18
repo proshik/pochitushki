@@ -28,7 +28,7 @@ class TelegramService(
     private val userService: UserService,
     private val importService: ImportService,
     private val exportService: ExportService,
-    private val pdfGenerator: PdfGenerator,
+    private val pdfGenerators: Map<String, PdfGenerator>,
     private val i18nService: I18nService,
     private val telegramKeyboard: TelegramKeyboard,
 ) {
@@ -470,8 +470,33 @@ class TelegramService(
         logger.info("toggleFavoriteForRandomPost success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
     }
 
-    fun sendPostPdf(chatId: Long, postId: Long, postType: PostType) {
-        logger.debug("sendPostPdf: chatId={}, postId={}, postType={}", chatId, postId, postType)
+    fun getAvailablePdfEngines(): List<String> {
+        return pdfGenerators.keys
+            .map { it.removeSuffix("PdfGenerator") }
+            .sorted()
+    }
+
+    fun showPdfEngineSelection(chatId: Long, postId: Long, postType: PostType) {
+        logger.debug("showPdfEngineSelection: chatId={}, postId={}, postType={}", chatId, postId, postType)
+
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+
+        val engines = getAvailablePdfEngines()
+        if (engines.size == 1) {
+            sendPostPdf(chatId, postId, postType, engines.first())
+            return
+        }
+
+        val keyboard = telegramKeyboard.buildPdfEngineKeyboard(postId, postType, engines, user.settings.languageCode)
+        sendMessageWithKeyboard(
+            chatId = chatId,
+            text = i18nService.getMessage("command.pdf.select_engine", user.settings.languageCode),
+            keyboard = keyboard
+        )
+    }
+
+    fun sendPostPdf(chatId: Long, postId: Long, postType: PostType, engine: String) {
+        logger.debug("sendPostPdf: chatId={}, postId={}, postType={}, engine={}", chatId, postId, postType, engine)
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
@@ -481,8 +506,15 @@ class TelegramService(
             return
         }
 
+        val generator = pdfGenerators["${engine}PdfGenerator"]
+        if (generator == null) {
+            logger.warn("sendPostPdf: unknown engine={}", engine)
+            sendMessage(chatId, i18nService.getMessage("command.pdf.error", user.settings.languageCode))
+            return
+        }
+
         try {
-            val pdfBytes = pdfGenerator.generatePdf(post.url)
+            val pdfBytes = generator.generatePdf(post.url)
             val filename = generatePdfFilename(post.title, post.url)
 
             botProvider.getBot().sendDocument(
@@ -491,9 +523,9 @@ class TelegramService(
                 caption = post.title ?: post.url
             )
 
-            logger.info("sendPostPdf success: chatId={}, postId={}", chatId, postId)
+            logger.info("sendPostPdf success: chatId={}, postId={}, engine={}", chatId, postId, engine)
         } catch (e: Exception) {
-            logger.warn("sendPostPdf error: postId={}, url={}", postId, post.url, e)
+            logger.warn("sendPostPdf error: postId={}, url={}, engine={}", postId, post.url, engine, e)
             sendMessage(chatId, i18nService.getMessage("command.pdf.error", user.settings.languageCode))
         }
     }

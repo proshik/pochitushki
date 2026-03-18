@@ -38,6 +38,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
 
         const val CALLBACK_PDF_UNREAD_POST = "pdf_unread_post"
         const val CALLBACK_PDF_ARCHIVE_POST = "pdf_archive_post"
+        const val CALLBACK_PDF_ENGINE = "pdf_engine"
 
         const val CALLBACK_PROFILE_FEED_SETTINGS = "profile_feed_settings"
         const val CALLBACK_PROFILE_LANGUAGE_SETTINGS = "profile_language_settings"
@@ -125,6 +126,33 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                 ),
             )
         )
+    }
+
+    /**
+     * Keyboard for PDF engine selection:
+     *
+     * [ OpenHTML ] [ Playwright ]
+     */
+    fun buildPdfEngineKeyboard(
+        postId: Long,
+        postType: PostType,
+        availableEngines: List<String>,
+        languageCode: String
+    ): InlineKeyboardMarkup {
+        val postTypeCode = when (postType) {
+            PostType.UNREAD, PostType.FAVORITES -> "u"
+            PostType.ARCHIVE -> "a"
+        }
+
+        val buttons = availableEngines.map { engine ->
+            val label = i18nService.getMessage("command.pdf.engine.$engine", languageCode)
+            InlineKeyboardButton.CallbackData(
+                text = label,
+                callbackData = "$CALLBACK_PDF_ENGINE|${postId}_${postTypeCode}_$engine"
+            )
+        }
+
+        return InlineKeyboardMarkup.create(listOf(buttons))
     }
 
     /**

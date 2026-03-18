@@ -19,7 +19,8 @@ spring:
     change-log: classpath:liquibase/changelog-master.yml
 
 pdf:
-  engine: openhtml  # openhtml | playwright
+  playwright:
+    enabled: false  # set to true to enable Playwright PDF engine selection
 
 telegram:
   enabled: true

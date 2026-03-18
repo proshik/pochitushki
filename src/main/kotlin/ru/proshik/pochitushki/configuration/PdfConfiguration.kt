@@ -14,14 +14,13 @@ class PdfConfiguration {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Bean
-    @ConditionalOnProperty(name = ["pdf.engine"], havingValue = "openhtml", matchIfMissing = true)
     fun openhtmlPdfGenerator(): PdfGenerator {
         logger.info("Using OpenHTML PDF engine")
         return OpenhtmlPdfGenerator()
     }
 
     @Bean
-    @ConditionalOnProperty(name = ["pdf.engine"], havingValue = "playwright")
+    @ConditionalOnProperty(name = ["pdf.playwright.enabled"], havingValue = "true")
     fun playwrightPdfGenerator(): PdfGenerator {
         logger.info("Using Playwright PDF engine")
         return PlaywrightPdfGenerator()
