@@ -20,7 +20,7 @@ spring:
 
 pdf:
   playwright:
-    enabled: false  # set to true to enable Playwright PDF engine selection
+    enabled: true  # set to true to enable Playwright PDF engine selection
 
 telegram:
   enabled: true
