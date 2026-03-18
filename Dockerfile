@@ -26,6 +26,7 @@ COPY --from=build /app/build/libs/*.jar app.jar
 # Install Playwright Chromium browser and OS dependencies (needed when pdf.engine=playwright).
 # To skip: docker build --build-arg INSTALL_PLAYWRIGHT=false
 ARG INSTALL_PLAYWRIGHT=true
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN if [ "$INSTALL_PLAYWRIGHT" = "true" ]; then \
       java -cp app.jar com.microsoft.playwright.CLI install --with-deps chromium; \
     fi
