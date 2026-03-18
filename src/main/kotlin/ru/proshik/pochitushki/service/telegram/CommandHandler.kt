@@ -111,16 +111,16 @@ class CommandHandler(
         telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.UNREAD)
     }
 
-    private fun handleRandomPostOperation(message: Message) {
-        telegramService.getRandomPost(message.chat.id, message.messageId)
-    }
-
     private fun handleArchivePostOperation(message: Message) {
         telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.ARCHIVE)
     }
 
     private fun handleFavoritesOperation(message: Message) {
         telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.FAVORITES)
+    }
+
+    private fun handleRandomPostOperation(message: Message) {
+        telegramService.getRandomPost(message.chat.id, message.messageId)
     }
 
     /**

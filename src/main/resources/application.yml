@@ -18,6 +18,9 @@ spring:
   liquibase:
     change-log: classpath:liquibase/changelog-master.yml
 
+pdf:
+  engine: openhtml  # openhtml | playwright
+
 telegram:
   enabled: true
 

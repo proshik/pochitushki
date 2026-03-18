@@ -50,6 +50,9 @@ dependencies {
     implementation("org.jsoup:jsoup:1.21.1")
 
     implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
+
+    implementation("com.microsoft.playwright:playwright:1.52.0")
 
     runtimeOnly("org.postgresql:postgresql")
 

@@ -3,16 +3,17 @@ package ru.proshik.pochitushki.service
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URI
+import java.util.Base64
+import javax.imageio.ImageIO
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Entities
 import org.jsoup.safety.Cleaner
 import org.jsoup.safety.Safelist
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Service
 
-@Service
-class PdfService {
+class OpenhtmlPdfGenerator : PdfGenerator {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -26,7 +27,7 @@ class PdfService {
         }
     }
 
-    fun generatePdf(url: String): ByteArray {
+    override fun generatePdf(url: String): ByteArray {
         logger.debug("generatePdf: url={}", url)
 
         val doc = Jsoup.connect(url)
@@ -46,11 +47,22 @@ class PdfService {
         val cleaner = Cleaner(Safelist.relaxed())
         val cleanDoc = cleaner.clean(doc)
 
-        // Resolve relative image URLs to absolute
+        // Resolve relative image URLs to absolute; convert unsupported formats to PNG
         for (img in cleanDoc.select("img[src]")) {
             val src = img.attr("src")
             if (src.isNotBlank() && !src.startsWith("data:")) {
-                img.attr("src", img.absUrl("src").ifBlank { resolveUrl(url, src) })
+                val resolved = img.absUrl("src").ifBlank { resolveUrl(url, src) }
+                if (isSupportedImageFormat(resolved)) {
+                    img.attr("src", resolved)
+                } else {
+                    val dataUri = convertToDataPng(resolved)
+                    if (dataUri != null) {
+                        img.attr("src", dataUri)
+                    } else {
+                        logger.debug("Removing unconvertible image: {}", resolved)
+                        img.remove()
+                    }
+                }
             }
         }
 
@@ -112,9 +124,42 @@ class PdfService {
 </html>"""
     }
 
+    private fun convertToDataPng(imageUrl: String): String? {
+        return try {
+            val connection = URI(imageUrl).toURL().openConnection()
+            connection.connectTimeout = 5000
+            connection.readTimeout = 10000
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; Pochitushki/1.0)")
+
+            val image = connection.getInputStream().use { ImageIO.read(it) }
+                ?: return null
+
+            val pngBytes = ByteArrayOutputStream().use { baos ->
+                ImageIO.write(image, "png", baos)
+                baos.toByteArray()
+            }
+
+            val base64 = Base64.getEncoder().encodeToString(pngBytes)
+            logger.debug("Converted image to PNG data URI: {} ({} bytes)", imageUrl, pngBytes.size)
+            "data:image/png;base64,$base64"
+        } catch (e: Exception) {
+            logger.warn("Failed to convert image: {} => {}", imageUrl, e.message)
+            null
+        }
+    }
+
+    private fun isSupportedImageFormat(url: String): Boolean {
+        val path = try {
+            URI(url).path?.lowercase() ?: ""
+        } catch (e: Exception) {
+            url.lowercase()
+        }
+        return SUPPORTED_IMAGE_EXTENSIONS.any { path.endsWith(it) }
+    }
+
     private fun resolveUrl(baseUrl: String, relative: String): String {
         return try {
-            java.net.URI(baseUrl).resolve(relative).toString()
+            URI(baseUrl).resolve(relative).toString()
         } catch (e: Exception) {
             relative
         }
@@ -131,6 +176,7 @@ class PdfService {
 
     companion object {
         private const val FONT_FAMILY = "document-font"
+        private val SUPPORTED_IMAGE_EXTENSIONS = listOf(".png", ".jpg", ".jpeg", ".gif", ".bmp")
 
         private val FONT_SEARCH_PATHS = listOf(
             // Linux (Debian/Ubuntu) — DejaVu Sans

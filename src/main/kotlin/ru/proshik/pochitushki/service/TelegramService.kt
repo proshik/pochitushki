@@ -28,7 +28,7 @@ class TelegramService(
     private val userService: UserService,
     private val importService: ImportService,
     private val exportService: ExportService,
-    private val pdfService: PdfService,
+    private val pdfGenerator: PdfGenerator,
     private val i18nService: I18nService,
     private val telegramKeyboard: TelegramKeyboard,
 ) {
@@ -482,7 +482,7 @@ class TelegramService(
         }
 
         try {
-            val pdfBytes = pdfService.generatePdf(post.url)
+            val pdfBytes = pdfGenerator.generatePdf(post.url)
             val filename = generatePdfFilename(post.title, post.url)
 
             botProvider.getBot().sendDocument(

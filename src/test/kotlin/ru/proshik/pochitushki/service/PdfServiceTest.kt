@@ -23,10 +23,15 @@ class PdfServiceTest : BaseIntegrationTest() {
         val TINY_PNG: ByteArray = Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
         )
+
+        // Minimal valid 1x1 WebP (lossy, 44 bytes)
+        val TINY_WEBP: ByteArray = Base64.getDecoder().decode(
+            "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+        )
     }
 
     @Autowired
-    private lateinit var pdfService: PdfService
+    private lateinit var pdfGenerator: PdfGenerator
 
     private lateinit var wireMock: WireMockServer
 
@@ -64,7 +69,7 @@ class PdfServiceTest : BaseIntegrationTest() {
         )
 
         val url = "http://localhost:${wireMock.port()}/article"
-        val pdfBytes = pdfService.generatePdf(url)
+        val pdfBytes = pdfGenerator.generatePdf(url)
 
         assertNotNull(pdfBytes)
         assertTrue(pdfBytes.size > 100, "PDF should have substantial content")
@@ -114,7 +119,7 @@ class PdfServiceTest : BaseIntegrationTest() {
         )
 
         val url = "http://localhost:${wireMock.port()}/complex"
-        val pdfBytes = pdfService.generatePdf(url)
+        val pdfBytes = pdfGenerator.generatePdf(url)
 
         assertNotNull(pdfBytes)
         assertTrue(pdfBytes.size > 100)
@@ -158,7 +163,7 @@ class PdfServiceTest : BaseIntegrationTest() {
         )
 
         val url = "http://localhost:${wireMock.port()}/with-image"
-        val pdfBytes = pdfService.generatePdf(url)
+        val pdfBytes = pdfGenerator.generatePdf(url)
 
         assertNotNull(pdfBytes)
         assertTrue(pdfBytes.size > 100)
@@ -201,13 +206,56 @@ class PdfServiceTest : BaseIntegrationTest() {
         )
 
         val url = "http://localhost:${wireMock.port()}/lazy-page"
-        val pdfBytes = pdfService.generatePdf(url)
+        val pdfBytes = pdfGenerator.generatePdf(url)
 
         assertNotNull(pdfBytes)
         val header = String(pdfBytes.copyOfRange(0, 5))
         assertTrue(header == "%PDF-")
 
         wireMock.verify(getRequestedFor(urlEqualTo("/lazy-img.png")))
+    }
+
+    @Test
+    fun `generatePdf converts unsupported image formats to PNG`() {
+        wireMock.stubFor(
+            get(urlEqualTo("/photo.webp")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "image/webp")
+                    .withBody(TINY_WEBP)
+            )
+        )
+
+        wireMock.stubFor(
+            get(urlEqualTo("/with-webp")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody(
+                        """
+                        <html>
+                        <head><title>WebP Article</title></head>
+                        <body>
+                            <h1>Article</h1>
+                            <img src="/photo.webp" alt="webp image"/>
+                        </body>
+                        </html>
+                        """.trimIndent()
+                    )
+            )
+        )
+
+        val url = "http://localhost:${wireMock.port()}/with-webp"
+        val pdfBytes = pdfGenerator.generatePdf(url)
+
+        assertNotNull(pdfBytes)
+        assertTrue(pdfBytes.size > 100)
+
+        val header = String(pdfBytes.copyOfRange(0, 5))
+        assertTrue(header == "%PDF-")
+
+        // WebP image was fetched and converted to PNG inline
+        wireMock.verify(getRequestedFor(urlEqualTo("/photo.webp")))
     }
 
     @Test
@@ -232,7 +280,7 @@ class PdfServiceTest : BaseIntegrationTest() {
         )
 
         val url = "http://localhost:${wireMock.port()}/unicode"
-        val pdfBytes = pdfService.generatePdf(url)
+        val pdfBytes = pdfGenerator.generatePdf(url)
 
         assertNotNull(pdfBytes)
         assertTrue(pdfBytes.size > 100)
@@ -241,7 +289,7 @@ class PdfServiceTest : BaseIntegrationTest() {
     @Test
     fun `generatePdf throws exception for unreachable URL`() {
         assertThrows<Exception> {
-            pdfService.generatePdf("http://localhost:1/nonexistent")
+            pdfGenerator.generatePdf("http://localhost:1/nonexistent")
         }
     }
 }
