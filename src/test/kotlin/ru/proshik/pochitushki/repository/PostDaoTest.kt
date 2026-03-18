@@ -151,4 +151,120 @@ class PostDaoTest : BaseIntegrationTest() {
         val archivePost = postDao.getPost(archivePostId, PostType.ARCHIVE)
         assertTrue(archivePost!!.isFavorite)
     }
+
+    @Test
+    fun `addPost creates post and returns id`() {
+        val postId = postDao.addPost(PostStoreData("My Title", "https://test.com/page", userId))
+
+        assertTrue(postId > 0)
+        val post = postDao.getPost(postId, PostType.UNREAD)
+        assertNotNull(post)
+        assertEquals("My Title", post!!.title)
+        assertEquals("https://test.com/page", post.url)
+        assertEquals(userId, post.userId)
+    }
+
+    @Test
+    fun `deletePost removes post`() {
+        val postId = postDao.addPost(PostStoreData("To Delete", "https://delete.com", userId))
+
+        postDao.deletePost(postId, PostType.UNREAD)
+
+        assertNull(postDao.getPost(postId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `getPosts returns posts with pagination`() {
+        postDao.addPost(PostStoreData("Post A", "https://a.com", userId))
+        postDao.addPost(PostStoreData("Post B", "https://b.com", userId))
+        postDao.addPost(PostStoreData("Post C", "https://c.com", userId))
+        postDao.addPost(PostStoreData("Post D", "https://d.com", userId))
+
+        val firstPage = postDao.getPosts(userId, PostType.UNREAD, 2, 0)
+        assertEquals(2, firstPage.size)
+
+        val secondPage = postDao.getPosts(userId, PostType.UNREAD, 2, 2)
+        assertEquals(2, secondPage.size)
+
+        val allUrls = (firstPage + secondPage).map { it.url }.toSet()
+        assertEquals(4, allUrls.size)
+    }
+
+    @Test
+    fun `getPosts returns empty list when no posts`() {
+        val posts = postDao.getPosts(userId, PostType.UNREAD, 10, 0)
+        assertTrue(posts.isEmpty())
+    }
+
+    @Test
+    fun `findPost finds post by URL`() {
+        postDao.addPost(PostStoreData("Found", "https://find-me.com/article", userId))
+        postDao.addPost(PostStoreData("Other", "https://other.com", userId))
+
+        val found = postDao.findPost(userId, PostType.UNREAD, "https://find-me.com/article")
+        assertEquals(1, found.size)
+        assertEquals("Found", found[0].title)
+    }
+
+    @Test
+    fun `findPost returns empty for non-existing URL`() {
+        postDao.addPost(PostStoreData("Exists", "https://exists.com", userId))
+
+        val found = postDao.findPost(userId, PostType.UNREAD, "https://nonexistent.com")
+        assertTrue(found.isEmpty())
+    }
+
+    @Test
+    fun `getPostCount returns correct count`() {
+        assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
+
+        postDao.addPost(PostStoreData("P1", "https://one.com", userId))
+        postDao.addPost(PostStoreData("P2", "https://two.com", userId))
+
+        assertEquals(2, postDao.getPostCount(userId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `getRandomPost returns post for user`() {
+        postDao.addPost(PostStoreData("Random Post", "https://random.com", userId))
+
+        val random = postDao.getRandomPost(userId)
+        assertNotNull(random)
+        assertEquals("Random Post", random!!.title)
+    }
+
+    @Test
+    fun `getRandomPost returns null when no posts`() {
+        val random = postDao.getRandomPost(userId)
+        assertNull(random)
+    }
+
+    @Test
+    fun `addToArchivePost moves post to archive table`() {
+        val postId = postDao.addPost(PostStoreData("Archive Me", "https://archive.com", userId))
+
+        postDao.addToArchivePost(postId)
+        postDao.deletePost(postId, PostType.UNREAD)
+
+        assertNull(postDao.getPost(postId, PostType.UNREAD))
+        val archiveCount = postDao.getPostCount(userId, PostType.ARCHIVE)
+        assertEquals(1, archiveCount)
+    }
+
+    @Test
+    fun `addToUnreadPost moves post back from archive`() {
+        val postId = postDao.addPost(PostStoreData("Unread Me", "https://unread.com", userId))
+        postDao.addToArchivePost(postId)
+        postDao.deletePost(postId, PostType.UNREAD)
+
+        val archivePostId = jdbcTemplate.queryForObject(
+            "SELECT id FROM archive_post WHERE user_id = ?", Long::class.java, userId
+        )!!
+
+        postDao.addToUnreadPost(archivePostId)
+        postDao.deletePost(archivePostId, PostType.ARCHIVE)
+
+        assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
+        assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
+    }
 }

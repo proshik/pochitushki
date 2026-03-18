@@ -1,8 +1,16 @@
 package ru.proshik.pochitushki.service
 
+import com.github.tomakehurst.wiremock.WireMockServer
+import com.github.tomakehurst.wiremock.client.WireMock.aResponse
+import com.github.tomakehurst.wiremock.client.WireMock.get
+import com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
+import java.net.URI
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -26,6 +34,8 @@ class PostServiceTest : BaseIntegrationTest() {
 
     private var userId: Long = 0L
 
+    private lateinit var wireMockExternalUrl: WireMockServer
+
     @BeforeEach
     fun setUp() {
         userId = jdbcTemplate.queryForObject(
@@ -34,10 +44,14 @@ class PostServiceTest : BaseIntegrationTest() {
                RETURNING id""",
             Long::class.java
         )!!
+
+        wireMockExternalUrl = WireMockServer(wireMockConfig().dynamicPort())
+        wireMockExternalUrl.start()
     }
 
     @AfterEach
     fun tearDown() {
+        wireMockExternalUrl.stop()
         jdbcTemplate.execute("DELETE FROM archive_post")
         jdbcTemplate.execute("DELETE FROM post")
         jdbcTemplate.execute("DELETE FROM users")
@@ -122,5 +136,147 @@ class PostServiceTest : BaseIntegrationTest() {
         val favorites = postService.getPosts(userId, PostType.FAVORITES, 10, 0)
         assertEquals(1, favorites.size)
         assertTrue(favorites[0].isFavorite)
+    }
+
+    @Test
+    fun `addPost saves post and returns id with title`() {
+        wireMockExternalUrl.stubFor(
+            get(urlEqualTo("/page")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody("<html><head><title>Page Title</title></head><body></body></html>")
+            )
+        )
+
+        val url = URI.create("http://localhost:${wireMockExternalUrl.port()}/page").toURL()
+        val (postId, title) = postService.addPost(url, userId)
+
+        assertTrue(postId > 0)
+        assertEquals("Page Title", title)
+
+        val post = postService.getPost(postId, PostType.UNREAD)
+        assertNotNull(post)
+        assertEquals("Page Title", post!!.title)
+    }
+
+    @Test
+    fun `addPost handles URL without title gracefully`() {
+        wireMockExternalUrl.stubFor(
+            get(urlEqualTo("/no-title")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody("<html><head></head><body>No title</body></html>")
+            )
+        )
+
+        val url = URI.create("http://localhost:${wireMockExternalUrl.port()}/no-title").toURL()
+        val (postId, title) = postService.addPost(url, userId)
+
+        assertTrue(postId > 0)
+        assertNotNull(title)
+    }
+
+    @Test
+    fun `getPosts returns posts ordered by creation desc`() {
+        postDao.addPost(PostStoreData("First", "https://first.com", userId))
+        Thread.sleep(10)
+        postDao.addPost(PostStoreData("Second", "https://second.com", userId))
+
+        val posts = postService.getPosts(userId, PostType.UNREAD, 10, 0)
+        assertEquals(2, posts.size)
+        assertEquals("Second", posts[0].title)
+        assertEquals("First", posts[1].title)
+    }
+
+    @Test
+    fun `deletePost removes post from unread`() {
+        val postId = postDao.addPost(PostStoreData("To Delete", "https://del.com", userId))
+
+        postService.deletePost(postId, PostType.UNREAD)
+
+        assertNull(postService.getPost(postId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `deletePost removes post from archive`() {
+        val postId = postDao.addPost(PostStoreData("To Archive", "https://arch.com", userId))
+        postService.archivePost(postId)
+
+        val archivePostId = jdbcTemplate.queryForObject(
+            "SELECT id FROM archive_post WHERE user_id = ?", Long::class.java, userId
+        )!!
+
+        postService.deletePost(archivePostId, PostType.ARCHIVE)
+
+        assertNull(postService.getPost(archivePostId, PostType.ARCHIVE))
+    }
+
+    @Test
+    fun `archivePost moves post from unread to archive`() {
+        val postId = postDao.addPost(PostStoreData("Move Me", "https://move.com", userId))
+
+        postService.archivePost(postId)
+
+        assertNull(postService.getPost(postId, PostType.UNREAD))
+        assertEquals(1, postService.getPostCount(userId, PostType.ARCHIVE))
+    }
+
+    @Test
+    fun `unreadPost moves post from archive to unread`() {
+        val postId = postDao.addPost(PostStoreData("Back", "https://back.com", userId))
+        postService.archivePost(postId)
+
+        val archivePostId = jdbcTemplate.queryForObject(
+            "SELECT id FROM archive_post WHERE user_id = ?", Long::class.java, userId
+        )!!
+
+        postService.unreadPost(archivePostId)
+
+        assertNull(postService.getPost(archivePostId, PostType.ARCHIVE))
+        assertEquals(1, postService.getPostCount(userId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `getRandomPost returns random unread post`() {
+        postDao.addPost(PostStoreData("Random", "https://random.com", userId))
+
+        val random = postService.getRandomPost(userId)
+        assertNotNull(random)
+        assertEquals("Random", random!!.title)
+    }
+
+    @Test
+    fun `getRandomPost returns null when empty`() {
+        val random = postService.getRandomPost(userId)
+        assertNull(random)
+    }
+
+    @Test
+    fun `getPostCount returns correct count for each PostType`() {
+        postDao.addPost(PostStoreData("U1", "https://u1.com", userId))
+        val u2 = postDao.addPost(PostStoreData("U2", "https://u2.com", userId))
+        postService.archivePost(u2)
+
+        assertEquals(1, postService.getPostCount(userId, PostType.UNREAD))
+        assertEquals(1, postService.getPostCount(userId, PostType.ARCHIVE))
+    }
+
+    @Test
+    fun `findPost returns existing post by URL`() {
+        postDao.addPost(PostStoreData("Found", "https://find.com/article", userId))
+
+        val url = URI.create("https://find.com/article").toURL()
+        val found = postService.findPost(userId, PostType.UNREAD, url)
+        assertEquals(1, found.size)
+        assertEquals("Found", found[0].title)
+    }
+
+    @Test
+    fun `findPost returns empty for unknown URL`() {
+        val url = URI.create("https://unknown.com").toURL()
+        val found = postService.findPost(userId, PostType.UNREAD, url)
+        assertTrue(found.isEmpty())
     }
 }
