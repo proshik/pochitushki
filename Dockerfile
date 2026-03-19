@@ -23,14 +23,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-co
 
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# Install Playwright Chromium browser and OS dependencies (needed when pdf.engine=playwright).
+# Extract the fat JAR so classpath works correctly at runtime (required for Playwright native driver)
+RUN java -Djarmode=tools -jar app.jar extract --destination /app/extracted && rm app.jar
+
+# Install Playwright Chromium browser and OS dependencies (needed when pdf.playwright.enabled=true).
 # To skip: docker build --build-arg INSTALL_PLAYWRIGHT=false
 ARG INSTALL_PLAYWRIGHT=true
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN if [ "$INSTALL_PLAYWRIGHT" = "true" ]; then \
-      java -Djarmode=tools -jar app.jar extract --destination /tmp/app-extract && \
-      java -cp "/tmp/app-extract/lib/*" com.microsoft.playwright.CLI install --with-deps chromium && \
-      rm -rf /tmp/app-extract; \
+      java -cp "/app/extracted/lib/*" com.microsoft.playwright.CLI install --with-deps chromium; \
     fi
 
 RUN addgroup --system spring && adduser --system --ingroup spring spring
@@ -38,4 +39,4 @@ RUN addgroup --system spring && adduser --system --ingroup spring spring
 USER spring:spring
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/extracted/app/app.jar"]
