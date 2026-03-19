@@ -3,6 +3,7 @@ package ru.proshik.pochitushki.service
 import com.microsoft.playwright.Browser
 import com.microsoft.playwright.BrowserType
 import com.microsoft.playwright.Page
+import java.util.concurrent.CompletableFuture
 import com.microsoft.playwright.Playwright
 import com.microsoft.playwright.options.Margin
 import org.slf4j.LoggerFactory
@@ -11,14 +12,16 @@ class PlaywrightPdfGenerator : PdfGenerator, AutoCloseable {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    private val playwright: Playwright = Playwright.create()
-    private val browser: Browser = playwright.chromium().launch(
-        BrowserType.LaunchOptions().setHeadless(true)
-    )
-
-    init {
+    private val browserFuture = CompletableFuture.supplyAsync {
+        logger.info("Playwright: starting background initialization...")
+        val pw = Playwright.create()
+        val br = pw.chromium().launch(BrowserType.LaunchOptions().setHeadless(true))
         logger.info("Playwright PDF generator initialized (Chromium headless)")
+        pw to br
     }
+
+    private val playwright: Playwright get() = browserFuture.join().first
+    private val browser: Browser get() = browserFuture.join().second
 
     override fun generatePdf(url: String): ByteArray {
         logger.debug("generatePdf: url={}", url)
