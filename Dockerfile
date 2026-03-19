@@ -28,7 +28,9 @@ COPY --from=build /app/build/libs/*.jar app.jar
 ARG INSTALL_PLAYWRIGHT=true
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN if [ "$INSTALL_PLAYWRIGHT" = "true" ]; then \
-      java -cp app.jar com.microsoft.playwright.CLI install --with-deps chromium; \
+      java -Djarmode=tools -jar app.jar extract --destination /tmp/app-extract && \
+      java -cp "/tmp/app-extract/lib/*" com.microsoft.playwright.CLI install --with-deps chromium && \
+      rm -rf /tmp/app-extract; \
     fi
 
 RUN addgroup --system spring && adduser --system --ingroup spring spring
