@@ -41,4 +41,4 @@ RUN addgroup --system spring && adduser --system --ingroup spring spring
 USER spring:spring
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/extracted/app/app.jar"]
+ENTRYPOINT ["sh", "-c", "java -jar /app/extracted/*.jar"]
