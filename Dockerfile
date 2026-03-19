@@ -22,9 +22,7 @@ WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
 # Extract the fat JAR so classpath works correctly at runtime (required for Playwright native driver)
-RUN java -Djarmode=tools -jar app.jar extract --destination /app/extracted && \
-    mv /app/extracted/*.jar /app/extracted/app.jar && \
-    rm app.jar
+RUN java -Djarmode=tools -jar app.jar extract --destination /app/extracted && rm app.jar
 
 # Install fonts, Playwright Chromium browser and OS dependencies in a single layer to save disk space.
 # To skip Playwright: docker build --build-arg INSTALL_PLAYWRIGHT=false
