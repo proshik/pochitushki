@@ -36,7 +36,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
-RUN addgroup --system spring && adduser --system --ingroup spring spring
+RUN addgroup --system spring && adduser --system --ingroup spring spring && \
+    if [ -d "$PLAYWRIGHT_BROWSERS_PATH" ]; then chown -R spring:spring "$PLAYWRIGHT_BROWSERS_PATH"; fi
 
 USER spring:spring
 
