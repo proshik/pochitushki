@@ -44,9 +44,26 @@ class PlaywrightPdfGenerator : PdfGenerator, AutoCloseable {
                 page.navigate(url, Page.NavigateOptions().setTimeout(30000.0))
                 page.waitForLoadState()
 
-                // Scroll down to trigger lazy-loaded images
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.waitForTimeout(1000.0)
+                // Incrementally scroll through the page to trigger lazy-loaded images
+                page.evaluate("""() => {
+                    return new Promise(resolve => {
+                        const distance = Math.max(document.documentElement.clientHeight, 600);
+                        const totalHeight = document.body.scrollHeight;
+                        let current = 0;
+                        const timer = setInterval(() => {
+                            current += distance;
+                            window.scrollTo(0, current);
+                            if (current >= totalHeight) {
+                                clearInterval(timer);
+                                window.scrollTo(0, 0);
+                                resolve();
+                            }
+                        }, 300);
+                    });
+                }""")
+
+                // Wait until all triggered network requests settle
+                page.waitForLoadState(com.microsoft.playwright.options.LoadState.NETWORKIDLE)
 
                 val pdfBytes = page.pdf(
                     Page.PdfOptions()
