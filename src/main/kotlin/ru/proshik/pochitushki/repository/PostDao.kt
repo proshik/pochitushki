@@ -32,19 +32,20 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             userId = rs.getLong("user_id"),
             tags = tags,
             isFavorite = rs.getBoolean("is_favorite"),
+            isArchived = rs.getBoolean("is_archived"),
             createdDate = rs.getTimestamp("created_date").toLocalDateTime(),
             updatedDate = rs.getTimestamp("updated_date").toLocalDateTime(),
         )
     }
 
     fun getPost(postId: Long, postType: PostType): PostData? {
-        val tableName = when (postType) {
-            PostType.UNREAD, PostType.FAVORITES -> "post"
-            PostType.ARCHIVE -> "archive_post"
+        val (tableName, isArchived) = when (postType) {
+            PostType.UNREAD, PostType.FAVORITES -> Pair("post", false)
+            PostType.ARCHIVE -> Pair("archive_post", true)
         }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, created_date, updated_date
             FROM $tableName
             WHERE id = :post_id
         """.trimIndent()
@@ -56,16 +57,36 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     }
 
     fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
-        val tableName = when (postType) {
-            PostType.UNREAD, PostType.FAVORITES -> "post"
-            PostType.ARCHIVE -> "archive_post"
+        if (postType == PostType.FAVORITES) {
+            val sql = """
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, created_date, updated_date
+                FROM post
+                WHERE user_id = :user_id AND is_favorite = true
+                UNION ALL
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, created_date, updated_date
+                FROM archive_post
+                WHERE user_id = :user_id AND is_favorite = true
+                ORDER BY created_date DESC OFFSET :offset LIMIT :limit
+            """.trimIndent()
+
+            val params = MapSqlParameterSource()
+                .addValue("user_id", userId)
+                .addValue("offset", offset)
+                .addValue("limit", limit)
+
+            return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
         }
-        val favoriteFilter = if (postType == PostType.FAVORITES) "AND is_favorite = true" else ""
+
+        val (tableName, isArchived) = when (postType) {
+            PostType.UNREAD -> Pair("post", false)
+            PostType.ARCHIVE -> Pair("archive_post", true)
+            PostType.FAVORITES -> error("unreachable")
+        }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, created_date, updated_date
             FROM $tableName
-            WHERE user_id = :user_id $favoriteFilter
+            WHERE user_id = :user_id
             ORDER BY created_date DESC OFFSET :offset LIMIT :limit
         """.trimIndent()
 
@@ -78,13 +99,13 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     }
 
     fun findPost(userId: Long, postType: PostType, url: String): List<PostData> {
-        val tableName = when (postType) {
-            PostType.UNREAD, PostType.FAVORITES -> "post"
-            PostType.ARCHIVE -> "archive_post"
+        val (tableName, isArchived) = when (postType) {
+            PostType.UNREAD, PostType.FAVORITES -> Pair("post", false)
+            PostType.ARCHIVE -> Pair("archive_post", true)
         }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, created_date, updated_date
             FROM $tableName
             WHERE user_id = :user_id AND url ilike :url
         """.trimIndent()
@@ -221,7 +242,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getRandomPost(userId: Long): PostData? {
         val sql = """
-            SELECT id, title, url, user_id, tags, is_favorite, created_date, updated_date
+            SELECT id, title, url, user_id, tags, is_favorite, false as is_archived, created_date, updated_date
             FROM post
             WHERE user_id = :user_id
             ORDER BY RANDOM()
@@ -235,16 +256,31 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     }
 
     fun getPostCount(userId: Long, postType: PostType): Int {
-        val tableName = when (postType) {
-            PostType.UNREAD, PostType.FAVORITES -> "post"
-            PostType.ARCHIVE -> "archive_post"
+        if (postType == PostType.FAVORITES) {
+            val sql = """
+                SELECT count(*) FROM (
+                    SELECT id FROM post WHERE user_id = :user_id AND is_favorite = true
+                    UNION ALL
+                    SELECT id FROM archive_post WHERE user_id = :user_id AND is_favorite = true
+                ) sub
+            """.trimIndent()
+
+            val params = MapSqlParameterSource()
+                .addValue("user_id", userId)
+
+            return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java)!!
         }
-        val favoriteFilter = if (postType == PostType.FAVORITES) "AND is_favorite = true" else ""
+
+        val tableName = when (postType) {
+            PostType.UNREAD -> "post"
+            PostType.ARCHIVE -> "archive_post"
+            PostType.FAVORITES -> error("unreachable")
+        }
 
         val sql = """
             SELECT count(*)
             FROM $tableName
-            WHERE user_id = :user_id $favoriteFilter
+            WHERE user_id = :user_id
         """.trimIndent()
 
         val params = MapSqlParameterSource()

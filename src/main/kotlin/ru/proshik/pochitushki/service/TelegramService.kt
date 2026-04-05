@@ -330,7 +330,12 @@ class TelegramService(
         val message = posts
             .map { post ->
                 val message = buildPostMessage(post.url, post.title)
-                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, postType, post.isFavorite, languageCode)
+                val effectivePostType = if (postType == PostType.FAVORITES) {
+                    if (post.isArchived) PostType.ARCHIVE else PostType.UNREAD
+                } else {
+                    postType
+                }
+                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, effectivePostType, post.isFavorite, languageCode)
 
                 PostFeedItem(message, keyboard)
             }

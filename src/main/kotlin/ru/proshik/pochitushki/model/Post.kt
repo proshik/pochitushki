@@ -9,6 +9,7 @@ data class PostData(
     val userId: Long,
     val tags: List<String>?,
     val isFavorite: Boolean = false,
+    val isArchived: Boolean = false,
     val createdDate: LocalDateTime,
     val updatedDate: LocalDateTime
 )
