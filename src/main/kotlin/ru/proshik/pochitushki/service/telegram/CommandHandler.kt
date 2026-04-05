@@ -180,6 +180,10 @@ class CommandHandler(
             chatId = chatId,
             text = i18nService.getMessage("command.start.message", languageCode)
         )
+        telegramService.sendMessageWithReplayKeyboard(
+            chatId = chatId,
+            text = i18nService.getMessage("command.start.features", languageCode)
+        )
     }
 
     private fun helpMessage(chatId: Long, languageCode: String) {
