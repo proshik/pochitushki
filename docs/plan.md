@@ -4,7 +4,7 @@
 
 | Фаза | Название | Статус |
 |------|----------|--------|
-| 1 | Тесты (актуализация + расширение) | 🔄 В процессе |
+| 1 | Тесты (актуализация + расширение) | ✅ Готово |
 | 2 | Favorites | ✅ Готово |
 | 3 | PDF | ✅ Готово |
 | 4 | Auth + Web Foundation | ⏳ В очереди |
@@ -22,14 +22,14 @@
 ### Что сделать
 - [x] `BaseIntegrationTest` — базовый класс с TestContainers + WireMock
 - [x] `TelegramBotIntegrationTest` — реальный тест webhook endpoint (`/start`, добавление поста по URL)
-- [ ] `TelegramControllerTest` — сейчас заглушка (println), заменить реальным тестом
+- [x] `TelegramControllerTest` — 2 теста (webhook 200, невалидный JSON)
 - Интеграционные тесты (extends `BaseIntegrationTest`):
-  - [ ] `PostServiceTest` — addPost, archivePost, unreadPost, getRandomPost, deletePost
-  - [ ] `UserServiceTest` — создание/получение пользователя, обновление настроек
-  - [ ] `PostDaoTest` — CRUD + пагинация + поиск по URL
+  - [x] `PostServiceTest` — 18 тестов
+  - [x] `UserServiceTest` — 8 тестов
+  - [x] `PostDaoTest` — 19 тестов
   - [ ] `ImportServiceTest` — разбор Pocket CSV/ZIP
 - Unit-тесты (без Spring):
-  - [ ] `I18nServiceTest` — fallback на EN при отсутствии перевода
+  - [x] `I18nServiceTest` — 4 теста
 
 ### Ключевые файлы
 - `src/test/kotlin/ru/proshik/pochitushki/BaseIntegrationTest.kt` — переиспользовать
