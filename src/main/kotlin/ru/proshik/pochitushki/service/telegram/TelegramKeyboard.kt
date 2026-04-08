@@ -245,8 +245,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         }
 
         val favoriteCallback = when {
-            postType == PostType.FAVORITES && isArchived -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
-            postType == PostType.ARCHIVE -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
+            postType == PostType.ARCHIVE || (postType == PostType.FAVORITES && isArchived) -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
             else -> CALLBACK_TOGGLE_UNREAD_FAVORITE
         }
         val favoriteText = if (isFavorite) {
@@ -256,8 +255,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         }
 
         val pdfCallback = when {
-            postType == PostType.FAVORITES && isArchived -> CALLBACK_PDF_ARCHIVE_POST
-            postType == PostType.ARCHIVE -> CALLBACK_PDF_ARCHIVE_POST
+            postType == PostType.ARCHIVE || (postType == PostType.FAVORITES && isArchived) -> CALLBACK_PDF_ARCHIVE_POST
             else -> CALLBACK_PDF_UNREAD_POST
         }
 
