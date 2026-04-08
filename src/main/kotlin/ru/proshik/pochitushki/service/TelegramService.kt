@@ -9,6 +9,8 @@ import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.types.TelegramBotResult
 import java.io.File
 import java.net.URI
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -357,7 +359,8 @@ class TelegramService(
 
         val message = posts
             .map { post ->
-                val message = buildPostMessage(post.url, post.title)
+                val date = if (postType == PostType.UNREAD || postType == PostType.ARCHIVE) post.createdDate else null
+                val message = buildPostMessage(post.url, post.title, createdDate = date)
                 val keyboard = if (postType == PostType.FAVORITES) {
                     telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.FAVORITES, post.isFavorite, languageCode, isArchived = post.isArchived)
                 } else {
@@ -717,11 +720,14 @@ class TelegramService(
         logger.info("updateUserSettingsFeedCount success: chatId={}, tgFeedEntriesNumber={}", chatId, tgFeedEntriesNumber)
     }
 
-    private fun buildPostMessage(postUrl: String, postTitle: String?, prefixMessage: String? = ""): String {
+    private fun buildPostMessage(postUrl: String, postTitle: String?, prefixMessage: String? = "", createdDate: LocalDateTime? = null): String {
         val escapedUrl = escapeTextMarkdown2(postUrl)
         val escapedTitle = postTitle?.let { title -> escapeTextMarkdown2(title) } ?: escapedUrl
+        val dateLine = createdDate?.let { date ->
+            "\n" + escapeTextMarkdown2(date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
+        } ?: ""
 
-        val message = "$prefixMessage[${escapedTitle}]($escapedUrl)"
+        val message = "$prefixMessage[${escapedTitle}]($escapedUrl)$dateLine"
 
         return message
     }

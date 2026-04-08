@@ -140,6 +140,25 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `feed command with posts should include date in message body`() {
+        registerTestUser()
+        val userId = getUserId()
+        createPost(userId, "Dated Post", "https://dated-post.com")
+
+        postUpdate(buildCommandMessage(nextUpdateId(), "/feed", "feed"))
+
+        awaitTelegramApiCalls("/bottest_token/sendMessage", 2)
+
+        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
+        // The bot sends form-encoded requests: MarkdownV2 backslashes (\) are URL-encoded to %5C
+        // So date "05\.04\.2026" appears as "05%5C.04%5C.2026" in the raw body
+        val hasDate = calls.any { call ->
+            call.bodyAsString.contains(Regex("""\d{2}%5C\.\d{2}%5C\.\d{4}"""))
+        }
+        assertTrue(hasDate, "Expected post card to contain a URL-encoded date in dd%5C.MM%5C.yyyy format")
+    }
+
+    @Test
     fun `archive command should send archive feed or not-found`() {
         registerTestUser()
 
