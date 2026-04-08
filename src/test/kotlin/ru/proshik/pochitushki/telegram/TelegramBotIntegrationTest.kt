@@ -151,11 +151,11 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
 
         val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
         // The bot sends form-encoded requests: MarkdownV2 backslashes (\) are URL-encoded to %5C
-        // So date "05\.04\.2026" appears as "05%5C.04%5C.2026" in the raw body
+        // Italic date "_05\.04\.2026_" appears as "_%5C._%5C." etc. in URL-encoded body
         val hasDate = calls.any { call ->
-            call.bodyAsString.contains(Regex("""\d{2}%5C\.\d{2}%5C\.\d{4}"""))
+            call.bodyAsString.contains(Regex("""_\d{2}%5C\.\d{2}%5C\.\d{4}_"""))
         }
-        assertTrue(hasDate, "Expected post card to contain a URL-encoded date in dd%5C.MM%5C.yyyy format")
+        assertTrue(hasDate, "Expected post card to contain an italic date in MarkdownV2 format")
     }
 
     @Test

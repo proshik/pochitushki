@@ -724,7 +724,7 @@ class TelegramService(
         val escapedUrl = escapeTextMarkdown2(postUrl)
         val escapedTitle = postTitle?.let { title -> escapeTextMarkdown2(title) } ?: escapedUrl
         val dateLine = createdDate?.let { date ->
-            "\n" + escapeTextMarkdown2(date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
+            "\n_" + escapeTextMarkdown2(date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))) + "_"
         } ?: ""
 
         val message = "$prefixMessage[${escapedTitle}]($escapedUrl)$dateLine"
