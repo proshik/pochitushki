@@ -97,10 +97,15 @@ class PlaywrightPdfGenerator : PdfGenerator, AutoCloseable {
 
     override fun close() {
         executor.submit {
-            val (pw, br) = browserFuture.join()
-            br.close()
-            pw.close()
-            logger.info("Playwright PDF generator closed")
+            try {
+                val (pw, br) = browserFuture.join()
+                br.close()
+                pw.close()
+                logger.info("Playwright PDF generator closed")
+            } catch (e: Exception) {
+                // Playwright process may already be gone during JVM shutdown — not an error
+                logger.warn("Playwright PDF generator closed with error (expected during shutdown): {}", e.message)
+            }
         }.get()
         executor.shutdown()
     }
