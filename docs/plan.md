@@ -7,7 +7,7 @@
 | 1 | Тесты (актуализация + расширение) | ✅ Готово |
 | 2 | Favorites | ✅ Готово |
 | 3 | PDF | ✅ Готово |
-| 3.5 | Bot UX улучшения | ⏳ В очереди |
+| 3.5 | Bot UX улучшения | ✅ Готово |
 | 4 | Auth + Web Foundation | ⏳ В очереди |
 | 5 | Web UI | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
@@ -89,9 +89,9 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 - `/favorites` — пост остаётся в списке, кнопки просто меняют состояние (обновляется inline-клавиатура), чтобы отражать, где сейчас находится пост (в архиве или непрочитанном)
 
 **Изменения**:
-- [ ] В `CallbackQueryHandler` — при обработке `CALLBACK_TOGGLE_UNREAD/ARCHIVE` проверять, откуда пришёл callback (context PostType)
-- [ ] Если `postType == FAVORITES` — после переноса не редактировать/удалять сообщение, а обновить inline-кнопки карточки через `editMessageReplyMarkup`
-- [ ] Тест в `TelegramBotIntegrationTest` — проверить, что в контексте favorites карточка не исчезает
+- [x] В `CallbackQueryHandler` — при обработке `CALLBACK_TOGGLE_UNREAD/ARCHIVE` проверять, откуда пришёл callback (context PostType)
+- [x] Если `postType == FAVORITES` — после переноса не редактировать/удалять сообщение, а обновить inline-кнопки карточки через `editMessageReplyMarkup`
+- [x] Тест в `TelegramBotIntegrationTest` — проверить, что в контексте favorites карточка не исчезает
 
 ### Задача 2 — Дата добавления под ссылкой в /feed и /archive
 
@@ -109,10 +109,10 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
   Точки в дате нужно экранировать (`\.`) в MarkdownV2.
 
 **Изменения**:
-- [ ] В `CommandHandler` (или хелпере форматирования карточки) — добавить строку с датой под ссылкой
-- [ ] Убедиться, что `parseMode = ParseMode.MARKDOWN_V2` выставлен для этих сообщений
-- [ ] Экранировать спецсимволы в дате через утилиту (`.` → `\.`)
-- [ ] Тест — проверить формат карточки с датой
+- [x] В `CommandHandler` (или хелпере форматирования карточки) — добавить строку с датой под ссылкой
+- [x] Убедиться, что `parseMode = ParseMode.MARKDOWN_V2` выставлен для этих сообщений
+- [x] Экранировать спецсимволы в дате через утилиту (`.` → `\.`)
+- [x] Тест — проверить формат карточки с датой
 
 ---
 
