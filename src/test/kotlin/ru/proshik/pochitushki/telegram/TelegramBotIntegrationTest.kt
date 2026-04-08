@@ -13,7 +13,6 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import java.time.Duration
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

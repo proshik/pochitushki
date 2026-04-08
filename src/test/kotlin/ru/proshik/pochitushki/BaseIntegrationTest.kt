@@ -1,8 +1,7 @@
 package ru.proshik.pochitushki
 
+import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
-import com.github.tomakehurst.wiremock.junit5.WireMockExtension
-import org.junit.jupiter.api.extension.RegisterExtension
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -36,17 +35,13 @@ class BaseIntegrationTest() {
             registry.add("spring.datasource.password", postgresContainer::getPassword)
         }
 
-        @RegisterExtension
         @JvmField
-        val wireMockTelegramApi: WireMockExtension = WireMockExtension.newInstance()
-            .options(wireMockConfig().dynamicPort())
-            .failOnUnmatchedRequests(false)
-            .build()
+        val wireMockTelegramApi: WireMockServer = WireMockServer(wireMockConfig().dynamicPort()).apply { start() }
 
         @DynamicPropertySource
         @JvmStatic
         fun telegramDynamicProps(registry: DynamicPropertyRegistry) {
-            registry.add("telegram.api-url") { "http://localhost:${wireMockTelegramApi.port}/" }
+            registry.add("telegram.api-url") { "http://localhost:${wireMockTelegramApi.port()}/" }
             registry.add("telegram.webhook-url") { "" }
         }
     }
