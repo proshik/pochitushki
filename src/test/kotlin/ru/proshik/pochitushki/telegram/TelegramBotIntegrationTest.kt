@@ -488,6 +488,23 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         )
     }
 
+    @Test
+    fun `toggle_favorites_unread_favorite callback should delete message when unfavoriting from favorites`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Unfav From Favorites", "https://unfav-favorites.com")
+        markAsFavorite(postId)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 72L, "toggle_favorites_unread_favorite|$postId"))
+
+        awaitCondition {
+            jdbcTemplate.queryForObject("SELECT is_favorite FROM post WHERE id = ?", Boolean::class.java, postId) == false
+        }
+        wireMockTelegramApi.verify(postRequestedFor(urlEqualTo("/bottest_token/deleteMessage")))
+        // Post still exists in unread, just no longer a favorite
+        awaitCondition { getPostCount("post") == 1 }
+    }
+
     // ==================== Helper methods ====================
 
     private fun setupTelegramApiStubs() {

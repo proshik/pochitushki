@@ -102,6 +102,14 @@ class CallbackQueryHandler(
                 val postId = data.toLong()
                 telegramService.favoritesToUnread(chatId, message.messageId, postId)
             }
+            TelegramKeyboard.CALLBACK_TOGGLE_FAVORITES_UNREAD_FAVORITE -> {
+                val postId = data.toLong()
+                telegramService.toggleFavoriteFromFavorites(chatId, message.messageId, postId, PostType.UNREAD)
+            }
+            TelegramKeyboard.CALLBACK_TOGGLE_FAVORITES_ARCHIVE_FAVORITE -> {
+                val postId = data.toLong()
+                telegramService.toggleFavoriteFromFavorites(chatId, message.messageId, postId, PostType.ARCHIVE)
+            }
             /**
              * PDF generation — engine selection
              */

@@ -49,6 +49,9 @@ class TelegramKeyboard(private val i18nService: I18nService) {
 
         const val CALLBACK_FAVORITES_TO_ARCHIVE = "favorites_to_archive"
         const val CALLBACK_FAVORITES_TO_UNREAD = "favorites_to_unread"
+
+        const val CALLBACK_TOGGLE_FAVORITES_UNREAD_FAVORITE = "toggle_favorites_unread_favorite"
+        const val CALLBACK_TOGGLE_FAVORITES_ARCHIVE_FAVORITE = "toggle_favorites_archive_favorite"
     }
 
     /**
@@ -245,7 +248,9 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         }
 
         val favoriteCallback = when {
-            postType == PostType.ARCHIVE || (postType == PostType.FAVORITES && isArchived) -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
+            postType == PostType.FAVORITES && isArchived -> CALLBACK_TOGGLE_FAVORITES_ARCHIVE_FAVORITE
+            postType == PostType.FAVORITES -> CALLBACK_TOGGLE_FAVORITES_UNREAD_FAVORITE
+            postType == PostType.ARCHIVE -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
             else -> CALLBACK_TOGGLE_UNREAD_FAVORITE
         }
         val favoriteText = if (isFavorite) {

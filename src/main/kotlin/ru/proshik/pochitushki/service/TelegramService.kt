@@ -478,6 +478,29 @@ class TelegramService(
         logger.info("toggleFavorite success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
     }
 
+    fun toggleFavoriteFromFavorites(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
+        logger.debug("toggleFavoriteFromFavorites: chatId={}, postId={}, postType={}", chatId, postId, postType)
+
+        val newIsFavorite = postService.toggleFavorite(postId, postType)
+
+        if (!newIsFavorite) {
+            // Post removed from favorites — delete the card from the list
+            botProvider.getBot().deleteMessage(chatId = ChatId.fromId(chatId), messageId = messageId)
+        } else {
+            // Re-added to favorites (edge case) — update keyboard in place
+            val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+            val post = postService.getPost(postId, postType) ?: run {
+                logger.warn("toggleFavoriteFromFavorites: post not found postId={}", postId)
+                return
+            }
+            val isArchived = postType == PostType.ARCHIVE
+            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(postId, PostType.FAVORITES, newIsFavorite, user.settings.languageCode, isArchived = isArchived)
+            editMessage(chatId, messageId, buildPostMessage(post.url, post.title), keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
+        }
+
+        logger.info("toggleFavoriteFromFavorites success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
+    }
+
     fun toggleFavoriteForRandomPost(chatId: Long, messageId: Long, postId: Long) {
         logger.debug("toggleFavoriteForRandomPost: chatId={}, postId={}", chatId, postId)
 
