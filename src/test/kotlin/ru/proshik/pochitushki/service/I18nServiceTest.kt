@@ -14,7 +14,7 @@ class I18nServiceTest : BaseIntegrationTest() {
     @Test
     fun `getMessage returns English message`() {
         val message = i18nService.getMessage("command.feed.button.archive", "en")
-        assertEquals("Archive 🗄", message)
+        assertEquals("To Archive 🗄", message)
     }
 
     @Test
@@ -26,7 +26,7 @@ class I18nServiceTest : BaseIntegrationTest() {
     @Test
     fun `getMessage falls back to English for unknown locale`() {
         val message = i18nService.getMessage("command.feed.button.archive", "fr")
-        assertEquals("Archive 🗄", message)
+        assertEquals("To Archive 🗄", message)
     }
 
     @Test

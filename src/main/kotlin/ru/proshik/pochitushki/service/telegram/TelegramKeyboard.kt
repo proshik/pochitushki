@@ -183,7 +183,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                         callbackData = "$CALLBACK_RANDOM_POST_ARCHIVE|$postId"
                     ),
                     InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.feed.button.delete", languageCode),
+                        text = i18nService.getMessage("command.feed.button.delete.unread", languageCode),
                         callbackData = "$CALLBACK_RANDOM_POST_DELETE|$postId"
                     )
                 ),
@@ -224,25 +224,25 @@ class TelegramKeyboard(private val i18nService: I18nService) {
             postType == PostType.FAVORITES && !isArchived -> {
                 Pair(
                     Pair(i18nService.getMessage("command.feed.button.archive", languageCode), CALLBACK_FAVORITES_TO_ARCHIVE),
-                    Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_POST)
+                    Pair(i18nService.getMessage("command.feed.button.delete.unread", languageCode), CALLBACK_DELETE_POST)
                 )
             }
             postType == PostType.FAVORITES && isArchived -> {
                 Pair(
                     Pair(i18nService.getMessage("command.feed.button.unread", languageCode), CALLBACK_FAVORITES_TO_UNREAD),
-                    Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
+                    Pair(i18nService.getMessage("command.feed.button.delete.archive", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
                 )
             }
             postType == PostType.UNREAD -> {
                 Pair(
                     Pair(i18nService.getMessage("command.feed.button.archive", languageCode), CALLBACK_ARCHIVE_POST),
-                    Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_POST)
+                    Pair(i18nService.getMessage("command.feed.button.delete.unread", languageCode), CALLBACK_DELETE_POST)
                 )
             }
             else -> {
                 Pair(
                     Pair(i18nService.getMessage("command.feed.button.unread", languageCode), CALLBACK_UNREAD_POST),
-                    Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
+                    Pair(i18nService.getMessage("command.feed.button.delete.archive", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
                 )
             }
         }
