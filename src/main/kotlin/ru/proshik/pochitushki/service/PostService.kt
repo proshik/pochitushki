@@ -58,15 +58,17 @@ class PostService(
     }
 
     @Transactional
-    fun archivePost(postId: Long) {
-        postDao.addToArchivePost(postId)
+    fun archivePost(postId: Long): Long {
+        val newId = postDao.addToArchivePost(postId)
         postDao.deletePost(postId, PostType.UNREAD)
+        return newId
     }
 
     @Transactional
-    fun unreadPost(postId: Long) {
-        postDao.addToUnreadPost(postId)
+    fun unreadPost(postId: Long): Long {
+        val newId = postDao.addToUnreadPost(postId)
         postDao.deletePost(postId, PostType.ARCHIVE)
+        return newId
     }
 
     fun getRandomPost(userId: Long): PostData? {

@@ -193,32 +193,34 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         namedParameterJdbcTemplate.update(sql, params)
     }
 
-    fun addToArchivePost(postId: Long) {
+    fun addToArchivePost(postId: Long): Long {
         val sql = """
             INSERT INTO archive_post(title, url, tags, user_id, is_favorite)
             SELECT title, url, tags, user_id, is_favorite
             FROM post
             WHERE post.id = :post_id
+            RETURNING id
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("post_id", postId)
 
-        namedParameterJdbcTemplate.update(sql, params)
+        return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)!!
     }
 
-    fun addToUnreadPost(postId: Long) {
+    fun addToUnreadPost(postId: Long): Long {
         val sql = """
             INSERT INTO post(title, url, tags, user_id, is_favorite)
             SELECT title, url, tags, user_id, is_favorite
             FROM archive_post
             WHERE archive_post.id = :post_id
+            RETURNING id
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("post_id", postId)
 
-        namedParameterJdbcTemplate.update(sql, params)
+        return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)!!
     }
 
     fun toggleFavorite(postId: Long, postType: PostType): Boolean {

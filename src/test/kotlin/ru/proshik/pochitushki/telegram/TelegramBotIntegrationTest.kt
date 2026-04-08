@@ -433,6 +433,42 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         awaitSendMessage()
     }
 
+    @Test
+    fun `favorites_to_archive callback should archive post and edit message keyboard, not delete`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Fav To Archive", "https://fav-to-archive.com")
+        markAsFavorite(postId)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 70L, "favorites_to_archive|$postId"))
+
+        awaitCondition { getPostCount("post") == 0 && getPostCount("archive_post") == 1 }
+        awaitEditMessage()
+        // Ensure message was NOT deleted
+        wireMockTelegramApi.verify(
+            0, postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))
+        )
+    }
+
+    @Test
+    fun `favorites_to_unread callback should move post to unread and edit message keyboard, not delete`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Fav To Unread", "https://fav-to-unread.com")
+        markAsFavorite(postId)
+        archivePost(postId)
+        val archivePostId = getArchivePostId(userId)
+        markArchiveAsFavorite(archivePostId)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 71L, "favorites_to_unread|$archivePostId"))
+
+        awaitCondition { getPostCount("post") == 1 && getPostCount("archive_post") == 0 }
+        awaitEditMessage()
+        wireMockTelegramApi.verify(
+            0, postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))
+        )
+    }
+
     // ==================== Helper methods ====================
 
     private fun setupTelegramApiStubs() {
@@ -474,6 +510,14 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
             "INSERT INTO post (title, url, user_id) VALUES (?, ?, ?) RETURNING id",
             Long::class.java, title, url, userId
         )!!
+    }
+
+    private fun markAsFavorite(postId: Long) {
+        jdbcTemplate.update("UPDATE post SET is_favorite = true WHERE id = ?", postId)
+    }
+
+    private fun markArchiveAsFavorite(archivePostId: Long) {
+        jdbcTemplate.update("UPDATE archive_post SET is_favorite = true WHERE id = ?", archivePostId)
     }
 
     private fun archivePost(postId: Long) {

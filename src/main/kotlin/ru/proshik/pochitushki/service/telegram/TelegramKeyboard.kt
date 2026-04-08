@@ -46,6 +46,9 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         const val CALLBACK_PROFILE_FEED_SETTINGS_CHANGE = "profile_feed_settings_changed"
         const val CALLBACK_PROFILE_LANGUAGE_SETTINGS_CHANGE = "profile_language_settings_changed"
         const val CALLBACK_PROFILE_BACK_SETTINGS = "profile_back_button_settings"
+
+        const val CALLBACK_FAVORITES_TO_ARCHIVE = "favorites_to_archive"
+        const val CALLBACK_FAVORITES_TO_UNREAD = "favorites_to_unread"
     }
 
     /**
@@ -211,17 +214,29 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         postId: Long,
         postType: PostType,
         isFavorite: Boolean,
-        languageCode: String
+        languageCode: String,
+        isArchived: Boolean = false
     ): InlineKeyboardMarkup {
-        val (unreadOrArchive, delete) = when (postType) {
-            PostType.UNREAD, PostType.FAVORITES -> {
+        val (unreadOrArchive, delete) = when {
+            postType == PostType.FAVORITES && !isArchived -> {
+                Pair(
+                    Pair(i18nService.getMessage("command.feed.button.archive", languageCode), CALLBACK_FAVORITES_TO_ARCHIVE),
+                    Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_POST)
+                )
+            }
+            postType == PostType.FAVORITES && isArchived -> {
+                Pair(
+                    Pair(i18nService.getMessage("command.feed.button.unread", languageCode), CALLBACK_FAVORITES_TO_UNREAD),
+                    Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
+                )
+            }
+            postType == PostType.UNREAD -> {
                 Pair(
                     Pair(i18nService.getMessage("command.feed.button.archive", languageCode), CALLBACK_ARCHIVE_POST),
                     Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_POST)
                 )
             }
-
-            PostType.ARCHIVE -> {
+            else -> {
                 Pair(
                     Pair(i18nService.getMessage("command.feed.button.unread", languageCode), CALLBACK_UNREAD_POST),
                     Pair(i18nService.getMessage("command.feed.button.delete", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
@@ -229,8 +244,9 @@ class TelegramKeyboard(private val i18nService: I18nService) {
             }
         }
 
-        val favoriteCallback = when (postType) {
-            PostType.ARCHIVE -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
+        val favoriteCallback = when {
+            postType == PostType.FAVORITES && isArchived -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
+            postType == PostType.ARCHIVE -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
             else -> CALLBACK_TOGGLE_UNREAD_FAVORITE
         }
         val favoriteText = if (isFavorite) {
@@ -239,8 +255,9 @@ class TelegramKeyboard(private val i18nService: I18nService) {
             i18nService.getMessage("command.feed.button.favorite", languageCode)
         }
 
-        val pdfCallback = when (postType) {
-            PostType.ARCHIVE -> CALLBACK_PDF_ARCHIVE_POST
+        val pdfCallback = when {
+            postType == PostType.FAVORITES && isArchived -> CALLBACK_PDF_ARCHIVE_POST
+            postType == PostType.ARCHIVE -> CALLBACK_PDF_ARCHIVE_POST
             else -> CALLBACK_PDF_UNREAD_POST
         }
 

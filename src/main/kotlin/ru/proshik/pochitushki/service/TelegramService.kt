@@ -275,6 +275,34 @@ class TelegramService(
         logger.info("toUnreadPost success: chatId={}, postId={}", chatId, postId)
     }
 
+    fun favoritesToArchive(chatId: Long, messageId: Long, postId: Long) {
+        logger.debug("favoritesToArchive: chatId={}, postId={}", chatId, postId)
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+        val post = postService.getPost(postId, PostType.UNREAD) ?: run {
+            logger.warn("favoritesToArchive: post not found postId={}", postId)
+            return
+        }
+        val newArchiveId = postService.archivePost(postId)
+        val messageText = buildPostMessage(post.url, post.title)
+        val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newArchiveId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = true)
+        editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
+        logger.info("favoritesToArchive success: chatId={}, postId={}, newArchiveId={}", chatId, postId, newArchiveId)
+    }
+
+    fun favoritesToUnread(chatId: Long, messageId: Long, postId: Long) {
+        logger.debug("favoritesToUnread: chatId={}, postId={}", chatId, postId)
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+        val post = postService.getPost(postId, PostType.ARCHIVE) ?: run {
+            logger.warn("favoritesToUnread: post not found postId={}", postId)
+            return
+        }
+        val newUnreadId = postService.unreadPost(postId)
+        val messageText = buildPostMessage(post.url, post.title)
+        val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newUnreadId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = false)
+        editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
+        logger.info("favoritesToUnread success: chatId={}, postId={}, newUnreadId={}", chatId, postId, newUnreadId)
+    }
+
     fun toDeletePost(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
         logger.debug("toDeletePost: chatId={}, postId={}, postType={}", chatId, postId, postType)
 
@@ -330,12 +358,11 @@ class TelegramService(
         val message = posts
             .map { post ->
                 val message = buildPostMessage(post.url, post.title)
-                val effectivePostType = if (postType == PostType.FAVORITES) {
-                    if (post.isArchived) PostType.ARCHIVE else PostType.UNREAD
+                val keyboard = if (postType == PostType.FAVORITES) {
+                    telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.FAVORITES, post.isFavorite, languageCode, isArchived = post.isArchived)
                 } else {
-                    postType
+                    telegramKeyboard.buildFeedPostInlineKeyboard(post.id, postType, post.isFavorite, languageCode)
                 }
-                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, effectivePostType, post.isFavorite, languageCode)
 
                 PostFeedItem(message, keyboard)
             }
