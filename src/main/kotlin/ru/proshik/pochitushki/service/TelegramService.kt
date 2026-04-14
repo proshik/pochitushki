@@ -629,6 +629,10 @@ class TelegramService(
         logger.info("importData success: chatId={}", chatId)
     }
 
+    fun showImportInstruction(chatId: Long) {
+        // TODO: implement in Task 4
+    }
+
     fun export(chatId: Long, messageId: Long) {
         logger.debug("export chatId={}", chatId)
 
