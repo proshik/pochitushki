@@ -52,6 +52,9 @@ class TelegramKeyboard(private val i18nService: I18nService) {
 
         const val CALLBACK_TOGGLE_FAVORITES_UNREAD_FAVORITE = "toggle_favorites_unread_favorite"
         const val CALLBACK_TOGGLE_FAVORITES_ARCHIVE_FAVORITE = "toggle_favorites_archive_favorite"
+
+        const val CALLBACK_PROFILE_IMPORT = "profile_import"
+        const val CALLBACK_PROFILE_EXPORT = "profile_export"
     }
 
     /**
@@ -128,6 +131,18 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                     InlineKeyboardButton.CallbackData(
                         text = i18nService.getMessage("command.profile.settings.language", languageCode),
                         callbackData = "$CALLBACK_PROFILE_LANGUAGE_SETTINGS|_"
+                    ),
+                ),
+                listOf(
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.profile.import", languageCode),
+                        callbackData = "$CALLBACK_PROFILE_IMPORT|_"
+                    ),
+                ),
+                listOf(
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.profile.export", languageCode),
+                        callbackData = "$CALLBACK_PROFILE_EXPORT|_"
                     ),
                 ),
             )

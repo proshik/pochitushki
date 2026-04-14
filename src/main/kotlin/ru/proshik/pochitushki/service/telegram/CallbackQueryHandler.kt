@@ -199,6 +199,14 @@ class CallbackQueryHandler(
                 telegramService.showProfile(chatId, messageId)
             }
 
+            TelegramKeyboard.CALLBACK_PROFILE_IMPORT -> {
+                telegramService.showImportInstruction(chatId)
+            }
+
+            TelegramKeyboard.CALLBACK_PROFILE_EXPORT -> {
+                telegramService.export(chatId, messageId)
+            }
+
             else -> throw RuntimeException("Unknown callback action $action")
         }
 

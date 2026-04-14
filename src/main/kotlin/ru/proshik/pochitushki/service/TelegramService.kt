@@ -608,25 +608,35 @@ class TelegramService(
 
         val byteArray = botProvider.getBot().downloadFileBytes(fileId)
         if (byteArray == null) {
-            sendMessage(chatId, "Can't download file: chatId=$chatId")
+            sendMessage(chatId, i18nService.getMessage("command.import.download_error", user.settings.languageCode))
             return
         }
 
-        val file = File("/tmp/pocket_import_${user.id}.zip")
+        val file = File.createTempFile("pocket_import_${user.id}_", ".zip")
         FileUtils.writeByteArrayToFile(file, byteArray)
 
         try {
             importService.importZipArchive(user.id, file)
+            sendMessage(chatId, i18nService.getMessage("command.import.success", user.settings.languageCode))
         } catch (ex: Exception) {
             logger.warn("import file error: userId={}", user.id, ex)
-            sendMessage(chatId, "Error on import! Please try again.")
+            sendMessage(chatId, i18nService.getMessage("command.import.error", user.settings.languageCode))
         } finally {
             FileUtils.delete(file)
         }
 
-        sendMessage(chatId, "Success import!")
-
         logger.info("importData success: chatId={}", chatId)
+    }
+
+    fun showImportInstruction(chatId: Long) {
+        logger.debug("showImportInstruction: chatId={}", chatId)
+
+        val user = userService.findUserByChatId(chatId)
+            ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+
+        sendMessage(chatId, i18nService.getMessage("command.profile.import.instruction", user.settings.languageCode))
+
+        logger.info("showImportInstruction success: chatId={}", chatId)
     }
 
     fun export(chatId: Long, messageId: Long) {
@@ -635,9 +645,25 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId)
             ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        exportService.export(user.id)
+        val file = exportService.export(user.id)
+        if (file == null) {
+            sendMessage(chatId, i18nService.getMessage("command.export.nothing_to_export", user.settings.languageCode))
+            return
+        }
 
-        logger.info("export success: chatId={}", chatId)
+        try {
+            val bytes = file.readBytes()
+            botProvider.getBot().sendDocument(
+                chatId = ChatId.fromId(chatId),
+                document = TelegramFile.ByByteArray(bytes, file.name),
+            )
+            logger.info("export success: chatId={}", chatId)
+        } catch (e: Exception) {
+            logger.warn("export send error: chatId={}", chatId, e)
+            sendMessage(chatId, i18nService.getMessage("command.export.error", user.settings.languageCode))
+        } finally {
+            file.delete()
+        }
     }
 
     fun getFeedSettings(chatId: Long, messageId: Long) {

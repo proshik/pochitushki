@@ -157,8 +157,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         }
 
         val sql = """
-            INSERT INTO $tableName (id, title, url, user_id, tags, created_date, updated_date)
-            VALUES (:id, :title, :url, :user_id, :tags::TEXT[], :created_date, :updated_date)
+            INSERT INTO $tableName (id, title, url, user_id, tags, is_favorite, created_date, updated_date)
+            VALUES (:id, :title, :url, :user_id, :tags::TEXT[], :is_favorite, :created_date, :updated_date)
         """.trimIndent()
 
         val batchArgs = posts.map { post ->
@@ -168,6 +168,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
                 .addValue("url", post.url)
                 .addValue("user_id", post.userId)
                 .addValue("tags", post.tags?.toTypedArray())
+                .addValue("is_favorite", post.isFavorite)
                 .addValue("created_date", post.createdDate)
                 .addValue("updated_date", post.updatedDate)
         }.toTypedArray()

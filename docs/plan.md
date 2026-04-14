@@ -7,9 +7,10 @@
 | 1 | Тесты (актуализация + расширение) | ✅ Готово |
 | 2 | Favorites | ✅ Готово |
 | 3 | PDF | ✅ Готово |
-| 3.5 | Bot UX улучшения | ✅ Готово |
-| 4 | Auth + Web Foundation | ⏳ В очереди |
-| 5 | Web UI | ⏳ В очереди |
+| 3.5 | Bot UX улучшения + ImportServiceTest | ✅ Готово |
+| 3.7 | Export & Import доработки | ⏳ В очереди |
+| 4 | Web UI Foundation (без auth) | ⏳ В очереди |
+| 5 | Auth + защита Web | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
 | 7 | Chrome Extension | 🔮 Будущее |
 | 8 | iOS App | 🔮 Будущее |
@@ -28,7 +29,6 @@
   - [x] `PostServiceTest` — 18 тестов
   - [x] `UserServiceTest` — 8 тестов
   - [x] `PostDaoTest` — 19 тестов
-  - [ ] `ImportServiceTest` — разбор Pocket CSV/ZIP
 - Unit-тесты (без Spring):
   - [x] `I18nServiceTest` — 4 теста
 
@@ -114,9 +114,108 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 - [x] Экранировать спецсимволы в дате через утилиту (`.` → `\.`)
 - [x] Тест — проверить формат карточки с датой
 
+### Задача 3 — ImportServiceTest (перенесено из фазы 1)
+
+`ImportService.importZipArchive()` уже реализован и работает (принимает ZIP от Telegram,
+разбирает Pocket CSV, сохраняет в БД). Нужно только покрыть тестами существующий код:
+
+- [x] `ImportServiceTest` — тест существующего `ImportService.importZipArchive()`
+  - Тест успешного импорта ZIP с валидным Pocket CSV внутри
+  - Тест партиционирования по статусу (unread / archive)
+  - Тест с пустым ZIP-архивом
+  - Тест сохранения тегов
+  - Тестовый fixture-файл `src/test/resources/pocket_export_sample.zip`
+
 ---
 
-## Фаза 4 — Auth + Web Foundation
+## Фаза 3.7 — Export & Import доработки
+
+### Аудит текущего состояния
+
+| Компонент | Файл | Статус | Проблема |
+|-----------|------|--------|---------|
+| ExportService | `service/ExportService.kt` | ⚠️ Partial | Создаёт CSV в `/tmp`, возвращает UUID — файл нигде не отправляется |
+| TelegramService.export() | `service/TelegramService.kt` | ❌ Broken | Вызывает `exportService.export()` но не шлёт файл пользователю |
+| CommandHandler | `service/telegram/CommandHandler.kt` | ⚠️ Partial | `handleImportButton()` закомментирован |
+| Формат тегов | ExportService / PocketCsv | ⚠️ Mismatch | Export: `\|`-separator, Import: `,`-separator — несовместимо при re-import |
+| is_favorite | ExportService | ❌ Missing | Поле `is_favorite` не попадает в экспорт |
+
+### Задача 1 — Починить экспорт в Telegram
+
+- [ ] `TelegramService.export()`: после генерации CSV отправлять файл через `sendDocument(chatId, TelegramFile.ByFile(...), "export.csv")`
+- [ ] Добавить команду `/export` в `CommandHandler`
+- [ ] Удалять временный файл из `/tmp` после отправки
+
+### Задача 2 — Унифицировать формат тегов
+
+- [ ] Сменить разделитель в `ExportService` с `|` на `,` (как в Pocket-формате)
+- [ ] Убедиться что при re-import экспортированного файла теги корректно читаются
+
+### Задача 3 — Включить is_favorite в экспорт
+
+- [ ] В CSV добавить колонку `is_favorite` (true/false)
+- [ ] При импорте читать поле `is_favorite` если есть (опционально, для обратной совместимости с Pocket)
+
+### Задача 4 — Тесты
+
+- [ ] `ExportServiceTest` — генерация CSV, корректный формат тегов, наличие `is_favorite`
+- [ ] Интеграционный тест отправки файла через Telegram
+
+---
+
+## Фаза 4 — Web UI Foundation (без аутентификации)
+
+**Логика**: сначала строим рабочий минимальный UI и убеждаемся, что посты корректно
+отображаются и загружаются. Auth добавляем следующим шагом (фаза 5).
+
+Для dev-режима: `userId` берётся из cookie или query-param `?userId=<telegram_id>`.
+
+### Стек
+- **Thymeleaf** — шаблоны на стороне сервера
+- **HTMX** (CDN) — динамические обновления без JS-фреймворка и без сборки
+- **Tailwind CSS** (CDN) — утилитарные стили без Node.js/npm
+
+### Эстетика
+
+Сервис для **чтения** — контент важнее оболочки.  
+Направление: **editorial / библиотечный минимализм** с тёплым характером.
+
+- **Типографика**: `Playfair Display` (заголовки, логотип) + `Source Serif 4` (body)
+- **Цвет**: фон `#F5F0E8` (тёплый пергамент), текст `#1A1714` (почти чёрный), акцент `#C0622A` (терракота)
+- **Карточки постов**: typographic cards, без теней; hover — тонкий левый border-accent
+- **Навигация**: боковая фиксированная, имя пользователя сверху
+- **Анимации**: subtle fade-in при загрузке, staggered delays через HTMX swap
+- **Нет**: градиентов, glassmorphism, лишних эмодзи в интерфейсе
+
+### Страницы
+
+- [ ] `/feed` — непрочитанные посты (пагинация)
+- [ ] `/archive` — архивные посты
+- [ ] `/favorites` — избранное
+- [ ] `/profile` — статистика пользователя
+
+### REST API
+
+```
+GET    /api/v1/posts?type=unread|archive|favorites&limit=&offset=
+POST   /api/v1/posts/{id}/archive
+POST   /api/v1/posts/{id}/unread
+POST   /api/v1/posts/{id}/favorite
+DELETE /api/v1/posts/{id}
+GET    /api/v1/profile
+```
+
+### Новые файлы
+
+- [ ] `controller/WebController.kt` — страницы `/feed`, `/archive`, `/favorites`, `/profile`
+- [ ] `controller/PostApiController.kt` — REST API для постов
+- [ ] `configuration/WebConfig.kt` — Thymeleaf + static resources
+- [ ] `templates/layout.html` — базовый layout (nav + content area)
+- [ ] `templates/feed.html`, `templates/archive.html`, `templates/favorites.html`, `templates/profile.html`
+
+---
+
+## Фаза 5 — Auth + защита Web
 
 ### Технологии
 - Telegram Login Widget (https://core.telegram.org/bots/telegram-login)
@@ -134,7 +233,6 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 - [ ] `service/TelegramAuthService.kt`
 - [ ] `service/JwtService.kt`
 - [ ] `configuration/JwtAuthInterceptor.kt`
-- [ ] `configuration/WebConfig.kt`
 - [ ] `controller/AuthController.kt` — GET /login, GET /auth/telegram/callback, GET /logout
 - [ ] `templates/login.html`
 
@@ -143,33 +241,6 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 implementation("io.jsonwebtoken:jjwt-api:0.12.5")
 runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
 runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
-```
-
----
-
-## Фаза 5 — Web UI
-
-### Стек: Thymeleaf + HTMX + Tailwind CSS (всё без сборки фронтенда)
-- Нет Node.js / npm / webpack
-- CDN для HTMX и Tailwind
-
-### Страницы
-- [ ] `/login`, `/feed`, `/archive`, `/favorites`, `/profile`
-
-### REST API
-```
-GET    /api/v1/posts?type=unread|archive|favorites&limit=&offset=
-POST   /api/v1/posts
-DELETE /api/v1/posts/{id}
-POST   /api/v1/posts/{id}/archive
-POST   /api/v1/posts/{id}/unread
-POST   /api/v1/posts/{id}/favorite
-GET    /api/v1/posts/{id}/pdf
-GET    /api/v1/posts/random
-GET    /api/v1/profile
-PUT    /api/v1/profile/settings
-POST   /api/v1/import
-GET    /api/v1/export
 ```
 
 ---

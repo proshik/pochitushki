@@ -19,6 +19,7 @@ data class PostStoreData(
     val url: String,
     val userId: Long,
     val tags: List<String>? = null,
+    val isFavorite: Boolean = false,
     val createdDate: LocalDateTime? = null,
     val updatedDate: LocalDateTime? = null
 )
@@ -29,6 +30,7 @@ data class PostStoreDataWithId(
     val url: String,
     val userId: Long,
     val tags: List<String>? = null,
+    val isFavorite: Boolean = false,
     val createdDate: LocalDateTime? = null,
     val updatedDate: LocalDateTime? = null
 )
@@ -57,6 +59,7 @@ fun PostStoreData.toPostStoreDataWithId(id: Long) =
         url = url,
         userId = userId,
         tags = tags,
+        isFavorite = isFavorite,
         createdDate = createdDate,
         updatedDate = updatedDate
     )
