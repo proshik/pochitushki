@@ -139,6 +139,21 @@ class ImportServiceTest : BaseIntegrationTest() {
         assertFalse(normal.isFavorite)
     }
 
+    @Test
+    fun `importZipArchive preserves is_favorite flag on archive posts`() {
+        val zip = createZip(
+            "export.csv", pocketCsv(
+                row("Fav Archive Post", "https://favarch.com", 1712000000L, "", "read", true),
+            )
+        )
+
+        importService.importZipArchive(userId, zip)
+
+        val posts = postDao.getPosts(userId, PostType.ARCHIVE, 10, 0)
+        assertEquals(1, posts.size)
+        assertTrue(posts[0].isFavorite)
+    }
+
     // --- Helpers ---
 
     private fun pocketCsv(vararg rows: String): String {
