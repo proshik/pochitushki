@@ -8,7 +8,7 @@
 | 2 | Favorites | ✅ Готово |
 | 3 | PDF | ✅ Готово |
 | 3.5 | Bot UX улучшения + ImportServiceTest | ✅ Готово |
-| 3.7 | Export & Import доработки | ⏳ В очереди |
+| 3.7 | Export & Import доработки | ✅ Готово |
 | 4 | Web UI Foundation (без auth) | ⏳ В очереди |
 | 5 | Auth + защита Web | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
@@ -142,24 +142,24 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 
 ### Задача 1 — Починить экспорт в Telegram
 
-- [ ] `TelegramService.export()`: после генерации CSV отправлять файл через `sendDocument(chatId, TelegramFile.ByFile(...), "export.csv")`
-- [ ] Добавить команду `/export` в `CommandHandler`
-- [ ] Удалять временный файл из `/tmp` после отправки
+- [x] `TelegramService.export()`: после генерации ZIP отправлять файл через `sendDocument(chatId, TelegramFile.ByByteArray(...))`
+- [x] Кнопки Import/Export в `/profile` через `CallbackQueryHandler`
+- [x] Удалять временный файл из `/tmp` после отправки (finally-блок)
 
 ### Задача 2 — Унифицировать формат тегов
 
-- [ ] Сменить разделитель в `ExportService` с `|` на `,` (как в Pocket-формате)
-- [ ] Убедиться что при re-import экспортированного файла теги корректно читаются
+- [x] Сменить разделитель в `ExportService` с `|` на `,` (как в Pocket-формате)
+- [x] При re-import экспортированного ZIP теги корректно читаются
 
 ### Задача 3 — Включить is_favorite в экспорт
 
-- [ ] В CSV добавить колонку `is_favorite` (true/false)
-- [ ] При импорте читать поле `is_favorite` если есть (опционально, для обратной совместимости с Pocket)
+- [x] В CSV добавить колонку `is_favorite` (true/false)
+- [x] При импорте читать поле `is_favorite` если есть (опционально, для обратной совместимости с Pocket)
 
 ### Задача 4 — Тесты
 
-- [ ] `ExportServiceTest` — генерация CSV, корректный формат тегов, наличие `is_favorite`
-- [ ] Интеграционный тест отправки файла через Telegram
+- [x] `ExportServiceTest` — 5 тестов: null, ZIP, заголовки, поля, round-trip
+- [x] `ImportServiceTest` — расширен до 7 тестов, включая `is_favorite` на unread и archive
 
 ---
 
