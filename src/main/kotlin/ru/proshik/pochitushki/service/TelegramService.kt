@@ -630,7 +630,14 @@ class TelegramService(
     }
 
     fun showImportInstruction(chatId: Long) {
-        // TODO: implement in Task 4
+        logger.debug("showImportInstruction: chatId={}", chatId)
+
+        val user = userService.findUserByChatId(chatId)
+            ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+
+        sendMessage(chatId, i18nService.getMessage("command.profile.import.instruction", user.settings.languageCode))
+
+        logger.info("showImportInstruction success: chatId={}", chatId)
     }
 
     fun export(chatId: Long, messageId: Long) {
@@ -639,9 +646,25 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId)
             ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        exportService.export(user.id)
+        val file = exportService.export(user.id)
+        if (file == null) {
+            sendMessage(chatId, i18nService.getMessage("command.export.nothing_to_export", user.settings.languageCode))
+            return
+        }
 
-        logger.info("export success: chatId={}", chatId)
+        try {
+            val bytes = file.readBytes()
+            botProvider.getBot().sendDocument(
+                chatId = ChatId.fromId(chatId),
+                document = TelegramFile.ByByteArray(bytes, file.name),
+            )
+            logger.info("export success: chatId={}", chatId)
+        } catch (e: Exception) {
+            logger.warn("export send error: chatId={}", chatId, e)
+            sendMessage(chatId, i18nService.getMessage("command.export.error", user.settings.languageCode))
+        } finally {
+            file.delete()
+        }
     }
 
     fun getFeedSettings(chatId: Long, messageId: Long) {
