@@ -5,7 +5,9 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -118,16 +120,35 @@ class ImportServiceTest : BaseIntegrationTest() {
         assertEquals(listOf("kotlin", "spring", "jvm"), tags)
     }
 
+    @Test
+    fun `importZipArchive preserves is_favorite flag`() {
+        val zip = createZip(
+            "export.csv", pocketCsv(
+                row("Fav Post", "https://fav.com", 1712000000L, "", "unread", true),
+                row("Normal Post", "https://normal.com", 1712001000L, "", "unread", false),
+            )
+        )
+
+        importService.importZipArchive(userId, zip)
+
+        val posts = postDao.getPosts(userId, PostType.UNREAD, 10, 0)
+        assertEquals(2, posts.size)
+        val fav = posts.first { it.url == "https://fav.com" }
+        val normal = posts.first { it.url == "https://normal.com" }
+        assertTrue(fav.isFavorite)
+        assertFalse(normal.isFavorite)
+    }
+
     // --- Helpers ---
 
     private fun pocketCsv(vararg rows: String): String {
-        val header = "title,url,time_added,tags,status"
+        val header = "title,url,time_added,tags,status,is_favorite"
         return (listOf(header) + rows.toList()).joinToString("\n")
     }
 
-    private fun row(title: String, url: String, timeAdded: Long, tags: String, status: String): String {
+    private fun row(title: String, url: String, timeAdded: Long, tags: String, status: String, isFavorite: Boolean = false): String {
         val quotedTags = if (tags.contains(",")) "\"$tags\"" else tags
-        return "$title,$url,$timeAdded,$quotedTags,$status"
+        return "$title,$url,$timeAdded,$quotedTags,$status,$isFavorite"
     }
 
     private fun createZip(fileName: String, csvContent: String): File {

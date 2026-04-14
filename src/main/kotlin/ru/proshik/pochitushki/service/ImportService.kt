@@ -1,5 +1,6 @@
 package ru.proshik.pochitushki.service
 
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.dataformat.csv.CsvSchema
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
@@ -26,6 +27,7 @@ class ImportService(
 
         val csvMapper = CsvMapper()
             .registerModule(ParameterNamesModule())
+            .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, false)
         val schema = CsvSchema.emptySchema().withHeader()
 
         val unreadPosts = mutableListOf<PostStoreData>()

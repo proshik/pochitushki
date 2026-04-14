@@ -12,7 +12,9 @@ data class PocketCsv(
     @JsonProperty("time_added")
     val timeAdded: Long,
     val tags: String?,
-    val status: String
+    val status: String,
+    @JsonProperty("is_favorite")
+    val isFavorite: Boolean = false
 )
 
 fun PocketCsv.toPostStoreData(userId: Long) =
@@ -21,6 +23,7 @@ fun PocketCsv.toPostStoreData(userId: Long) =
         url = url,
         userId = userId,
         tags = if (!tags.isNullOrEmpty()) tags.split(",") else null,
+        isFavorite = isFavorite,
         createdDate = LocalDateTime.ofInstant(
             Instant.ofEpochSecond(timeAdded),
             TimeZone.getDefault().toZoneId()
