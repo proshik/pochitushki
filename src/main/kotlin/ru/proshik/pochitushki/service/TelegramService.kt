@@ -608,23 +608,22 @@ class TelegramService(
 
         val byteArray = botProvider.getBot().downloadFileBytes(fileId)
         if (byteArray == null) {
-            sendMessage(chatId, "Can't download file: chatId=$chatId")
+            sendMessage(chatId, i18nService.getMessage("command.import.download_error", user.settings.languageCode))
             return
         }
 
-        val file = File("/tmp/pocket_import_${user.id}.zip")
+        val file = File.createTempFile("pocket_import_${user.id}_", ".zip")
         FileUtils.writeByteArrayToFile(file, byteArray)
 
         try {
             importService.importZipArchive(user.id, file)
+            sendMessage(chatId, i18nService.getMessage("command.import.success", user.settings.languageCode))
         } catch (ex: Exception) {
             logger.warn("import file error: userId={}", user.id, ex)
-            sendMessage(chatId, "Error on import! Please try again.")
+            sendMessage(chatId, i18nService.getMessage("command.import.error", user.settings.languageCode))
         } finally {
             FileUtils.delete(file)
         }
-
-        sendMessage(chatId, "Success import!")
 
         logger.info("importData success: chatId={}", chatId)
     }
