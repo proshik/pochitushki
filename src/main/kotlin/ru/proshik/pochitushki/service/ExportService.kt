@@ -1,16 +1,21 @@
 package ru.proshik.pochitushki.service
 
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileWriter
+import java.io.FileOutputStream
 import java.io.IOException
-import java.util.UUID
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.TimeZone
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVPrinter
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import ru.proshik.pochitushki.model.PostData
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.repository.PostDao
-
 
 @Service
 class ExportService(
@@ -20,48 +25,62 @@ class ExportService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     companion object {
-        val HEADERS = arrayOf("title", "url", "time_added", "tags", "status")
+        val HEADERS = arrayOf("title", "url", "time_added", "tags", "status", "is_favorite")
+        const val CHUNK_SIZE = 1000
     }
 
-    fun export(userId: Long): String? {
-        val archivePosts = postDao.getPosts(userId = userId, postType = PostType.ARCHIVE, 9999999, offset = 0)
-        val unreadPosts = postDao.getPosts(userId = userId, postType = PostType.UNREAD, 9999999, offset = 0)
+    fun export(userId: Long): File? {
+        val unreadPosts = postDao.getPosts(userId = userId, postType = PostType.UNREAD, limit = Int.MAX_VALUE, offset = 0)
+        val archivePosts = postDao.getPosts(userId = userId, postType = PostType.ARCHIVE, limit = Int.MAX_VALUE, offset = 0)
 
-        val posts = archivePosts + unreadPosts
+        val allPosts: List<Pair<PostData, String>> =
+            unreadPosts.map { it to "unread" } + archivePosts.map { it to "archive" }
 
-        val csvFormat = CSVFormat.DEFAULT.builder()
-            .setHeader(*HEADERS)
-            .setDelimiter(",")
-            .get()
-
-//        var i: Int = 0
-
-        val fileUuid = UUID.randomUUID().toString()
-
-        val file = File("/tmp/export_$fileUuid.csv")
-
-        val fileWriter = FileWriter(file)
-
-        try {
-            posts.chunked(10000)
-
-            CSVPrinter(fileWriter, csvFormat).use { csvPrinter ->
-                for (post in archivePosts) {
-                    val tags = post.tags?.joinToString(separator = "|") ?: ""
-                    csvPrinter.printRecord(post.title, post.url, post.createdDate, tags, "archive")
-                }
-
-                for (post in unreadPosts) {
-                    val tags = post.tags?.joinToString(separator = "|") ?: ""
-                    csvPrinter.printRecord(post.title, post.url, post.createdDate, tags, "unread")
-                }
-            }
-        } catch (e: IOException) {
-            logger.warn("Exception while exporting posts: userId={}", userId, e)
-
+        if (allPosts.isEmpty()) {
+            logger.info("export: no posts found for userId={}", userId)
             return null
         }
 
-        return fileUuid
+        val date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val file = File("/tmp/pochitushki_export_$date.zip")
+
+        try {
+            ZipOutputStream(FileOutputStream(file)).use { zip ->
+                allPosts.chunked(CHUNK_SIZE).forEachIndexed { index, chunk ->
+                    val csvBytes = buildCsvChunk(chunk)
+                    val entryName = "posts_%03d.csv".format(index + 1)
+                    zip.putNextEntry(ZipEntry(entryName))
+                    zip.write(csvBytes)
+                    zip.closeEntry()
+                }
+            }
+        } catch (e: IOException) {
+            logger.warn("export: failed to generate ZIP for userId={}", userId, e)
+            if (file.exists()) file.delete()
+            return null
+        }
+
+        logger.info("export: ZIP created for userId={}, posts={}", userId, allPosts.size)
+        return file
+    }
+
+    private fun buildCsvChunk(chunk: List<Pair<PostData, String>>): ByteArray {
+        val csvFormat = CSVFormat.DEFAULT.builder()
+            .setHeader(*HEADERS)
+            .get()
+
+        val out = ByteArrayOutputStream()
+        out.writer(Charsets.UTF_8).use { writer ->
+            CSVPrinter(writer, csvFormat).use { printer ->
+                for ((post, status) in chunk) {
+                    val timeAdded = post.createdDate
+                        .atZone(TimeZone.getDefault().toZoneId())
+                        .toEpochSecond()
+                    val tags = post.tags?.joinToString(",") ?: ""
+                    printer.printRecord(post.title, post.url, timeAdded, tags, status, post.isFavorite)
+                }
+            }
+        }
+        return out.toByteArray()
     }
 }
