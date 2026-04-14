@@ -30,6 +30,8 @@ class ExportServiceTest : BaseIntegrationTest() {
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
+    private val tempFiles = mutableListOf<File>()
+
     private var userId: Long = 0L
 
     @BeforeEach
@@ -44,6 +46,7 @@ class ExportServiceTest : BaseIntegrationTest() {
 
     @AfterEach
     fun tearDown() {
+        tempFiles.forEach { it.delete() }
         jdbcTemplate.execute("DELETE FROM archive_post")
         jdbcTemplate.execute("DELETE FROM post")
         jdbcTemplate.execute("DELETE FROM users")
@@ -59,26 +62,22 @@ class ExportServiceTest : BaseIntegrationTest() {
     fun `export returns ZIP file when user has posts`() {
         postDao.addPost(PostStoreData("Title", "https://example.com", userId))
 
-        val file = exportService.export(userId)
+        val file = exportService.export(userId)?.also { tempFiles.add(it) }
 
         assertNotNull(file)
         assertTrue(file!!.name.endsWith(".zip"))
         assertTrue(file.exists())
-
-        file.delete()
     }
 
     @Test
     fun `export CSV has correct headers`() {
         postDao.addPost(PostStoreData("Title", "https://example.com", userId))
 
-        val file = exportService.export(userId)!!
+        val file = exportService.export(userId)!!.also { tempFiles.add(it) }
         val csvContent = readFirstCsvFromZip(file)
         val headerLine = csvContent.trim().lines().first()
 
         assertEquals("title,url,time_added,tags,status,is_favorite", headerLine)
-
-        file.delete()
     }
 
     @Test
@@ -88,7 +87,7 @@ class ExportServiceTest : BaseIntegrationTest() {
             "INSERT INTO post (title, url, user_id, tags) VALUES ('Article', 'https://test.com', $userId, ARRAY['kotlin','spring'])"
         )
 
-        val file = exportService.export(userId)!!
+        val file = exportService.export(userId)!!.also { tempFiles.add(it) }
         val csvContent = readFirstCsvFromZip(file)
         val lines = csvContent.trim().lines()
         assertEquals(2, lines.size)
@@ -103,8 +102,6 @@ class ExportServiceTest : BaseIntegrationTest() {
 
         // status for unread post
         assertTrue(lines[1].contains("unread"))
-
-        file.delete()
     }
 
     @Test
@@ -116,7 +113,7 @@ class ExportServiceTest : BaseIntegrationTest() {
         )!!
         postDao.toggleFavorite(postId, PostType.UNREAD)
 
-        val zipFile = exportService.export(userId)!!
+        val zipFile = exportService.export(userId)!!.also { tempFiles.add(it) }
 
         // Delete original post so we can verify import independently
         postDao.deletePost(postId, PostType.UNREAD)
@@ -132,8 +129,6 @@ class ExportServiceTest : BaseIntegrationTest() {
         assertEquals("https://rt.com", post.url)
         assertEquals(listOf("a", "b"), post.tags)
         assertTrue(post.isFavorite)
-
-        zipFile.delete()
     }
 
     // --- Helpers ---

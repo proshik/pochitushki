@@ -4,8 +4,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.TimeZone
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -25,7 +23,7 @@ class ExportService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     companion object {
-        val HEADERS = arrayOf("title", "url", "time_added", "tags", "status", "is_favorite")
+        private val HEADERS = arrayOf("title", "url", "time_added", "tags", "status", "is_favorite")
         const val CHUNK_SIZE = 1000
     }
 
@@ -41,8 +39,7 @@ class ExportService(
             return null
         }
 
-        val date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val file = File("/tmp/pochitushki_export_$date.zip")
+        val file = File.createTempFile("pochitushki_export_${userId}_", ".zip")
 
         try {
             ZipOutputStream(FileOutputStream(file)).use { zip ->
@@ -70,15 +67,14 @@ class ExportService(
             .get()
 
         val out = ByteArrayOutputStream()
-        out.writer(Charsets.UTF_8).use { writer ->
-            CSVPrinter(writer, csvFormat).use { printer ->
-                for ((post, status) in chunk) {
-                    val timeAdded = post.createdDate
-                        .atZone(TimeZone.getDefault().toZoneId())
-                        .toEpochSecond()
-                    val tags = post.tags?.joinToString(",") ?: ""
-                    printer.printRecord(post.title, post.url, timeAdded, tags, status, post.isFavorite)
-                }
+        val writer = out.writer(Charsets.UTF_8)
+        CSVPrinter(writer, csvFormat).use { printer ->
+            for ((post, status) in chunk) {
+                val timeAdded = post.createdDate
+                    .atZone(TimeZone.getDefault().toZoneId())
+                    .toEpochSecond()
+                val tags = post.tags?.joinToString(",") ?: ""
+                printer.printRecord(post.title, post.url, timeAdded, tags, status, post.isFavorite)
             }
         }
         return out.toByteArray()
