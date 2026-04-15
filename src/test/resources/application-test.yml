@@ -21,3 +21,6 @@ telegram:
   token-name: test_token_name
   base-url: some_base_url
   webhook-url: ${telegram.base-url}/${telegram.token}
+
+web:
+  dev-user-id: 0

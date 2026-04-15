@@ -28,3 +28,6 @@ telegram:
 logging:
   level:
     ru.proshik.pochitushki: DEBUG
+
+web:
+  dev-user-id: 0  # Replace with your actual internal DB user ID (from `SELECT id FROM users LIMIT 1`)
