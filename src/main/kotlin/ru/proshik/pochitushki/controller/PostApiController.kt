@@ -1,5 +1,6 @@
 package ru.proshik.pochitushki.controller
 
+import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Controller
@@ -61,12 +62,18 @@ class PostApiController(private val postService: PostService) {
         return "fragments/post-card :: card"
     }
 
+    // Dev mode: userId is in scope but service methods do not scope by user_id.
+    // This is intentional pre-auth (Phase 5 will add authorization at the service layer).
     @PostMapping("/{id}/archive")
     fun archive(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
     ): ResponseEntity<Void> {
-        postService.archivePost(id)
+        try {
+            postService.archivePost(id)
+        } catch (e: EmptyResultDataAccessException) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
+        }
         return ResponseEntity.ok().build()
     }
 
@@ -75,7 +82,11 @@ class PostApiController(private val postService: PostService) {
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
     ): ResponseEntity<Void> {
-        postService.unreadPost(id)
+        try {
+            postService.unreadPost(id)
+        } catch (e: EmptyResultDataAccessException) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
+        }
         return ResponseEntity.ok().build()
     }
 
