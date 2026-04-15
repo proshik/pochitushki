@@ -107,4 +107,41 @@ class PostApiControllerTest : BaseIntegrationTest() {
         )
             .andExpect(status().isBadRequest)
     }
+
+    @Test
+    fun `POST posts adds post and returns card fragment`() {
+        // Stub the URL so Jsoup can fetch a title without real network call
+        // wireMockTelegramApi is a companion object field — access via class name
+        BaseIntegrationTest.wireMockTelegramApi.stubFor(
+            com.github.tomakehurst.wiremock.client.WireMock.get(
+                com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo("/article")
+            ).willReturn(
+                com.github.tomakehurst.wiremock.client.WireMock.aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=UTF-8")
+                    .withBody("<html><head><title>My Great Article</title></head><body></body></html>")
+            )
+        )
+        val url = "http://localhost:${BaseIntegrationTest.wireMockTelegramApi.port()}/article"
+
+        mockMvc.perform(
+            post("/api/v1/posts")
+                .param("url", url)
+                .with(withUser())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("My Great Article")))
+
+        assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `POST posts returns 400 for malformed URL`() {
+        mockMvc.perform(
+            post("/api/v1/posts")
+                .param("url", "not-a-url")
+                .with(withUser())
+        )
+            .andExpect(status().isBadRequest)
+    }
 }
