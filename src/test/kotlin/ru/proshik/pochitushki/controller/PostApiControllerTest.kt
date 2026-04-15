@@ -1,5 +1,8 @@
 package ru.proshik.pochitushki.controller
 
+import com.github.tomakehurst.wiremock.client.WireMock.aResponse
+import com.github.tomakehurst.wiremock.client.WireMock.get as wmGet
+import com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.AfterEach
@@ -50,6 +53,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         jdbcTemplate.execute("DELETE FROM archive_post")
         jdbcTemplate.execute("DELETE FROM post")
         jdbcTemplate.execute("DELETE FROM users")
+        BaseIntegrationTest.wireMockTelegramApi.resetMappings()
     }
 
     private fun withUser(): RequestPostProcessor = RequestPostProcessor { req ->
@@ -113,10 +117,8 @@ class PostApiControllerTest : BaseIntegrationTest() {
         // Stub the URL so Jsoup can fetch a title without real network call
         // wireMockTelegramApi is a companion object field — access via class name
         BaseIntegrationTest.wireMockTelegramApi.stubFor(
-            com.github.tomakehurst.wiremock.client.WireMock.get(
-                com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo("/article")
-            ).willReturn(
-                com.github.tomakehurst.wiremock.client.WireMock.aResponse()
+            wmGet(urlEqualTo("/article")).willReturn(
+                aResponse()
                     .withStatus(200)
                     .withHeader("Content-Type", "text/html; charset=UTF-8")
                     .withBody("<html><head><title>My Great Article</title></head><body></body></html>")

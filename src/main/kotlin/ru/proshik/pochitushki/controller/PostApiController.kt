@@ -42,12 +42,17 @@ class PostApiController(private val postService: PostService) {
         model: Model
     ): String {
         val parsedUrl = try {
-            URL(url)
+            URL(url).also { u ->
+                if (u.protocol !in listOf("http", "https")) {
+                    throw MalformedURLException("Unsupported scheme: ${u.protocol}")
+                }
+            }
         } catch (e: MalformedURLException) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid URL")
         }
         val (postId, _) = postService.addPost(parsedUrl, userId)
-        val post = postService.getPost(postId, PostType.UNREAD)!!
+        val post = postService.getPost(postId, PostType.UNREAD)
+            ?: throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Post not found after insert")
         model.addAttribute("post", post)
         model.addAttribute("type", PostType.UNREAD.value)
         return "fragments/post-card :: card"
