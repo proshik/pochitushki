@@ -1,9 +1,12 @@
 package ru.proshik.pochitushki.controller
 
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestAttribute
 import org.springframework.web.bind.annotation.RequestMapping
@@ -56,6 +59,53 @@ class PostApiController(private val postService: PostService) {
         model.addAttribute("post", post)
         model.addAttribute("type", PostType.UNREAD.value)
         return "fragments/post-card :: card"
+    }
+
+    @PostMapping("/{id}/archive")
+    fun archive(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable id: Long
+    ): ResponseEntity<Void> {
+        postService.archivePost(id)
+        return ResponseEntity.ok().build()
+    }
+
+    @PostMapping("/{id}/unread")
+    fun unread(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable id: Long
+    ): ResponseEntity<Void> {
+        postService.unreadPost(id)
+        return ResponseEntity.ok().build()
+    }
+
+    @PostMapping("/{id}/favorite")
+    fun favorite(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable id: Long,
+        @RequestParam type: String,
+        model: Model
+    ): String {
+        val postType = PostType.entries.firstOrNull { it.value == type }
+            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown post type: $type")
+        postService.toggleFavorite(id, postType)
+        val post = postService.getPost(id, postType)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
+        model.addAttribute("post", post)
+        model.addAttribute("type", type)
+        return "fragments/post-card :: card"
+    }
+
+    @DeleteMapping("/{id}")
+    fun delete(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable id: Long,
+        @RequestParam type: String
+    ): ResponseEntity<Void> {
+        val postType = PostType.entries.firstOrNull { it.value == type }
+            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown post type: $type")
+        postService.deletePost(id, postType)
+        return ResponseEntity.ok().build()
     }
 
     companion object {

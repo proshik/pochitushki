@@ -146,4 +146,77 @@ class PostApiControllerTest : BaseIntegrationTest() {
         )
             .andExpect(status().isBadRequest)
     }
+
+    @Test
+    fun `POST archive moves unread post to archive`() {
+        val postId = insertPost()
+
+        mockMvc.perform(
+            post("/api/v1/posts/$postId/archive").with(withUser())
+        ).andExpect(status().isOk)
+
+        assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
+        assertEquals(1, postDao.getPostCount(userId, PostType.ARCHIVE))
+    }
+
+    @Test
+    fun `POST unread moves archive post to unread`() {
+        val postId = insertArchivePost()
+
+        mockMvc.perform(
+            post("/api/v1/posts/$postId/unread").with(withUser())
+        ).andExpect(status().isOk)
+
+        assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
+        assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
+    }
+
+    @Test
+    fun `POST favorite toggles favorite and returns updated card`() {
+        val postId = insertPost()
+
+        // Toggle on
+        mockMvc.perform(
+            post("/api/v1/posts/$postId/favorite")
+                .param("type", "unread")
+                .with(withUser())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("⭐")))
+
+        // Toggle off
+        mockMvc.perform(
+            post("/api/v1/posts/$postId/favorite")
+                .param("type", "unread")
+                .with(withUser())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("☆")))
+    }
+
+    @Test
+    fun `DELETE post removes it from unread`() {
+        val postId = insertPost()
+
+        mockMvc.perform(
+            delete("/api/v1/posts/$postId")
+                .param("type", "unread")
+                .with(withUser())
+        ).andExpect(status().isOk)
+
+        assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `DELETE post removes it from archive`() {
+        val postId = insertArchivePost()
+
+        mockMvc.perform(
+            delete("/api/v1/posts/$postId")
+                .param("type", "archive")
+                .with(withUser())
+        ).andExpect(status().isOk)
+
+        assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
+    }
 }
