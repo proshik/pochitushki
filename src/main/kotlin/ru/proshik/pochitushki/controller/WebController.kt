@@ -55,6 +55,7 @@ class WebController(
     }
 
     companion object {
-        const val PAGE_SIZE = 20
+        // Delegate to PostApiController so both controllers use the same page size
+        val PAGE_SIZE get() = PostApiController.PAGE_SIZE
     }
 }
