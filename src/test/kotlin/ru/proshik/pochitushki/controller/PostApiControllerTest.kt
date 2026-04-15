@@ -96,4 +96,15 @@ class PostApiControllerTest : BaseIntegrationTest() {
             .andExpect(status().isOk)
             .andExpect(content().string(not(containsString("hx-trigger"))))
     }
+
+    @Test
+    fun `GET fragment returns 400 for unknown type`() {
+        mockMvc.perform(
+            get("/api/v1/posts/fragment")
+                .param("type", "bogus")
+                .param("offset", "0")
+                .with(withUser())
+        )
+            .andExpect(status().isBadRequest)
+    }
 }
