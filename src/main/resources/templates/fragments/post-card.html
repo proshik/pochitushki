@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<!-- src/main/resources/templates/fragments/post-card.html -->
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!--
+  Parameters:
+    post : PostData
+    type : "unread" | "archive"  (never "favorites" — derived from post.isArchived in post-list)
+-->
+<div th:fragment="card(post, type)"
+     th:id="'card-' + ${post.id}"
+     class="post-card"
+     style="padding-top: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border);">
+
+  <!-- Title (link to original) -->
+  <a th:href="${post.url}"
+     th:text="${post.title != null ? post.title : post.url}"
+     target="_blank"
+     rel="noopener noreferrer"
+     class="font-display"
+     style="font-size: 1.1rem; font-weight: 600; color: var(--text); text-decoration: none; display: block;">
+    Post Title
+  </a>
+
+  <!-- Date -->
+  <p style="color: var(--muted); font-style: italic; font-size: 0.85rem; margin-top: 0.2rem;">
+    <span th:text="${#temporals.format(post.createdDate, 'dd.MM.yyyy')}">01.01.2024</span>
+  </p>
+
+  <!-- Tags -->
+  <div th:if="${post.tags != null and !post.tags.isEmpty()}"
+       style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.35rem;">
+    <span th:each="tag : ${post.tags}"
+          th:text="'#' + ${tag}"
+          style="color: var(--muted); font-size: 0.8rem;">
+      #tag
+    </span>
+  </div>
+
+  <!-- Action buttons (visible on card hover via CSS) -->
+  <div class="card-actions" style="gap: 0.5rem; margin-top: 0.6rem; align-items: center;">
+
+    <!-- Favorite toggle -->
+    <button th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
+            hx-target="closest .post-card"
+            hx-swap="outerHTML"
+            style="cursor: pointer; background: none; border: 1px solid var(--border);
+                   border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.85rem;
+                   color: var(--text);"
+            th:text="${post.isFavorite} ? '⭐' : '☆'">
+      ☆
+    </button>
+
+    <!-- To Archive (unread posts only) -->
+    <button th:if="${type == 'unread'}"
+            th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${post.id})}"
+            hx-target="closest .post-card"
+            hx-swap="delete"
+            style="cursor: pointer; background: none; border: 1px solid var(--border);
+                   border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.85rem;
+                   color: var(--text);">
+      → Архив
+    </button>
+
+    <!-- To Unread (archive posts only) -->
+    <button th:if="${type == 'archive'}"
+            th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${post.id})}"
+            hx-target="closest .post-card"
+            hx-swap="delete"
+            style="cursor: pointer; background: none; border: 1px solid var(--border);
+                   border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.85rem;
+                   color: var(--text);">
+      → Непрочитанное
+    </button>
+
+    <!-- Delete -->
+    <button th:attr="hx-delete=@{/api/v1/posts/{id}(id=${post.id},type=${type})}"
+            hx-target="closest .post-card"
+            hx-swap="delete"
+            hx-confirm="Удалить пост?"
+            style="cursor: pointer; background: none; border: 1px solid var(--border);
+                   border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.85rem;
+                   color: var(--muted);">
+      🗑
+    </button>
+  </div>
+</div>
+</html>

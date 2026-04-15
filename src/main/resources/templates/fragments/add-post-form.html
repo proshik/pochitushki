@@ -1,4 +1,25 @@
 <!DOCTYPE html>
+<!-- src/main/resources/templates/fragments/add-post-form.html -->
 <html xmlns:th="http://www.thymeleaf.org">
-<form th:fragment="form"><!-- implemented in Task 4 --></form>
+
+<form th:fragment="form"
+      hx-post="/api/v1/posts"
+      hx-target="#post-list"
+      hx-swap="afterbegin"
+      hx-on--after-request="if(event.detail.successful) this.reset()"
+      style="display: flex; gap: 0.75rem; margin-bottom: 2rem;">
+  <input type="url"
+         name="url"
+         placeholder="https://..."
+         required
+         style="flex: 1; padding: 0.6rem 1rem; border: 1px solid var(--border);
+                border-radius: 4px; background: var(--bg); color: var(--text);
+                font-family: inherit; font-size: 0.95rem;">
+  <button type="submit"
+          style="padding: 0.6rem 1.25rem; background: var(--accent); color: white;
+                 border: none; border-radius: 4px; cursor: pointer;
+                 font-family: inherit; font-size: 0.95rem;">
+    Добавить
+  </button>
+</form>
 </html>
