@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Архив')}"></head>
+<body>
+<div style="display: flex; min-height: 100vh;">
+  <nav th:replace="~{layout :: nav('archive')}"></nav>
+  <main style="flex: 1; padding: 2.5rem; max-width: 820px;">
+    <h1 class="font-display" style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">
+      Архив
+    </h1>
+    <div id="post-list">
+      <div th:replace="~{fragments/post-list :: posts(${posts}, ${pageType}, ${offset}, ${hasMore})}"></div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

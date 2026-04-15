@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head th:fragment="head(pageTitle)">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${pageTitle} + ' — Почитушки'">Почитушки</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F5F0E8;
+      --text: #1A1714;
+      --accent: #C0622A;
+      --muted: #8B7355;
+      --border: #DDD5C4;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Source Serif 4', Georgia, serif;
+    }
+    .font-display { font-family: 'Playfair Display', Georgia, serif; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .post-card {
+      border-left: 3px solid transparent;
+      padding-left: 1rem;
+      transition: border-left-color 0.15s ease;
+      animation: fadeIn 0.3s ease-out both;
+      animation-delay: calc(var(--card-index, 0) * 60ms);
+    }
+    .post-card:hover { border-left-color: var(--accent); }
+    .post-card .card-actions { display: none; }
+    .post-card:hover .card-actions { display: flex; }
+    .htmx-added { animation: fadeIn 0.3s ease-out both; }
+  </style>
+</head>
+
+<nav th:fragment="nav(active)"
+     style="width: 220px; min-height: 100vh; border-right: 1px solid var(--border);
+            padding: 2rem 1.5rem; position: sticky; top: 0; flex-shrink: 0;">
+  <div class="mb-8">
+    <a href="/feed" class="font-display text-2xl font-bold"
+       style="color: var(--text); text-decoration: none;">Почитушки</a>
+  </div>
+  <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+    <li>
+      <a href="/feed"
+         th:style="${active == 'feed'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
+         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+        Непрочитанные
+      </a>
+    </li>
+    <li>
+      <a href="/archive"
+         th:style="${active == 'archive'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
+         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+        Архив
+      </a>
+    </li>
+    <li>
+      <a href="/favorites"
+         th:style="${active == 'favorites'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
+         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+        Избранное
+      </a>
+    </li>
+    <li>
+      <a href="/profile"
+         th:style="${active == 'profile'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
+         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+        Профиль
+      </a>
+    </li>
+  </ul>
+</nav>
+
+</html>
