@@ -14,6 +14,9 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import ru.proshik.pochitushki.BaseIntegrationTest
 
+// Note: BaseIntegrationTest uses RANDOM_PORT; @AutoConfigureMockMvc binds MockMvc to the mock
+// dispatcher (not Tomcat). Controller/template tests work correctly. When auth filters are added
+// in Phase 5, consider switching to MOCK web environment for proper servlet-layer coverage.
 @AutoConfigureMockMvc
 class WebControllerTest : BaseIntegrationTest() {
 

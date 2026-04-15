@@ -51,29 +51,33 @@
   <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem;">
     <li>
       <a href="/feed"
-         th:style="${active == 'feed'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
-         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+         th:style="${active == 'feed'}
+           ? 'text-decoration: none; display: block; padding: 0.35rem 0; font-weight: 600; color: var(--accent);'
+           : 'text-decoration: none; display: block; padding: 0.35rem 0; color: var(--text);'">
         Непрочитанные
       </a>
     </li>
     <li>
       <a href="/archive"
-         th:style="${active == 'archive'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
-         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+         th:style="${active == 'archive'}
+           ? 'text-decoration: none; display: block; padding: 0.35rem 0; font-weight: 600; color: var(--accent);'
+           : 'text-decoration: none; display: block; padding: 0.35rem 0; color: var(--text);'">
         Архив
       </a>
     </li>
     <li>
       <a href="/favorites"
-         th:style="${active == 'favorites'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
-         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+         th:style="${active == 'favorites'}
+           ? 'text-decoration: none; display: block; padding: 0.35rem 0; font-weight: 600; color: var(--accent);'
+           : 'text-decoration: none; display: block; padding: 0.35rem 0; color: var(--text);'">
         Избранное
       </a>
     </li>
     <li>
       <a href="/profile"
-         th:style="${active == 'profile'} ? 'font-weight: 600; color: var(--accent);' : 'color: var(--text);'"
-         style="text-decoration: none; display: block; padding: 0.35rem 0;">
+         th:style="${active == 'profile'}
+           ? 'text-decoration: none; display: block; padding: 0.35rem 0; font-weight: 600; color: var(--accent);'
+           : 'text-decoration: none; display: block; padding: 0.35rem 0; color: var(--text);'">
         Профиль
       </a>
     </li>
