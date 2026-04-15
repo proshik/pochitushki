@@ -17,8 +17,8 @@
     <div th:replace="~{fragments/post-card :: card(${post}, ${post.isArchived ? 'archive' : 'unread'})}"></div>
   </div>
 
-  <!-- Infinite scroll trigger — only if more posts exist -->
-  <div th:if="${hasMore}"
+  <!-- Infinite scroll trigger — only if more posts exist (guard against empty list with bad hasMore) -->
+  <div th:if="${hasMore and !posts.isEmpty()}"
        th:attr="hx-get=@{/api/v1/posts/fragment(type=${pageType},offset=${offset})}"
        hx-trigger="revealed"
        hx-swap="outerHTML"
