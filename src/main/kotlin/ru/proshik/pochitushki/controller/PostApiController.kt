@@ -1,0 +1,35 @@
+package ru.proshik.pochitushki.controller
+
+import org.springframework.stereotype.Controller
+import org.springframework.ui.Model
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestAttribute
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import ru.proshik.pochitushki.model.PostType
+import ru.proshik.pochitushki.service.PostService
+
+@Controller
+@RequestMapping("/api/v1/posts")
+class PostApiController(private val postService: PostService) {
+
+    @GetMapping("/fragment")
+    fun fragment(
+        @RequestAttribute("userId") userId: Long,
+        @RequestParam type: String,
+        @RequestParam offset: Int,
+        model: Model
+    ): String {
+        val postType = PostType.entries.first { it.value == type }
+        val posts = postService.getPosts(userId, postType, PAGE_SIZE, offset)
+        model.addAttribute("posts", posts)
+        model.addAttribute("pageType", type)
+        model.addAttribute("offset", offset + posts.size)
+        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        return "fragments/post-list :: posts"
+    }
+
+    companion object {
+        const val PAGE_SIZE = 20
+    }
+}
