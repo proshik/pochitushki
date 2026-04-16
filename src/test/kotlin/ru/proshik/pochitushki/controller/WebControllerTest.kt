@@ -53,7 +53,7 @@ class WebControllerTest : BaseIntegrationTest() {
 
     @Test
     fun `GET feed returns 200 with post-list element`() {
-        mockMvc.perform(get("/feed").with(withUser()))
+        mockMvc.perform(get("/").with(withUser()))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("id=\"post-list\"")))
     }

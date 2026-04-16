@@ -219,4 +219,49 @@ class PostApiControllerTest : BaseIntegrationTest() {
 
         assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
     }
+
+    @Test
+    fun `GET og-image returns ogImageUrl when og tag present`() {
+        val articlePath = "/og-article"
+        val postId = insertPost(url = "http://localhost:${BaseIntegrationTest.wireMockTelegramApi.port()}$articlePath")
+
+        BaseIntegrationTest.wireMockTelegramApi.stubFor(
+            wmGet(urlEqualTo(articlePath)).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=UTF-8")
+                    .withBody("""<html><head><meta property="og:image" content="https://example.com/thumb.jpg"/></head><body></body></html>""")
+            )
+        )
+
+        mockMvc.perform(
+            get("/api/v1/posts/$postId/og-image")
+                .param("type", "unread")
+                .with(withUser())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().json("""{"ogImageUrl":"https://example.com/thumb.jpg"}"""))
+    }
+
+    @Test
+    fun `GET og-image returns 404 when no og tag`() {
+        val articlePath = "/no-og-article"
+        val postId = insertPost(url = "http://localhost:${BaseIntegrationTest.wireMockTelegramApi.port()}$articlePath")
+
+        BaseIntegrationTest.wireMockTelegramApi.stubFor(
+            wmGet(urlEqualTo(articlePath)).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=UTF-8")
+                    .withBody("<html><head><title>No OG</title></head><body></body></html>")
+            )
+        )
+
+        mockMvc.perform(
+            get("/api/v1/posts/$postId/og-image")
+                .param("type", "unread")
+                .with(withUser())
+        )
+            .andExpect(status().isNotFound)
+    }
 }

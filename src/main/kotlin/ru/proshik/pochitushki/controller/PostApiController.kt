@@ -1,5 +1,9 @@
 package ru.proshik.pochitushki.controller
 
+import java.io.IOException
+import java.net.MalformedURLException
+import java.net.URL
+import org.jsoup.Jsoup
 import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -12,9 +16,8 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestAttribute
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.server.ResponseStatusException
-import java.net.MalformedURLException
-import java.net.URL
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.service.PostService
 
@@ -117,6 +120,27 @@ class PostApiController(private val postService: PostService) {
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown post type: $type")
         postService.deletePost(id, postType)
         return ResponseEntity.ok().build()
+    }
+
+    @GetMapping("/{id}/og-image")
+    @ResponseBody
+    fun getOgImage(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable id: Long,
+        @RequestParam(defaultValue = "unread") type: String
+    ): ResponseEntity<Map<String, String>> {
+        val postType = PostType.entries.firstOrNull { it.value == type } ?: PostType.UNREAD
+        val post = postService.getPost(id, postType)
+            ?: return ResponseEntity.notFound().build()
+        return try {
+            val doc = Jsoup.connect(post.url).timeout(5000).get()
+            val ogImage = doc.select("meta[property=og:image]").attr("content").takeIf { it.isNotBlank() }
+                ?: doc.select("meta[name=twitter:image]").attr("content").takeIf { it.isNotBlank() }
+            if (ogImage != null) ResponseEntity.ok(mapOf("ogImageUrl" to ogImage))
+            else ResponseEntity.notFound().build()
+        } catch (e: IOException) {
+            ResponseEntity.notFound().build()
+        }
     }
 
     companion object {

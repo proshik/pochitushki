@@ -4,10 +4,14 @@
 <body>
 <div style="display: flex; min-height: 100vh;">
   <nav th:replace="~{layout :: nav('favorites')}"></nav>
-  <main style="flex: 1; padding: 2.5rem; max-width: 820px;">
-    <h1 class="font-display" style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">
-      Избранное
-    </h1>
+  <main style="flex: 1; padding: 2.5rem; min-width: 0;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+      <h1 class="font-display" style="font-size: 2rem; font-weight: 700;">Избранное</h1>
+      <div style="display: flex; gap: 0.25rem;">
+        <button id="view-list-btn" class="view-btn" onclick="setViewMode('list')" title="Список">☰</button>
+        <button id="view-grid-btn" class="view-btn" onclick="setViewMode('grid')" title="Сетка">⊞</button>
+      </div>
+    </div>
     <div id="post-list">
       <div th:replace="~{fragments/post-list :: posts(${posts}, ${pageType}, ${offset}, ${hasMore})}"></div>
     </div>
