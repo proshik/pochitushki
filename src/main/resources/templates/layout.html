@@ -5,50 +5,183 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title th:text="${pageTitle} + ' — Почитушки'">Почитушки</title>
+
+  <!-- Anti-flash: apply saved theme before any paint -->
+  <script>
+    (function () {
+      if (localStorage.getItem('pochitushki-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap" rel="stylesheet">
+
   <style>
+    /* ── Sepia palette (default) ── */
     :root {
-      --bg: #F5F0E8;
-      --text: #1A1714;
+      --bg:     #F5F0E8;
+      --text:   #1A1714;
       --accent: #C0622A;
-      --muted: #8B7355;
+      --muted:  #8B7355;
       --border: #DDD5C4;
     }
+
+    /* ── Dark palette ── */
+    html.dark {
+      --bg:     #1A1714;
+      --text:   #E8E0D0;
+      --border: #3A3330;
+      --muted:  #8B7B6B;
+      /* --accent unchanged: #C0622A */
+    }
+
     body {
       background-color: var(--bg);
       color: var(--text);
       font-family: 'Source Serif 4', Georgia, serif;
+      transition: background-color 0.2s, color 0.2s;
     }
     .font-display { font-family: 'Playfair Display', Georgia, serif; }
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+
+    /* ── Post card ── */
     .post-card {
-      border-left: 3px solid transparent;
-      padding-left: 1rem;
-      transition: border-left-color 0.15s ease;
+      transition: opacity 0.15s ease;
       animation: fadeIn 0.3s ease-out both;
       animation-delay: calc(var(--card-index, 0) * 60ms);
     }
-    .post-card:hover { border-left-color: var(--accent); }
     .post-card .card-actions { display: none; }
     .post-card:hover .card-actions { display: flex; }
     .htmx-added { animation: fadeIn 0.3s ease-out both; }
+
+    /* ── Action button (ghost style, hover fill) ── */
+    .card-action-btn {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      padding: 0.2rem 0.55rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    .card-action-btn:hover {
+      background: var(--border);
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    /* ── Inline delete confirm ── */
+    .delete-confirm {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .delete-confirm-yes {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .delete-confirm-no {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-family: inherit;
+      color: var(--muted);
+    }
+
+    /* ── Theme toggle button ── */
+    .theme-toggle-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: border-color 0.1s;
+    }
+    .theme-toggle-btn:hover { border-color: var(--muted); }
   </style>
+
+  <script>
+    /* ── Theme toggle ── */
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('pochitushki-theme', isDark ? 'dark' : 'sepia');
+      const icon = document.getElementById('theme-icon');
+      if (icon) icon.textContent = isDark ? '🌙' : '☀️';
+    }
+
+    /* ── Inline delete confirm ── */
+    function showDeleteConfirm(postId) {
+      document.getElementById('card-actions-' + postId).style.display = 'none';
+      document.getElementById('delete-confirm-' + postId).style.display = 'flex';
+    }
+    function hideDeleteConfirm(postId) {
+      document.getElementById('delete-confirm-' + postId).style.display = 'none';
+      document.getElementById('card-actions-' + postId).style.display = '';
+    }
+
+    /* ── Favicon loader (runs on initial load + HTMX infinite-scroll swaps) ── */
+    function initFavicons(root) {
+      (root || document).querySelectorAll('.post-favicon[data-url]').forEach(function (el) {
+        try {
+          var domain = new URL(el.dataset.url).hostname;
+          var img = el.querySelector('img');
+          var fallback = el.querySelector('.fav-fallback');
+          fallback.textContent = domain.replace(/^www\./, '').substring(0, 2).toUpperCase();
+          img.src = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=32';
+          img.onload  = function () { img.style.display = 'block'; fallback.style.display = 'none'; };
+          img.onerror = function () { img.style.display = 'none'; };
+        } catch (e) {}
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var icon = document.getElementById('theme-icon');
+      if (icon) icon.textContent = document.documentElement.classList.contains('dark') ? '🌙' : '☀️';
+      initFavicons();
+    });
+
+    document.addEventListener('htmx:afterSwap', function (e) {
+      initFavicons(e.detail.target);
+    });
+  </script>
 </head>
 
 <nav th:fragment="nav(active)"
      style="width: 220px; min-height: 100vh; border-right: 1px solid var(--border);
-            padding: 2rem 1.5rem; position: sticky; top: 0; flex-shrink: 0;">
+            padding: 2rem 1.5rem; position: sticky; top: 0; flex-shrink: 0;
+            display: flex; flex-direction: column;">
   <div class="mb-8">
     <a href="/feed" class="font-display text-2xl font-bold"
        style="color: var(--text); text-decoration: none;">Почитушки</a>
   </div>
-  <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+  <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; flex: 1;">
     <li>
       <a href="/feed"
          th:style="${active == 'feed'}
@@ -80,6 +213,12 @@
            : 'text-decoration: none; display: block; padding: 0.35rem 0; color: var(--text);'">
         Профиль
       </a>
+    </li>
+    <!-- Theme toggle at bottom of nav -->
+    <li style="margin-top: auto; padding-top: 1.5rem;">
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Переключить тему">
+        <span id="theme-icon">☀️</span>
+      </button>
     </li>
   </ul>
 </nav>
