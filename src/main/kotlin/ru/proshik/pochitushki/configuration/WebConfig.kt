@@ -26,7 +26,7 @@ class WebConfig(private val webProperties: WebProperties) : WebMvcConfigurer {
 
     override fun addInterceptors(registry: InterceptorRegistry) {
         registry.addInterceptor(DevUserInterceptor())
-            .addPathPatterns("/", "/feed", "/archive", "/favorites", "/profile", "/api/v1/**")
+            .addPathPatterns("/", "/archive", "/favorites", "/profile", "/api/v1/**")
     }
 
     private inner class DevUserInterceptor : HandlerInterceptor {
