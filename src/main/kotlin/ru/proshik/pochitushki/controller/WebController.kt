@@ -14,7 +14,7 @@ class WebController(
     private val userService: UserService,
 ) {
 
-    @GetMapping("/feed")
+    @GetMapping("/", "/feed")
     fun feed(@RequestAttribute("userId") userId: Long, model: Model): String {
         val posts = postService.getPosts(userId, PostType.UNREAD, PAGE_SIZE, 0)
         model.addAttribute("posts", posts)
