@@ -9,8 +9,7 @@
 -->
 <div th:fragment="card(post, type)"
      th:id="'card-' + ${post.id}"
-     class="post-card"
-     style="border-bottom: 1px solid var(--border);">
+     class="post-card">
 
   <!-- ═══ LIST VIEW (display:contents → children join parent flex) ═══ -->
   <div class="card-list-view">
@@ -38,12 +37,12 @@
         Post Title
       </a>
       <!-- Date row + actions on the same line -->
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.15rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.15rem; padding-right: 0.4rem;">
         <p style="color: var(--muted); font-style: italic; font-size: 0.82rem; margin: 0;">
           <span th:text="${#temporals.format(post.createdDate, 'dd.MM.yyyy')}">01.01.2024</span>
         </p>
         <!-- Actions: in-flow (reserves width), confirm absolute on top -->
-        <div style="position: relative; display: flex; align-items: center; flex-shrink: 0;">
+        <div style="position: relative; display: flex; align-items: center; flex-shrink: 0; margin-left: 0.5rem;">
           <div class="card-actions" style="gap: 0.3rem; align-items: center; white-space: nowrap;">
             <button th:if="${type == 'unread'}"
                     class="card-action-btn"
@@ -115,7 +114,7 @@
     </div>
 
     <!-- Card body -->
-    <div style="padding: 0.65rem 0.75rem;">
+    <div class="card-grid-body" style="padding: 0.65rem 0.75rem;">
       <a th:href="${post.url}"
          th:text="${post.title != null ? post.title : post.url}"
          target="_blank" rel="noopener noreferrer"
@@ -126,22 +125,24 @@
         Post Title
       </a>
       <!-- Date row + actions on the same line -->
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.2rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.2rem; padding-right: 0.4rem;">
         <p style="font-size: 0.72rem; color: var(--muted); font-style: italic; margin: 0;">
           <span th:text="${#temporals.format(post.createdDate, 'dd.MM.yyyy')}">01.01.2024</span>
         </p>
-        <div style="position: relative; display: flex; align-items: center; flex-shrink: 0;">
-          <div class="card-actions" style="gap: 0.25rem; align-items: center; white-space: nowrap;">
+        <div style="position: relative; display: flex; align-items: center; flex-shrink: 0; margin-left: 0.5rem;">
+          <div class="card-actions" style="gap: 0.15rem; align-items: center;">
             <button th:if="${type == 'unread'}"
                     class="card-action-btn"
+                    title="В архив"
                     th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${post.id})}"
                     hx-target="closest .post-card"
-                    hx-swap="delete">→ Архив</button>
+                    hx-swap="delete">→</button>
             <button th:if="${type == 'archive'}"
                     class="card-action-btn"
+                    title="В непрочитанные"
                     th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${post.id})}"
                     hx-target="closest .post-card"
-                    hx-swap="delete">→ Непрочитанное</button>
+                    hx-swap="delete">←</button>
             <button class="card-action-btn"
                     data-fav-btn
                     th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
@@ -149,6 +150,7 @@
                     hx-on--after-request="if(event.detail.successful) toggleFavBtn(this)"
                     th:text="${post.isFavorite} ? '⭐' : '☆'">☆</button>
             <button class="card-action-btn"
+                    title="Удалить"
                     th:attr="onclick='showDeleteConfirm(' + ${post.id} + ')'">🗑</button>
           </div>
           <div class="delete-confirm"

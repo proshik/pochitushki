@@ -9,7 +9,7 @@
 | 3 | PDF | ✅ Готово |
 | 3.5 | Bot UX улучшения + ImportServiceTest | ✅ Готово |
 | 3.7 | Export & Import доработки | ✅ Готово |
-| 4 | Web UI Foundation (без auth) | ⏳ В очереди |
+| 4 | Web UI Foundation (без auth) | ✅ Готово |
 | 5 | Auth + защита Web | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
 | 7 | Chrome Extension | 🔮 Будущее |
@@ -189,29 +189,31 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 
 ### Страницы
 
-- [ ] `/feed` — непрочитанные посты (пагинация)
-- [ ] `/archive` — архивные посты
-- [ ] `/favorites` — избранное
-- [ ] `/profile` — статистика пользователя
+- [x] `/feed` — непрочитанные посты (пагинация)
+- [x] `/archive` — архивные посты
+- [x] `/favorites` — избранное
+- [x] `/profile` — статистика пользователя
 
 ### REST API
 
 ```
-GET    /api/v1/posts?type=unread|archive|favorites&limit=&offset=
+GET    /api/v1/posts/fragment?type=unread|archive|favorites&offset=
+POST   /api/v1/posts
 POST   /api/v1/posts/{id}/archive
 POST   /api/v1/posts/{id}/unread
 POST   /api/v1/posts/{id}/favorite
 DELETE /api/v1/posts/{id}
-GET    /api/v1/profile
 ```
 
 ### Новые файлы
 
-- [ ] `controller/WebController.kt` — страницы `/feed`, `/archive`, `/favorites`, `/profile`
-- [ ] `controller/PostApiController.kt` — REST API для постов
-- [ ] `configuration/WebConfig.kt` — Thymeleaf + static resources
-- [ ] `templates/layout.html` — базовый layout (nav + content area)
-- [ ] `templates/feed.html`, `templates/archive.html`, `templates/favorites.html`, `templates/profile.html`
+- [x] `controller/WebController.kt` — страницы `/feed`, `/archive`, `/favorites`, `/profile`
+- [x] `controller/PostApiController.kt` — REST API для постов
+- [x] `configuration/WebConfig.kt` — DevUserInterceptor, injects userId from config
+- [x] `configuration/properties/WebProperties.kt` — `web.dev-user-id`
+- [x] `templates/layout.html` — базовый layout (nav + content area)
+- [x] `templates/feed.html`, `templates/archive.html`, `templates/favorites.html`, `templates/profile.html`
+- [x] `templates/fragments/post-card.html`, `post-list.html`, `add-post-form.html`
 
 ---
 

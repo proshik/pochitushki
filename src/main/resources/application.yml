@@ -30,4 +30,4 @@ logging:
     ru.proshik.pochitushki: DEBUG
 
 web:
-  dev-user-id: 0  # Replace with your actual internal DB user ID (from `SELECT id FROM users LIMIT 1`)
+  dev-user-id: 1  # Internal DB user ID (users.id, not telegram_id). Run: SELECT id FROM users LIMIT 1

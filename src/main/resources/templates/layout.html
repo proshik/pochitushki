@@ -66,7 +66,7 @@
     /* ── Post card — grid mode ── */
     #post-list.view-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
       gap: 1rem;
     }
     /* Make intermediate Thymeleaf wrapper divs transparent so .post-card elements
@@ -77,6 +77,7 @@
     .view-grid .post-card { display: block; padding: 0; border-bottom: none; }
     .view-grid .card-list-view { display: none; }
     .view-grid .card-grid-view { display: block; }
+    .view-grid .card-grid-body { min-height: 5.5rem; }
 
     /* ── Action button (ghost style) ── */
     .card-action-btn {
