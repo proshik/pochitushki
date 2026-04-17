@@ -37,46 +37,54 @@
                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
         Post Title
       </a>
-      <p style="color: var(--muted); font-style: italic; font-size: 0.82rem; margin-top: 0.15rem;">
-        <span th:text="${#temporals.format(post.createdDate, 'dd.MM.yyyy')}">01.01.2024</span>
-      </p>
+      <!-- Date row + actions on the same line -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.15rem;">
+        <p style="color: var(--muted); font-style: italic; font-size: 0.82rem; margin: 0;">
+          <span th:text="${#temporals.format(post.createdDate, 'dd.MM.yyyy')}">01.01.2024</span>
+        </p>
+        <!-- Actions: in-flow (reserves width), confirm absolute on top -->
+        <div style="position: relative; display: flex; align-items: center; flex-shrink: 0;">
+          <div class="card-actions" style="gap: 0.3rem; align-items: center; white-space: nowrap;">
+            <button th:if="${type == 'unread'}"
+                    class="card-action-btn"
+                    th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${post.id})}"
+                    hx-target="closest .post-card"
+                    hx-swap="delete">→ Архив</button>
+            <button th:if="${type == 'archive'}"
+                    class="card-action-btn"
+                    th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${post.id})}"
+                    hx-target="closest .post-card"
+                    hx-swap="delete">→ Непрочитанное</button>
+            <button class="card-action-btn"
+                    data-fav-btn
+                    th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
+                    hx-swap="none"
+                    hx-on--after-request="if(event.detail.successful) toggleFavBtn(this)"
+                    th:text="${post.isFavorite} ? '⭐' : '☆'">☆</button>
+            <button class="card-action-btn"
+                    th:attr="onclick='showDeleteConfirm(' + ${post.id} + ')'">🗑</button>
+          </div>
+          <div class="delete-confirm"
+               style="position: absolute; inset: 0; gap: 0.4rem; align-items: center;
+                      justify-content: flex-end; background: var(--bg); white-space: nowrap;">
+            <span>Удалить?</span>
+            <button class="delete-confirm-yes"
+                    th:attr="hx-delete=@{/api/v1/posts/{id}(id=${post.id},type=${type})}"
+                    hx-target="closest .post-card"
+                    hx-swap="delete">Да</button>
+            <button class="delete-confirm-no"
+                    th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
+          </div>
+        </div>
+      </div>
       <div th:if="${post.tags != null and !post.tags.isEmpty()}"
            style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.3rem;">
         <span th:each="tag : ${post.tags}"
               th:text="'#' + ${tag}"
               style="color: var(--muted); font-size: 0.78rem;">#tag</span>
       </div>
-      <!-- Actions -->
-      <div class="card-actions" style="gap: 0.4rem; margin-top: 0.5rem; align-items: center;">
-        <button class="card-action-btn"
-                th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
-                hx-target="closest .post-card"
-                hx-swap="outerHTML"
-                th:text="${post.isFavorite} ? '⭐' : '☆'">☆</button>
-        <button th:if="${type == 'unread'}"
-                class="card-action-btn"
-                th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${post.id})}"
-                hx-target="closest .post-card"
-                hx-swap="delete">→ Архив</button>
-        <button th:if="${type == 'archive'}"
-                class="card-action-btn"
-                th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${post.id})}"
-                hx-target="closest .post-card"
-                hx-swap="delete">→ Непрочитанное</button>
-        <button class="card-action-btn"
-                th:attr="onclick='showDeleteConfirm(' + ${post.id} + ')'">🗑</button>
-      </div>
-      <!-- Delete confirm -->
-      <div class="delete-confirm" style="margin-top: 0.5rem;">
-        <span>Удалить?</span>
-        <button class="delete-confirm-yes"
-                th:attr="hx-delete=@{/api/v1/posts/{id}(id=${post.id},type=${type})}"
-                hx-target="closest .post-card"
-                hx-swap="delete">Да</button>
-        <button class="delete-confirm-no"
-                th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
-      </div>
     </div>
+
   </div>
 
   <!-- ═══ GRID VIEW ═══ -->
@@ -93,7 +101,6 @@
                 display: flex; align-items: center; justify-content: center;">
       <img class="og-img"
            style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="">
-      <!-- Fallback: large favicon centred -->
       <div class="og-fallback"
            style="display: flex; flex-direction: column; align-items: center; gap: 0.4rem;">
         <div class="post-favicon"
@@ -118,38 +125,44 @@
                 overflow: hidden; line-height: 1.35;">
         Post Title
       </a>
-      <p style="font-size: 0.72rem; color: var(--muted); font-style: italic; margin-top: 0.2rem;">
-        <span th:text="${#temporals.format(post.createdDate, 'dd.MM.yyyy')}">01.01.2024</span>
-      </p>
-      <!-- Grid actions -->
-      <div class="card-actions" style="gap: 0.3rem; margin-top: 0.4rem; align-items: center;">
-        <button class="card-action-btn"
-                th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
-                hx-target="closest .post-card"
-                hx-swap="outerHTML"
-                th:text="${post.isFavorite} ? '⭐' : '☆'">☆</button>
-        <button th:if="${type == 'unread'}"
-                class="card-action-btn"
-                th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${post.id})}"
-                hx-target="closest .post-card"
-                hx-swap="delete">→ Архив</button>
-        <button th:if="${type == 'archive'}"
-                class="card-action-btn"
-                th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${post.id})}"
-                hx-target="closest .post-card"
-                hx-swap="delete">→ Непрочитанное</button>
-        <button class="card-action-btn"
-                th:attr="onclick='showDeleteConfirm(' + ${post.id} + ')'">🗑</button>
-      </div>
-      <!-- Grid delete confirm -->
-      <div class="delete-confirm" style="margin-top: 0.4rem;">
-        <span>Удалить?</span>
-        <button class="delete-confirm-yes"
-                th:attr="hx-delete=@{/api/v1/posts/{id}(id=${post.id},type=${type})}"
-                hx-target="closest .post-card"
-                hx-swap="delete">Да</button>
-        <button class="delete-confirm-no"
-                th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
+      <!-- Date row + actions on the same line -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.2rem;">
+        <p style="font-size: 0.72rem; color: var(--muted); font-style: italic; margin: 0;">
+          <span th:text="${#temporals.format(post.createdDate, 'dd.MM.yyyy')}">01.01.2024</span>
+        </p>
+        <div style="position: relative; display: flex; align-items: center; flex-shrink: 0;">
+          <div class="card-actions" style="gap: 0.25rem; align-items: center; white-space: nowrap;">
+            <button th:if="${type == 'unread'}"
+                    class="card-action-btn"
+                    th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${post.id})}"
+                    hx-target="closest .post-card"
+                    hx-swap="delete">→ Архив</button>
+            <button th:if="${type == 'archive'}"
+                    class="card-action-btn"
+                    th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${post.id})}"
+                    hx-target="closest .post-card"
+                    hx-swap="delete">→ Непрочитанное</button>
+            <button class="card-action-btn"
+                    data-fav-btn
+                    th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
+                    hx-swap="none"
+                    hx-on--after-request="if(event.detail.successful) toggleFavBtn(this)"
+                    th:text="${post.isFavorite} ? '⭐' : '☆'">☆</button>
+            <button class="card-action-btn"
+                    th:attr="onclick='showDeleteConfirm(' + ${post.id} + ')'">🗑</button>
+          </div>
+          <div class="delete-confirm"
+               style="position: absolute; inset: 0; gap: 0.3rem; align-items: center;
+                      justify-content: flex-end; background: var(--bg); white-space: nowrap;">
+            <span>Удалить?</span>
+            <button class="delete-confirm-yes"
+                    th:attr="hx-delete=@{/api/v1/posts/{id}(id=${post.id},type=${type})}"
+                    hx-target="closest .post-card"
+                    hx-swap="delete">Да</button>
+            <button class="delete-confirm-no"
+                    th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

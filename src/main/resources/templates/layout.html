@@ -52,11 +52,15 @@
     }
     .card-list-view { display: contents; }
     .card-grid-view { display: none; }
-    .post-card .card-actions { display: none; }
-    .post-card:hover .card-actions { display: flex; }
-    .post-card .delete-confirm { display: none; }
-    .post-card.confirming .card-actions { display: none !important; }
-    .post-card.confirming .delete-confirm { display: flex !important; }
+    .post-card .card-actions {
+      display: flex; opacity: 0; pointer-events: none; transition: opacity 0.15s;
+    }
+    .post-card:hover .card-actions { opacity: 1; pointer-events: auto; }
+    .post-card .delete-confirm {
+      display: flex; opacity: 0; pointer-events: none; transition: opacity 0.15s;
+    }
+    .post-card.confirming .card-actions { opacity: 0 !important; pointer-events: none !important; }
+    .post-card.confirming .delete-confirm { opacity: 1 !important; pointer-events: auto !important; }
     .htmx-added { animation: fadeIn 0.3s ease-out both; }
 
     /* ── Post card — grid mode ── */
@@ -65,6 +69,11 @@
       grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 1rem;
     }
+    /* Make intermediate Thymeleaf wrapper divs transparent so .post-card elements
+       become direct grid items. :not(.post-card) prevents the rule from matching
+       cards inserted directly by HTMX afterbegin (which are already at depth 1). */
+    #post-list.view-grid > div:not(.post-card),
+    #post-list.view-grid > div:not(.post-card) > div { display: contents; }
     .view-grid .post-card { display: block; padding: 0; border-bottom: none; }
     .view-grid .card-list-view { display: none; }
     .view-grid .card-grid-view { display: block; }
@@ -83,8 +92,7 @@
 
     /* ── Delete confirm ── */
     .delete-confirm {
-      align-items: center; gap: 0.5rem;
-      margin-top: 0.5rem; font-size: 0.82rem; color: var(--muted);
+      align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--muted);
     }
     .delete-confirm-yes {
       background: var(--accent); color: white; border: none;
@@ -176,6 +184,13 @@
       });
     }
 
+    /* ── Favorite toggle (client-side only, no card re-render) ── */
+    function toggleFavBtn(btn) {
+      btn.closest('.post-card').querySelectorAll('[data-fav-btn]').forEach(function (b) {
+        b.textContent = b.textContent.trim() === '☆' ? '⭐' : '☆';
+      });
+    }
+
     /* ── View mode ── */
     function setViewMode(mode) {
       var postList = document.getElementById('post-list');
@@ -195,10 +210,15 @@
     });
 
     document.addEventListener('htmx:afterSwap', function (e) {
-      initFavicons(e.detail.target);
+      /* For outerHTML swaps the target is already detached; search from its
+         parent so the newly inserted element is found. Fall back to document. */
+      var root = document.contains(e.detail.target)
+        ? e.detail.target
+        : (e.detail.target.parentElement || document);
+      initFavicons(root);
       var postList = document.getElementById('post-list');
       if (postList && postList.classList.contains('view-grid')) {
-        initOgImages(e.detail.target);
+        initOgImages(root);
       }
     });
   </script>
