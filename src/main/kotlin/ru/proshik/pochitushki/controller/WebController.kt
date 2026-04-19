@@ -4,7 +4,9 @@ import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestAttribute
+import org.springframework.dao.DataAccessException
 import ru.proshik.pochitushki.model.PostType
+import ru.proshik.pochitushki.model.UserData
 import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.UserService
 
@@ -54,16 +56,17 @@ class WebController(
         model.addAttribute("unreadCount", postService.getPostCount(userId, PostType.UNREAD))
         model.addAttribute("archiveCount", postService.getPostCount(userId, PostType.ARCHIVE))
         model.addAttribute("favoritesCount", postService.getPostCount(userId, PostType.FAVORITES))
-        addUserInfo(userId, model)
+        addUserInfo(userId, model, resolved = user)
         return "profile"
     }
 
-    private fun addUserInfo(userId: Long, model: Model) {
-        try {
-            model.addAttribute("userInfo", userService.getUserByUserId(userId))
-        } catch (e: Exception) {
-            model.addAttribute("userInfo", null)
+    private fun addUserInfo(userId: Long, model: Model, resolved: UserData? = null) {
+        val info = resolved ?: try {
+            userService.getUserByUserId(userId)
+        } catch (e: DataAccessException) {
+            null
         }
+        model.addAttribute("userInfo", info)
     }
 
     companion object {
