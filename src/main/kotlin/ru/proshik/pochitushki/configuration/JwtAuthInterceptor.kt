@@ -19,12 +19,10 @@ class JwtAuthInterceptor(private val jwtService: JwtService) : HandlerIntercepto
         val userId = token?.let { jwtService.extractUserId(it) }
 
         if (userId == null) {
-            val accept = request.getHeader("Accept") ?: ""
-            val isApiRequest = request.requestURI.startsWith("/api/")
-            if (!isApiRequest && !accept.contains("application/json")) {
-                response.sendRedirect("/login")
-            } else {
+            if (request.requestURI.startsWith("/api/")) {
                 response.status = HttpStatus.UNAUTHORIZED.value()
+            } else {
+                response.sendRedirect("/login")
             }
             return false
         }

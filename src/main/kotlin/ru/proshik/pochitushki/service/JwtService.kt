@@ -41,5 +41,7 @@ class JwtService(private val jwtProperties: JwtProperties) {
         null
     } catch (_: IllegalArgumentException) {
         null
+    } catch (_: NumberFormatException) {
+        null
     }
 }
