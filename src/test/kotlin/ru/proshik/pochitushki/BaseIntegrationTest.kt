@@ -2,23 +2,33 @@ package ru.proshik.pochitushki
 
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
+import jakarta.servlet.http.Cookie
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.test.web.servlet.request.RequestPostProcessor
 import org.testcontainers.containers.PostgreSQLContainer
+import ru.proshik.pochitushki.service.JwtService
 
 @SpringBootTest(
     classes = [PochitushkiApplication::class],
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 )
 @ActiveProfiles("test")
-class BaseIntegrationTest() {
+class BaseIntegrationTest {
+
+    @Autowired
+    protected lateinit var jwtService: JwtService
+
+    fun withAuth(userId: Long): RequestPostProcessor = RequestPostProcessor { request ->
+        val token = jwtService.createToken(userId)
+        request.setCookies(Cookie("auth_token", token))
+        request
+    }
 
     companion object {
-        // Container is started once for the entire test suite (Ryuk handles cleanup at JVM exit).
-        // Using manual start instead of @Container + @Testcontainers to prevent per-class
-        // stop/start cycles that break cached Spring contexts pointing to a closed port.
         @JvmStatic
         val postgresContainer = PostgreSQLContainer<Nothing>("postgres:16-alpine").apply {
             withDatabaseName("testdb")
@@ -38,11 +48,15 @@ class BaseIntegrationTest() {
         @JvmField
         val wireMockTelegramApi: WireMockServer = WireMockServer(wireMockConfig().dynamicPort()).apply { start() }
 
+        @JvmField
+        val wireMockOidc: WireMockServer = WireMockServer(wireMockConfig().dynamicPort()).apply { start() }
+
         @DynamicPropertySource
         @JvmStatic
         fun telegramDynamicProps(registry: DynamicPropertyRegistry) {
             registry.add("telegram.api-url") { "http://localhost:${wireMockTelegramApi.port()}/" }
             registry.add("telegram.webhook-url") { "" }
+            registry.add("telegram.oauth.base-url") { "http://localhost:${wireMockOidc.port()}" }
         }
     }
 }

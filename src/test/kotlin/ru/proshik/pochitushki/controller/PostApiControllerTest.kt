@@ -16,7 +16,6 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.request.RequestPostProcessor
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import ru.proshik.pochitushki.BaseIntegrationTest
@@ -56,11 +55,6 @@ class PostApiControllerTest : BaseIntegrationTest() {
         BaseIntegrationTest.wireMockTelegramApi.resetMappings()
     }
 
-    private fun withUser(): RequestPostProcessor = RequestPostProcessor { req ->
-        req.setAttribute("userId", userId)
-        req
-    }
-
     private fun insertPost(title: String = "Test Post", url: String = "https://example.com"): Long =
         jdbcTemplate.queryForObject(
             "INSERT INTO post(title, url, user_id) VALUES (?, ?, ?) RETURNING id",
@@ -81,7 +75,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
             get("/api/v1/posts/fragment")
                 .param("type", "unread")
                 .param("offset", "0")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("https://myarticle.com")))
@@ -95,7 +89,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
             get("/api/v1/posts/fragment")
                 .param("type", "unread")
                 .param("offset", "0")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isOk)
             .andExpect(content().string(not(containsString("hx-trigger"))))
@@ -107,7 +101,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
             get("/api/v1/posts/fragment")
                 .param("type", "bogus")
                 .param("offset", "0")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isBadRequest)
     }
@@ -129,7 +123,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             post("/api/v1/posts")
                 .param("url", url)
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("My Great Article")))
@@ -142,7 +136,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             post("/api/v1/posts")
                 .param("url", "not-a-url")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isBadRequest)
     }
@@ -152,7 +146,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         val postId = insertPost()
 
         mockMvc.perform(
-            post("/api/v1/posts/$postId/archive").with(withUser())
+            post("/api/v1/posts/$postId/archive").with(withAuth(userId))
         ).andExpect(status().isOk)
 
         assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
@@ -164,7 +158,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         val postId = insertArchivePost()
 
         mockMvc.perform(
-            post("/api/v1/posts/$postId/unread").with(withUser())
+            post("/api/v1/posts/$postId/unread").with(withAuth(userId))
         ).andExpect(status().isOk)
 
         assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
@@ -179,7 +173,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             post("/api/v1/posts/$postId/favorite")
                 .param("type", "unread")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("⭐")))
@@ -188,7 +182,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             post("/api/v1/posts/$postId/favorite")
                 .param("type", "unread")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("☆")))
@@ -201,7 +195,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             delete("/api/v1/posts/$postId")
                 .param("type", "unread")
-                .with(withUser())
+                .with(withAuth(userId))
         ).andExpect(status().isOk)
 
         assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
@@ -214,7 +208,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             delete("/api/v1/posts/$postId")
                 .param("type", "archive")
-                .with(withUser())
+                .with(withAuth(userId))
         ).andExpect(status().isOk)
 
         assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
@@ -237,7 +231,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             get("/api/v1/posts/$postId/og-image")
                 .param("type", "unread")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isOk)
             .andExpect(content().json("""{"ogImageUrl":"https://example.com/thumb.jpg"}"""))
@@ -260,7 +254,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(
             get("/api/v1/posts/$postId/og-image")
                 .param("type", "unread")
-                .with(withUser())
+                .with(withAuth(userId))
         )
             .andExpect(status().isNotFound)
     }

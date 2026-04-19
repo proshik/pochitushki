@@ -9,14 +9,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.request.RequestPostProcessor
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import ru.proshik.pochitushki.BaseIntegrationTest
 
-// Note: BaseIntegrationTest uses RANDOM_PORT; @AutoConfigureMockMvc binds MockMvc to the mock
-// dispatcher (not Tomcat). Controller/template tests work correctly. When auth filters are added
-// in Phase 5, consider switching to MOCK web environment for proper servlet-layer coverage.
 @AutoConfigureMockMvc
 class WebControllerTest : BaseIntegrationTest() {
 
@@ -46,36 +41,38 @@ class WebControllerTest : BaseIntegrationTest() {
         jdbcTemplate.execute("DELETE FROM users")
     }
 
-    private fun withUser(): RequestPostProcessor = RequestPostProcessor { req ->
-        req.setAttribute("userId", userId)
-        req
-    }
-
     @Test
     fun `GET feed returns 200 with post-list element`() {
-        mockMvc.perform(get("/").with(withUser()))
+        mockMvc.perform(get("/").with(withAuth(userId)))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("id=\"post-list\"")))
     }
 
     @Test
     fun `GET archive returns 200 with post-list element`() {
-        mockMvc.perform(get("/archive").with(withUser()))
+        mockMvc.perform(get("/archive").with(withAuth(userId)))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("id=\"post-list\"")))
     }
 
     @Test
     fun `GET favorites returns 200 with post-list element`() {
-        mockMvc.perform(get("/favorites").with(withUser()))
+        mockMvc.perform(get("/favorites").with(withAuth(userId)))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("id=\"post-list\"")))
     }
 
     @Test
     fun `GET profile returns 200 with username`() {
-        mockMvc.perform(get("/profile").with(withUser()))
+        mockMvc.perform(get("/profile").with(withAuth(userId)))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("webtest")))
+    }
+
+    @Test
+    fun `GET feed without auth cookie redirects to login`() {
+        mockMvc.perform(get("/"))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(header().string("Location", "/login"))
     }
 }

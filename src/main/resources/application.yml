@@ -24,13 +24,15 @@ pdf:
 
 telegram:
   enabled: true
+  oauth:
+    base-url: https://oauth.telegram.org
+    client-id: ${TELEGRAM_CLIENT_ID}
+    client-secret: ${TELEGRAM_CLIENT_SECRET}
+    redirect-uri: ${APP_BASE_URL}/auth/telegram/callback
 
 logging:
   level:
     ru.proshik.pochitushki: DEBUG
-
-web:
-  dev-user-id: 1  # Internal DB user ID (users.id, not telegram_id). Run: SELECT id FROM users LIMIT 1
 
 jwt:
   secret: ${JWT_SECRET}

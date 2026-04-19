@@ -21,9 +21,11 @@ telegram:
   token-name: test_token_name
   base-url: some_base_url
   webhook-url: ${telegram.base-url}/${telegram.token}
-
-web:
-  dev-user-id: 0
+  oauth:
+    base-url: http://localhost:0  # overridden by DynamicPropertySource in BaseIntegrationTest
+    client-id: test-client-id
+    client-secret: test-client-secret
+    redirect-uri: http://localhost/auth/telegram/callback
 
 jwt:
   secret: dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktMzI=
