@@ -21,6 +21,7 @@ class WebController(
         model.addAttribute("pageType", PostType.UNREAD.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        addUserInfo(userId, model)
         return "feed"
     }
 
@@ -31,6 +32,7 @@ class WebController(
         model.addAttribute("pageType", PostType.ARCHIVE.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        addUserInfo(userId, model)
         return "archive"
     }
 
@@ -41,6 +43,7 @@ class WebController(
         model.addAttribute("pageType", PostType.FAVORITES.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        addUserInfo(userId, model)
         return "favorites"
     }
 
@@ -51,7 +54,16 @@ class WebController(
         model.addAttribute("unreadCount", postService.getPostCount(userId, PostType.UNREAD))
         model.addAttribute("archiveCount", postService.getPostCount(userId, PostType.ARCHIVE))
         model.addAttribute("favoritesCount", postService.getPostCount(userId, PostType.FAVORITES))
+        addUserInfo(userId, model)
         return "profile"
+    }
+
+    private fun addUserInfo(userId: Long, model: Model) {
+        try {
+            model.addAttribute("userInfo", userService.getUserByUserId(userId))
+        } catch (e: Exception) {
+            model.addAttribute("userInfo", null)
+        }
     }
 
     companion object {
