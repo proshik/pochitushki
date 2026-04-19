@@ -2,17 +2,21 @@ package ru.proshik.pochitushki.service
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
-import ru.proshik.pochitushki.BaseIntegrationTest
+import ru.proshik.pochitushki.configuration.properties.JwtProperties
 
-class JwtServiceTest : BaseIntegrationTest() {
+class JwtServiceTest {
 
-    @Autowired
-    private lateinit var jwtService: JwtService
+    private val props = JwtProperties(
+        secret = "dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktMzI=",
+        ttlDays = 7,
+    )
+    private val jwtService = JwtService(props)
 
     @Test
-    fun `createToken returns non-blank string`() {
-        assertTrue(jwtService.createToken(42L).isNotBlank())
+    fun `createToken returns valid JWT structure`() {
+        val token = jwtService.createToken(42L)
+        assertTrue(token.isNotBlank())
+        assertEquals(3, token.split(".").size, "JWT must have 3 dot-separated segments")
     }
 
     @Test
@@ -31,5 +35,16 @@ class JwtServiceTest : BaseIntegrationTest() {
         val token = jwtService.createToken(1L)
         val tampered = token.dropLast(5) + "XXXXX"
         assertNull(jwtService.extractUserId(tampered))
+    }
+
+    @Test
+    fun `extractUserId returns null for expired token`() {
+        val expiredProps = JwtProperties(
+            secret = "dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktMzI=",
+            ttlDays = 0,
+        )
+        val expiredService = JwtService(expiredProps)
+        val token = expiredService.createToken(1L)
+        assertNull(jwtService.extractUserId(token))
     }
 }

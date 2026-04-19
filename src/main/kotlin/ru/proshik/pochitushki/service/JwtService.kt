@@ -20,7 +20,7 @@ class JwtService(private val jwtProperties: JwtProperties) {
 
     fun createToken(userId: Long): String {
         val now = Date()
-        val expiry = Date(now.time + jwtProperties.ttlDays * 24 * 60 * 60 * 1000)
+        val expiry = Date(now.time + java.util.concurrent.TimeUnit.DAYS.toMillis(jwtProperties.ttlDays))
         return Jwts.builder()
             .subject(userId.toString())
             .issuedAt(now)
