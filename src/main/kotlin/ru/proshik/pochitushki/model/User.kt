@@ -5,7 +5,7 @@ import java.time.LocalDateTime
 data class UserData(
     val id: Long,
     val telegramId: Long,
-    val username: String,
+    val username: String?,
     val firstName: String?,
     val lastName: String?,
     val settings: UserSettingsData,
