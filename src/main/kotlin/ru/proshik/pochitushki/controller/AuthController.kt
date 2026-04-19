@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
+import feign.FeignException
 import ru.proshik.pochitushki.service.JwtService
 import ru.proshik.pochitushki.service.TelegramOidcService
 import ru.proshik.pochitushki.service.UserService
@@ -63,7 +64,7 @@ class AuthController(
             )
             response.addCookie(authCookie(jwtService.createToken(user.id)))
             "redirect:/"
-        } catch (e: Exception) {
+        } catch (e: FeignException) {
             "redirect:/login?error=server"
         }
     }
@@ -75,11 +76,11 @@ class AuthController(
     }
 
     private fun shortLivedCookie(name: String, value: String, maxAgeSeconds: Int) =
-        Cookie(name, value).apply { isHttpOnly = true; path = "/"; maxAge = maxAgeSeconds }
+        Cookie(name, value).apply { isHttpOnly = true; secure = true; path = "/"; maxAge = maxAgeSeconds }
 
     private fun authCookie(jwt: String) =
-        Cookie("auth_token", jwt).apply { isHttpOnly = true; path = "/"; maxAge = 7 * 24 * 60 * 60 }
+        Cookie("auth_token", jwt).apply { isHttpOnly = true; secure = true; path = "/"; maxAge = 7 * 24 * 60 * 60 }
 
     private fun clearCookie(response: HttpServletResponse, name: String) =
-        response.addCookie(Cookie(name, "").apply { isHttpOnly = true; path = "/"; maxAge = 0 })
+        response.addCookie(Cookie(name, "").apply { isHttpOnly = true; secure = true; path = "/"; maxAge = 0 })
 }
