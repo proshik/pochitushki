@@ -31,3 +31,7 @@ logging:
 
 web:
   dev-user-id: 1  # Internal DB user ID (users.id, not telegram_id). Run: SELECT id FROM users LIMIT 1
+
+jwt:
+  secret: ${JWT_SECRET}
+  ttl-days: 7

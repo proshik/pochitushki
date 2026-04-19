@@ -24,3 +24,7 @@ telegram:
 
 web:
   dev-user-id: 0
+
+jwt:
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktMzI=
+  ttl-days: 7
