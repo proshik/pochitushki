@@ -30,8 +30,11 @@ class UserService(private val userDao: UserDao) {
     }
 
     fun getOrCreateUser(telegramId: Long, firstName: String, username: String?, languageCode: String): UserData {
-        return userDao.findUserByChatId(telegramId) ?: run {
-            val resolvedLang = if (languageCode in listOf("ru", "en")) languageCode else "ru"
+        val existing = userDao.findUserByChatId(telegramId)
+        if (existing != null) return existing
+
+        val resolvedLang = if (languageCode in setOf("ru", "en")) languageCode else "ru"
+        return try {
             userDao.addUser(
                 UserStoreData(
                     telegramId = telegramId,
@@ -41,6 +44,8 @@ class UserService(private val userDao: UserDao) {
                     settings = UserSettingsData(languageCode = resolvedLang, tgFeedEntriesNumber = 5),
                 )
             )
+            userDao.getUserByChatId(telegramId)
+        } catch (e: org.springframework.dao.DataIntegrityViolationException) {
             userDao.getUserByChatId(telegramId)
         }
     }
