@@ -28,4 +28,20 @@ class UserService(private val userDao: UserDao) {
     fun updateUserSettings(userId: Long, updatedUserSettings: UserSettingsData) {
         userDao.updateUserSettings(userId, updatedUserSettings)
     }
+
+    fun getOrCreateUser(telegramId: Long, firstName: String, username: String?, languageCode: String): UserData {
+        return userDao.findUserByChatId(telegramId) ?: run {
+            val resolvedLang = if (languageCode in listOf("ru", "en")) languageCode else "ru"
+            userDao.addUser(
+                UserStoreData(
+                    telegramId = telegramId,
+                    username = username,
+                    firstName = firstName,
+                    lastName = null,
+                    settings = UserSettingsData(languageCode = resolvedLang, tgFeedEntriesNumber = 5),
+                )
+            )
+            userDao.getUserByChatId(telegramId)
+        }
+    }
 }
