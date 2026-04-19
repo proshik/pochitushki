@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Войти — Почитушки</title>
+  <script>
+    (function () {
+      if (localStorage.getItem('pochitushki-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #F5F0E8; --text: #1A1714; --accent: #C0622A;
+      --muted: #8B7355; --border: #DDD5C4;
+    }
+    html.dark {
+      --bg: #1A1714; --text: #E8E0D0;
+      --accent: #D4784A; --muted: #9C8B72; --border: #3A3228;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Source Serif 4', serif; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center">
+  <div class="text-center max-w-sm w-full px-6">
+    <h1 class="text-3xl font-bold mb-2" style="font-family: 'Playfair Display', serif;">Почитушки</h1>
+    <p class="mb-8" style="color: var(--muted);">Сохраняйте и читайте статьи в удобное время</p>
+
+    <div th:if="${param.error}" class="mb-4 p-3 rounded text-sm" style="background:#fde8e8;color:#c0392b;">
+      <span th:switch="${param.error[0]}">
+        <span th:case="'state'">Ошибка безопасности. Попробуйте ещё раз.</span>
+        <span th:case="'cancelled'">Вход отменён.</span>
+        <span th:case="'server'">Ошибка сервера. Попробуйте позже.</span>
+        <span th:case="*">Произошла ошибка. Попробуйте ещё раз.</span>
+      </span>
+    </div>
+
+    <a href="/auth/telegram"
+       class="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-white font-medium transition-opacity hover:opacity-90"
+       style="background: var(--accent);">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.67l-2.938-.919c-.64-.203-.654-.64.136-.954l11.44-4.408c.534-.194 1.003.131.832.946l.234-.114z"/>
+      </svg>
+      Войти через Telegram
+    </a>
+  </div>
+</body>
+</html>
