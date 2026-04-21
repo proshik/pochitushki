@@ -216,12 +216,7 @@
       function doLoad() {
         if (sentinel.dataset.loading) return;
         sentinel.dataset.loading = '1';
-        htmx.ajax('GET', sentinel.dataset.url, { target: '#post-list', swap: 'beforeend' })
-          .then(function () { sentinel.remove(); })
-          .catch(function () {
-            delete sentinel.dataset.loading;
-            sentinel.removeAttribute('data-sentinel-init');
-          });
+        htmx.trigger(sentinel, 'loadMore');
       }
 
       var observer = new IntersectionObserver(function (entries, obs) {

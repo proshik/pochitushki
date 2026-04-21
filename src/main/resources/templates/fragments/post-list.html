@@ -17,10 +17,15 @@
     <div th:replace="~{fragments/post-card :: card(${post}, ${post.isArchived ? 'archive' : 'unread'})}"></div>
   </div>
 
-  <!-- Infinite scroll sentinel — managed by initScrollSentinel() in layout.html -->
+  <!-- Infinite scroll sentinel — observer managed by initScrollSentinel() in layout.html;
+       htmx fires on custom 'loadMore' event so IntersectionObserver controls timing -->
   <div th:if="${hasMore and !posts.isEmpty()}"
        class="load-more-sentinel"
-       th:attr="data-url=@{/api/v1/posts/fragment(type=${pageType},offset=${offset})}"
+       th:attr="hx-get=@{/api/v1/posts/fragment(type=${pageType},offset=${offset})}"
+       hx-trigger="loadMore"
+       hx-target="#post-list"
+       hx-swap="beforeend"
+       hx-on--after-request="if(event.detail.successful) this.remove()"
        style="padding: 1rem; text-align: center; color: var(--muted); font-size: 0.9rem;">
     <span th:text="#{web.list.loading}">Загрузка...</span>
   </div>
