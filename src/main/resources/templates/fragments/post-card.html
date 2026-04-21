@@ -46,11 +46,13 @@
           <div class="card-actions" style="gap: 0.3rem; align-items: center; white-space: nowrap;">
             <button th:if="${type == 'unread'}"
                     class="card-action-btn"
+                    th:text="#{web.post.to.archive}"
                     th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${post.id})}"
                     hx-target="closest .post-card"
                     hx-swap="delete">→ Архив</button>
             <button th:if="${type == 'archive'}"
                     class="card-action-btn"
+                    th:text="#{web.post.to.unread}"
                     th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${post.id})}"
                     hx-target="closest .post-card"
                     hx-swap="delete">→ Непрочитанное</button>
@@ -66,12 +68,14 @@
           <div class="delete-confirm"
                style="position: absolute; inset: 0; gap: 0.4rem; align-items: center;
                       justify-content: flex-end; background: var(--bg); white-space: nowrap;">
-            <span>Удалить?</span>
+            <span th:text="#{web.post.delete.confirm}">Удалить?</span>
             <button class="delete-confirm-yes"
+                    th:text="#{web.post.delete.yes}"
                     th:attr="hx-delete=@{/api/v1/posts/{id}(id=${post.id},type=${type})}"
                     hx-target="closest .post-card"
                     hx-swap="delete">Да</button>
             <button class="delete-confirm-no"
+                    th:text="#{web.post.delete.no}"
                     th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
           </div>
         </div>
@@ -156,12 +160,14 @@
           <div class="delete-confirm"
                style="position: absolute; inset: 0; gap: 0.3rem; align-items: center;
                       justify-content: flex-end; background: var(--bg); white-space: nowrap;">
-            <span>Удалить?</span>
+            <span th:text="#{web.post.delete.confirm}">Удалить?</span>
             <button class="delete-confirm-yes"
+                    th:text="#{web.post.delete.yes}"
                     th:attr="hx-delete=@{/api/v1/posts/{id}(id=${post.id},type=${type})}"
                     hx-target="closest .post-card"
                     hx-swap="delete">Да</button>
             <button class="delete-confirm-no"
+                    th:text="#{web.post.delete.no}"
                     th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
           </div>
         </div>

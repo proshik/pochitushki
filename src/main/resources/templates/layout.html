@@ -239,7 +239,9 @@
                        color: white; font-weight: 700; font-size: 0.9rem; margin-bottom: 0.5rem;
                        font-family: 'Playfair Display', Georgia, serif; text-decoration: none;">П</a>
     <!-- Bookmarks section icon -->
-    <button class="rail-btn active" title="Закладки">📚</button>
+    <a href="/" class="rail-btn"
+       th:classappend="${active == 'feed' or active == 'archive' or active == 'favorites'} ? ' active' : ''"
+       th:title="#{web.nav.bookmarks}">📚</a>
     <!-- Bottom: theme / profile / settings -->
     <div style="margin-top: auto; display: flex; flex-direction: column; gap: 0.25rem; align-items: center;">
       <button id="theme-icon-rail" class="rail-btn" onclick="toggleTheme()" title="Тема">☀️</button>
@@ -254,11 +256,13 @@
               display: flex; flex-direction: column; background: var(--bg);
               overflow-y: auto; flex-shrink: 0;">
     <div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
-                color: var(--muted); margin-bottom: 0.75rem; padding: 0 0.4rem;">Закладки</div>
+                color: var(--muted); margin-bottom: 0.75rem; padding: 0 0.4rem;"
+         th:text="#{web.nav.bookmarks}">Закладки</div>
     <ul style="list-style: none; padding: 0; margin: 0;
                display: flex; flex-direction: column; gap: 0.1rem; flex: 1;">
       <li>
         <a href="/"
+           th:text="#{web.nav.unread}"
            th:style="${active == 'feed'}
              ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:#EDE8DF;color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
              : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
@@ -267,6 +271,7 @@
       </li>
       <li>
         <a href="/archive"
+           th:text="#{web.nav.archive}"
            th:style="${active == 'archive'}
              ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:#EDE8DF;color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
              : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
@@ -275,18 +280,11 @@
       </li>
       <li>
         <a href="/favorites"
+           th:text="#{web.nav.favorites}"
            th:style="${active == 'favorites'}
              ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:#EDE8DF;color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
              : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
           Избранное
-        </a>
-      </li>
-      <li>
-        <a href="/profile"
-           th:style="${active == 'profile'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:#EDE8DF;color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
-             : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
-          Профиль
         </a>
       </li>
     </ul>
@@ -316,7 +314,7 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
           <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.88 13.958l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.268.601z"/>
         </svg>
-        Войти
+        <span th:text="#{web.nav.login}">Войти</span>
       </a>
     </div>
   </div>

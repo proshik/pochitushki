@@ -1,5 +1,6 @@
 package ru.proshik.pochitushki.service
 
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.model.UserData
 import ru.proshik.pochitushki.model.UserSettingsData
@@ -8,6 +9,8 @@ import ru.proshik.pochitushki.repository.UserDao
 
 @Service
 class UserService(private val userDao: UserDao) {
+
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     fun addUser(userStoreData: UserStoreData) {
         userDao.addUser(userStoreData)
@@ -32,6 +35,8 @@ class UserService(private val userDao: UserDao) {
     fun getOrCreateUser(telegramId: Long, firstName: String?, username: String?, languageCode: String): UserData {
         val existing = userDao.findUserByChatId(telegramId)
         if (existing != null) return existing
+
+        logger.info("New user registered: telegramId={}, username={}", telegramId, username)
 
         val resolvedLang = if (languageCode in setOf("ru", "en")) languageCode else "ru"
         return try {

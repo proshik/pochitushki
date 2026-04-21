@@ -2,13 +2,19 @@ package ru.proshik.pochitushki.configuration
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
 import ru.proshik.pochitushki.service.JwtService
+import ru.proshik.pochitushki.service.UserService
+import java.util.Locale
 
 @Component
-class JwtAuthInterceptor(private val jwtService: JwtService) : HandlerInterceptor {
+class JwtAuthInterceptor(
+    private val jwtService: JwtService,
+    private val userService: UserService,
+) : HandlerInterceptor {
 
     override fun preHandle(
         request: HttpServletRequest,
@@ -28,6 +34,14 @@ class JwtAuthInterceptor(private val jwtService: JwtService) : HandlerIntercepto
         }
 
         request.setAttribute("userId", userId)
+
+        val languageCode = try {
+            userService.getUserByUserId(userId).settings.languageCode
+        } catch (e: Exception) {
+            "ru"
+        }
+        LocaleContextHolder.setLocale(Locale(languageCode))
+
         return true
     }
 }

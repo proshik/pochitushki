@@ -23,11 +23,12 @@
        hx-trigger="revealed"
        hx-swap="outerHTML"
        style="padding: 1rem; text-align: center; color: var(--muted); font-size: 0.9rem;">
-    Загрузка...
+    <span th:text="#{web.list.loading}">Загрузка...</span>
   </div>
 
   <!-- Empty state -->
   <div th:if="${posts.isEmpty()}"
+       th:text="#{web.list.empty}"
        style="padding: 3rem 0; text-align: center; color: var(--muted);">
     Список пуст
   </div>

@@ -6,7 +6,7 @@
   <nav th:replace="~{layout :: nav('archive')}"></nav>
   <main style="flex: 1; padding: 2.5rem; min-width: 0;">
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
-      <h1 class="font-display" style="font-size: 2rem; font-weight: 700;">Архив</h1>
+      <h1 class="font-display" style="font-size: 2rem; font-weight: 700;" th:text="#{web.page.archive}">Архив</h1>
       <div style="display: flex; gap: 0.25rem;">
         <button id="view-list-btn" class="view-btn" onclick="setViewMode('list')" title="Список">☰</button>
         <button id="view-grid-btn" class="view-btn" onclick="setViewMode('grid')" title="Сетка">⊞</button>

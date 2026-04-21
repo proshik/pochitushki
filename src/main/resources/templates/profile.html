@@ -21,6 +21,7 @@
         </div>
       </div>
       <a href="/logout"
+         th:text="#{web.profile.logout}"
          style="font-size:.85rem; color:var(--muted); text-decoration:none;
                 border:1px solid var(--border); padding:.35rem .8rem;
                 border-radius:5px; white-space:nowrap;"
@@ -34,22 +35,25 @@
       <!-- Stats -->
       <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;">
         <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.08em;
-                    color:var(--muted); margin-bottom:1rem;">Статистика</div>
+                    color:var(--muted); margin-bottom:1rem;" th:text="#{web.profile.stats}">Статистика</div>
         <div style="display:flex; flex-direction:column; gap:.6rem;">
           <div>
             <span class="font-display" style="font-size:1.4rem; font-weight:700;"
                   th:text="${unreadCount}">0</span>
-            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;">непрочитанных</span>
+            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;"
+                  th:text="#{web.profile.stats.unread}">непрочитанных</span>
           </div>
           <div>
             <span class="font-display" style="font-size:1.4rem; font-weight:700;"
                   th:text="${archiveCount}">0</span>
-            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;">в архиве</span>
+            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;"
+                  th:text="#{web.profile.stats.archive}">в архиве</span>
           </div>
           <div>
             <span class="font-display" style="font-size:1.4rem; font-weight:700;"
                   th:text="${favoritesCount}">0</span>
-            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;">избранных</span>
+            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;"
+                  th:text="#{web.profile.stats.favorites}">избранных</span>
           </div>
         </div>
       </div>
@@ -57,11 +61,12 @@
       <!-- Settings -->
       <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;" hx-ext="json-enc">
         <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.08em;
-                    color:var(--muted); margin-bottom:1rem;">Настройки</div>
+                    color:var(--muted); margin-bottom:1rem;" th:text="#{web.profile.settings}">Настройки</div>
 
         <!-- Language -->
         <div style="margin-bottom:1rem;">
-          <div style="font-size:.8rem; color:var(--muted); margin-bottom:.4rem;">Язык бота</div>
+          <div style="font-size:.8rem; color:var(--muted); margin-bottom:.4rem;"
+               th:text="#{web.profile.language}">Язык бота</div>
           <div id="lang-btns" style="display:flex; gap:.35rem;">
             <button class="settings-btn"
                     th:classappend="${user.settings.languageCode == 'ru'} ? ' settings-btn-active' : ''"
@@ -76,32 +81,10 @@
                     hx-swap="none"
                     hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'lang-btns')">EN</button>
           </div>
+          <div style="font-size:.72rem; color:var(--muted); margin-top:.4rem;"
+               th:text="#{web.profile.language.hint}">Влияет только на ответы бота в Telegram</div>
         </div>
 
-        <!-- Feed count -->
-        <div>
-          <div style="font-size:.8rem; color:var(--muted); margin-bottom:.4rem;">Записей в ленте бота</div>
-          <div id="feed-btns" style="display:flex; gap:.35rem;">
-            <button class="settings-btn"
-                    th:classappend="${user.settings.tgFeedEntriesNumber == 5} ? ' settings-btn-active' : ''"
-                    hx-post="/api/v1/profile/settings"
-                    hx-vals='{"tgFeedEntriesNumber":5}'
-                    hx-swap="none"
-                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'feed-btns')">5</button>
-            <button class="settings-btn"
-                    th:classappend="${user.settings.tgFeedEntriesNumber == 10} ? ' settings-btn-active' : ''"
-                    hx-post="/api/v1/profile/settings"
-                    hx-vals='{"tgFeedEntriesNumber":10}'
-                    hx-swap="none"
-                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'feed-btns')">10</button>
-            <button class="settings-btn"
-                    th:classappend="${user.settings.tgFeedEntriesNumber == 20} ? ' settings-btn-active' : ''"
-                    hx-post="/api/v1/profile/settings"
-                    hx-vals='{"tgFeedEntriesNumber":20}'
-                    hx-swap="none"
-                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'feed-btns')">20</button>
-          </div>
-        </div>
       </div>
 
     </div>

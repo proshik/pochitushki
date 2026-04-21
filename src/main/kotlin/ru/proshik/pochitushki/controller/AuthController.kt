@@ -3,6 +3,7 @@ package ru.proshik.pochitushki.controller
 import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -18,6 +19,8 @@ class AuthController(
     private val jwtService: JwtService,
     private val userService: UserService,
 ) {
+
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     @GetMapping("/login")
     fun loginPage(): String = "login"
@@ -63,14 +66,17 @@ class AuthController(
                 languageCode = request.locale.language,
             )
             response.addCookie(authCookie(jwtService.createToken(user.id)))
+            logger.info("User {} logged in (telegramId={})", user.id, userInfo.id)
             "redirect:/"
         } catch (e: Exception) {
+            logger.warn("Login failed during OIDC callback: {}", e.message, e)
             "redirect:/login?error=server"
         }
     }
 
     @GetMapping("/logout")
     fun logout(response: HttpServletResponse): String {
+        logger.debug("Logout endpoint called")
         clearCookie(response, "auth_token")
         return "redirect:/login"
     }

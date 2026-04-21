@@ -21,6 +21,7 @@ class PostService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     fun addPost(url: URL, userId: Long): Pair<Long, String?> {
+        logger.debug("User {} adding post: {}", userId, url)
         val urlString = url.toString()
         val title = loadTitle(urlString)
 
@@ -54,11 +55,13 @@ class PostService(
     }
 
     fun deletePost(postId: Long, postType: PostType) {
+        logger.debug("Deleting post {} (type={})", postId, postType)
         postDao.deletePost(postId, postType)
     }
 
     @Transactional
     fun archivePost(postId: Long): Long {
+        logger.debug("Archiving post {}", postId)
         val newId = postDao.addToArchivePost(postId)
         postDao.deletePost(postId, PostType.UNREAD)
         return newId
@@ -66,6 +69,7 @@ class PostService(
 
     @Transactional
     fun unreadPost(postId: Long): Long {
+        logger.debug("Moving post {} to unread", postId)
         val newId = postDao.addToUnreadPost(postId)
         postDao.deletePost(postId, PostType.ARCHIVE)
         return newId
@@ -80,7 +84,9 @@ class PostService(
     }
 
     fun toggleFavorite(postId: Long, postType: PostType): Boolean {
-        return postDao.toggleFavorite(postId, postType)
+        val newValue = postDao.toggleFavorite(postId, postType)
+        logger.debug("Toggled favorite for post {} (type={}), now={}", postId, postType, newValue)
+        return newValue
     }
 
     fun getPost(postId: Long, postType: PostType): PostData? {
