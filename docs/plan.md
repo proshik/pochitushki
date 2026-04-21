@@ -11,6 +11,7 @@
 | 3.7 | Export & Import доработки | ✅ Готово |
 | 4 | Web UI Foundation (без auth) | ✅ Готово |
 | 4.5 | Mobile UI | ⏳ В очереди |
+| 4.6 | Random | ⏳ В очереди |
 | 5 | Auth + защита Web | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
 | 7 | Chrome Extension | 🔮 Будущее |
@@ -265,6 +266,46 @@ DELETE /api/v1/posts/{id}
 2. Chrome DevTools → Device toolbar → iPhone SE (375×667), Pixel 7 (412×915)
 3. Убедиться: нижний таббар отображается, навигация работает, active-state корректен
 4. Десктоп (>767px): сайдбар без изменений, регрессий нет
+
+---
+
+## Фаза 4.6 — Random
+
+**Цель**: страница `/random` — показывает 8 случайных непрочитанных постов с кнопкой «Ещё 8».
+
+### Backend
+
+- [ ] `PostDao` — метод `getRandomPosts(userId, count): List<PostData>` → `ORDER BY RANDOM() LIMIT :count`
+- [ ] `PostService` — делегирующий метод `getRandomPosts(userId, count)`
+- [ ] `PostApiController` — новый endpoint:
+  ```
+  GET /api/v1/posts/random-fragment → fragments/random-list :: posts
+  ```
+  Возвращает фрагмент с 8 случайными карточками.
+- [ ] `WebController` — маршрут `/random` → `random.html`, первая порция загружается сервером
+
+### Frontend
+
+- [ ] `templates/random.html` — страница в том же layout, `nav('random')`
+- [ ] Список постов в `<div id="random-list">` — стандартные карточки `post-card :: card`
+- [ ] Кнопка «Ещё 8» (или иконка 🔀) рядом с заголовком:
+  ```html
+  hx-get="/api/v1/posts/random-fragment"
+  hx-target="#random-list"
+  hx-swap="innerHTML"
+  ```
+  Полностью заменяет список новыми 8 постами (не дозагружает, а перетасовывает).
+- [ ] Пункт «Случайные» в сайдбаре (`layout.html`) — между «Избранное» и нижним блоком
+
+### Ключевые решения
+
+- Без инфинит-скролла — только ручной рефреш
+- `ORDER BY RANDOM() LIMIT 8` — достаточно для тысяч постов, доп. индексы не нужны
+- Карточки используют тот же `post-card :: card` фрагмент — все действия (архив, фаворит, удалить) работают без изменений
+
+### Тесты
+
+- [ ] `PostDaoTest` — `getRandomPosts` возвращает правильное количество, все посты принадлежат пользователю
 
 ---
 
