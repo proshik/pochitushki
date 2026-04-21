@@ -2,7 +2,6 @@ package ru.proshik.pochitushki.configuration
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
@@ -40,7 +39,7 @@ class JwtAuthInterceptor(
         } catch (e: Exception) {
             "ru"
         }
-        LocaleContextHolder.setLocale(Locale(languageCode))
+        request.setAttribute("_userLocale", Locale(languageCode))
 
         return true
     }
