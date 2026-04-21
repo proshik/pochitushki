@@ -27,10 +27,12 @@
     :root {
       --bg: #F5F0E8; --text: #1A1714; --accent: #C0622A;
       --muted: #8B7355; --border: #DDD5C4;
+      --sidebar-bg: #EAE4D8;
     }
     html.dark {
       --bg: #1A1714; --text: #E8E0D0;
       --border: #3A3330; --muted: #8B7B6B;
+      --sidebar-bg: #211D1A;
     }
     body {
       background-color: var(--bg); color: var(--text);
@@ -249,7 +251,7 @@
   <!-- Text nav (200px) -->
   <div style="width: 200px; height: 100vh; border-right: 1px solid var(--border);
               padding: 1.25rem 1rem; position: sticky; top: 0;
-              display: flex; flex-direction: column; background: var(--bg);
+              display: flex; flex-direction: column; background: var(--sidebar-bg);
               overflow-y: auto; flex-shrink: 0;">
     <ul style="list-style: none; padding: 0; margin: 0;
                display: flex; flex-direction: column; gap: 0.1rem; flex: 1;">
@@ -257,7 +259,7 @@
         <a href="/"
            th:text="#{web.nav.unread}"
            th:style="${active == 'feed'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:#EDE8DF;color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
+             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
              : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
           Непрочитанные
         </a>
@@ -266,7 +268,7 @@
         <a href="/archive"
            th:text="#{web.nav.archive}"
            th:style="${active == 'archive'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:#EDE8DF;color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
+             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
              : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
           Архив
         </a>
@@ -275,7 +277,7 @@
         <a href="/favorites"
            th:text="#{web.nav.favorites}"
            th:style="${active == 'favorites'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:#EDE8DF;color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
+             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
              : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
           Избранное
         </a>
