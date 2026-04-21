@@ -256,6 +256,15 @@
     <ul style="list-style: none; padding: 0; margin: 0;
                display: flex; flex-direction: column; gap: 0.1rem; flex: 1;">
       <li>
+        <a href="/all"
+           th:text="#{web.nav.all}"
+           th:style="${active == 'all'}
+             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
+             : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
+          Все
+        </a>
+      </li>
+      <li>
         <a href="/"
            th:text="#{web.nav.unread}"
            th:style="${active == 'feed'}

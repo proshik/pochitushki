@@ -27,6 +27,17 @@ class WebController(
         return "feed"
     }
 
+    @GetMapping("/all")
+    fun all(@RequestAttribute("userId") userId: Long, model: Model): String {
+        val posts = postService.getPosts(userId, PostType.ALL, PAGE_SIZE, 0)
+        model.addAttribute("posts", posts)
+        model.addAttribute("pageType", PostType.ALL.value)
+        model.addAttribute("offset", posts.size)
+        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        addUserInfo(userId, model)
+        return "all"
+    }
+
     @GetMapping("/archive")
     fun archive(@RequestAttribute("userId") userId: Long, model: Model): String {
         val posts = postService.getPosts(userId, PostType.ARCHIVE, PAGE_SIZE, 0)

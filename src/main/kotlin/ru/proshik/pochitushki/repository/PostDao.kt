@@ -42,6 +42,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val (tableName, isArchived) = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> Pair("post", false)
             PostType.ARCHIVE -> Pair("archive_post", true)
+            PostType.ALL -> error("getPost does not support ALL")
         }
 
         val sql = """
@@ -57,6 +58,26 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     }
 
     fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
+        if (postType == PostType.ALL) {
+            val sql = """
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, created_date, updated_date
+                FROM post
+                WHERE user_id = :user_id
+                UNION ALL
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, created_date, updated_date
+                FROM archive_post
+                WHERE user_id = :user_id
+                ORDER BY created_date DESC OFFSET :offset LIMIT :limit
+            """.trimIndent()
+
+            val params = MapSqlParameterSource()
+                .addValue("user_id", userId)
+                .addValue("offset", offset)
+                .addValue("limit", limit)
+
+            return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
+        }
+
         if (postType == PostType.FAVORITES) {
             val sql = """
                 SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, created_date, updated_date
@@ -80,7 +101,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val (tableName, isArchived) = when (postType) {
             PostType.UNREAD -> Pair("post", false)
             PostType.ARCHIVE -> Pair("archive_post", true)
-            PostType.FAVORITES -> error("unreachable")
+            PostType.FAVORITES, PostType.ALL -> error("unreachable")
         }
 
         val sql = """
@@ -102,6 +123,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val (tableName, isArchived) = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> Pair("post", false)
             PostType.ARCHIVE -> Pair("archive_post", true)
+            PostType.ALL -> error("findPost does not support ALL")
         }
 
         val sql = """
@@ -121,6 +143,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val seqName = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "post_id_seq"
             PostType.ARCHIVE -> "archive_post_id_seq"
+            PostType.ALL -> error("getPostSequenceIds does not support ALL")
         }
 
         val sql = """
@@ -154,6 +177,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val tableName = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
+            PostType.ALL -> error("addPosts does not support ALL")
         }
 
         val sql = """
@@ -180,6 +204,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val tableName = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
+            PostType.ALL -> error("deletePost does not support ALL")
         }
 
         val sql = """
@@ -228,6 +253,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val tableName = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
+            PostType.ALL -> error("toggleFavorite does not support ALL")
         }
 
         val sql = """
@@ -259,6 +285,21 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     }
 
     fun getPostCount(userId: Long, postType: PostType): Int {
+        if (postType == PostType.ALL) {
+            val sql = """
+                SELECT count(*) FROM (
+                    SELECT id FROM post WHERE user_id = :user_id
+                    UNION ALL
+                    SELECT id FROM archive_post WHERE user_id = :user_id
+                ) sub
+            """.trimIndent()
+
+            val params = MapSqlParameterSource()
+                .addValue("user_id", userId)
+
+            return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java)!!
+        }
+
         if (postType == PostType.FAVORITES) {
             val sql = """
                 SELECT count(*) FROM (
@@ -277,7 +318,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val tableName = when (postType) {
             PostType.UNREAD -> "post"
             PostType.ARCHIVE -> "archive_post"
-            PostType.FAVORITES -> error("unreachable")
+            PostType.FAVORITES, PostType.ALL -> error("unreachable")
         }
 
         val sql = """

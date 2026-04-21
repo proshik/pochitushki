@@ -163,6 +163,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         val postTypeCode = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "u"
             PostType.ARCHIVE -> "a"
+            PostType.ALL -> error("ALL is not supported in Telegram bot")
         }
 
         val buttons = availableEngines.map { engine ->
@@ -340,6 +341,8 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                 previousCallbackAction = CALLBACK_PREVIOUS_FAVORITES
                 nextCallbackAction = CALLBACK_NEXT_FAVORITES
             }
+
+            PostType.ALL -> error("ALL is not supported in Telegram bot")
         }
 
         val navigationKeyboard = if (offset == 0 && postSize < countOfPosts) {

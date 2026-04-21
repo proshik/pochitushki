@@ -43,7 +43,8 @@ data class UserToPostData(
 enum class PostType(val value: String) {
     UNREAD("unread"),
     ARCHIVE("archive"),
-    FAVORITES("favorites");
+    FAVORITES("favorites"),
+    ALL("all");
 
     companion object {
         private val stringToType = PostType.entries.associateBy { it.name }

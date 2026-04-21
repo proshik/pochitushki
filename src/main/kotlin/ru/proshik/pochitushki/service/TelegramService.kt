@@ -375,6 +375,7 @@ class TelegramService(
                 PostType.UNREAD -> "command.feed.unread_message"
                 PostType.ARCHIVE -> "command.feed.archive_message"
                 PostType.FAVORITES -> "command.favorites.message"
+                PostType.ALL -> error("ALL is not supported in Telegram bot")
             }
 
             val text = i18nService.getMessage(messageCode, languageCode, arrayOf(countOfPosts))
