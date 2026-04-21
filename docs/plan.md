@@ -10,6 +10,7 @@
 | 3.5 | Bot UX улучшения + ImportServiceTest | ✅ Готово |
 | 3.7 | Export & Import доработки | ✅ Готово |
 | 4 | Web UI Foundation (без auth) | ✅ Готово |
+| 4.5 | Mobile UI | ⏳ В очереди |
 | 5 | Auth + защита Web | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
 | 7 | Chrome Extension | 🔮 Будущее |
@@ -214,6 +215,56 @@ DELETE /api/v1/posts/{id}
 - [x] `templates/layout.html` — базовый layout (nav + content area)
 - [x] `templates/feed.html`, `templates/archive.html`, `templates/favorites.html`, `templates/profile.html`
 - [x] `templates/fragments/post-card.html`, `post-list.html`, `add-post-form.html`
+
+---
+
+## Фаза 4.5 — Mobile UI
+
+**Цель**: адаптировать веб-интерфейс для мобильных телефонов. Текущий UI — desktop-only: фиксированный сайдбар 248px занимает 66% экрана телефона (375px), нет media queries.
+
+**Breakpoint**: `768px` — ниже этого значения включается мобильный layout.
+
+### Подход: скрыть сайдбар → нижний tab bar
+
+На мобильном:
+- Скрыть десктопный сайдбар (`display: none`)
+- Убрать `padding-left: 248px` с `body`, добавить `padding-bottom: 56px`
+- Показать **фиксированный нижний nav bar** (56px): Все / Непрочитанные / Архив / Избранное / Профиль
+- Добавить **тонкий top bar** (48px) с названием приложения и кнопкой смены темы
+
+### Изменения
+
+#### `templates/layout.html`
+- [ ] CSS: добавить `@media (max-width: 767px)` блок:
+  - `body { padding-left: 0; padding-bottom: 56px; }`
+  - `.desktop-nav { display: none; }` — скрыть сайдбар
+  - `.mobile-nav { display: flex; }` — показать нижний таббар
+  - `.mobile-top-bar { display: flex; }` — показать верхний бар
+  - `main` padding: `1rem 0.75rem` вместо `2.5rem`
+  - Grid: `minmax(265px, 1fr)` → `minmax(155px, 1fr)` (2 карточки в ряд)
+  - `.profile-grid { grid-template-columns: 1fr; }` — 1 колонка
+- [ ] Nav fragment: добавить класс `desktop-nav` к `<nav>`
+- [ ] Nav fragment: добавить `.mobile-top-bar` div (лого + кнопка темы)
+- [ ] Nav fragment: добавить `.mobile-nav` с 5 пунктами (иконка + подпись, active-state)
+- [ ] JS `toggleTheme()`: использовать `querySelectorAll('#theme-icon-rail')` вместо `getElementById`
+
+#### `templates/feed.html`, `all.html`, `archive.html`, `favorites.html`
+- [ ] Добавить класс `page-main` к `<main>` (для mobile CSS-таргетинга padding)
+
+#### `templates/profile.html`
+- [ ] Заменить inline `grid-template-columns: 1fr 1fr` классом `profile-grid`
+
+### Файлы
+- `src/main/resources/templates/layout.html` — основная работа (CSS + nav fragment)
+- `src/main/resources/templates/feed.html`, `all.html`, `archive.html`, `favorites.html`
+- `src/main/resources/templates/profile.html`
+- `src/main/resources/templates/fragments/post-card.html` — изменений нет
+
+### Проверка
+1. `docker compose up --build`
+2. Chrome DevTools → Device toolbar → iPhone SE (375×667), Pixel 7 (412×915)
+3. Убедиться: нижний таббар отображается, навигация работает, active-state корректен
+4. Десктоп (>767px): сайдбар без изменений, регрессий нет
 
 ---
 
