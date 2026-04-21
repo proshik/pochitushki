@@ -56,19 +56,11 @@ class AuthControllerTest : BaseIntegrationTest() {
 
     @Test
     fun `GET callback with valid code creates new user and sets JWT cookie`() {
-        // TelegramOidcClient uses @PostMapping("/token"), so stub at /token (not /auth/token)
         wireMockOidc.stubFor(
             post(urlEqualTo("/token"))
                 .willReturn(aResponse().withStatus(200)
                     .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .withBody("""{"access_token":"test-tok","token_type":"Bearer"}"""))
-        )
-        wireMockOidc.stubFor(
-            get(urlEqualTo("/userinfo"))
-                .withHeader("Authorization", equalTo("Bearer test-tok"))
-                .willReturn(aResponse().withStatus(200)
-                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .withBody("""{"id":99999,"first_name":"Test","username":"testuser","photo_url":null}"""))
+                    .withBody("""{"access_token":"test-tok","token_type":"Bearer","id_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MjIyMCIsImlkIjoiOTk5OTkiLCJuYW1lIjoiVGVzdCIsInByZWZlcnJlZF91c2VybmFtZSI6InRlc3R1c2VyIiwicGljdHVyZSI6bnVsbH0.fakesig"}"""))
         )
 
         val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
@@ -120,18 +112,11 @@ class AuthControllerTest : BaseIntegrationTest() {
                        '{"languageCode":"ru","tgFeedEntriesNumber":5}'::jsonb)"""
         )
 
-        // TelegramOidcClient uses @PostMapping("/token"), so stub at /token (not /auth/token)
         wireMockOidc.stubFor(
             post(urlEqualTo("/token"))
                 .willReturn(aResponse().withStatus(200)
                     .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .withBody("""{"access_token":"tok2","token_type":"Bearer"}"""))
-        )
-        wireMockOidc.stubFor(
-            get(urlEqualTo("/userinfo"))
-                .willReturn(aResponse().withStatus(200)
-                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .withBody("""{"id":88888,"first_name":"Existing","username":"existing","photo_url":null}"""))
+                    .withBody("""{"access_token":"tok2","token_type":"Bearer","id_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MjIyMCIsImlkIjoiODg4ODgiLCJuYW1lIjoiRXhpc3RpbmciLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJleGlzdGluZyIsInBpY3R1cmUiOm51bGx9.fakesig"}"""))
         )
 
         val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()

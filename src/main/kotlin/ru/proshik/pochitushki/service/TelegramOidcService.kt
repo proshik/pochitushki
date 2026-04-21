@@ -25,18 +25,17 @@ data class TelegramUserInfo(
 data class TokenResponse(
     @JsonProperty("access_token") val accessToken: String,
     @JsonProperty("token_type") val tokenType: String,
-    @JsonProperty("id_token") val idToken: String,
+    @JsonProperty("id_token") val idToken: String?,
 )
 
 @FeignClient(name = "telegram-oidc", url = "\${telegram.oauth.base-url}")
 interface TelegramOidcClient {
-    @PostMapping("/token")
+    @PostMapping("/token", consumes = ["application/x-www-form-urlencoded"])
     fun exchangeCode(@RequestBody params: LinkedMultiValueMap<String, String>): TokenResponse
 }
 
 @Service
 @EnableConfigurationProperties(TelegramOAuthProperties::class)
-@Suppress("UNCHECKED_CAST")
 class TelegramOidcService(
     private val client: TelegramOidcClient,
     private val props: TelegramOAuthProperties,
@@ -76,11 +75,21 @@ class TelegramOidcService(
         }
         val tokenResponse = client.exchangeCode(params)
 
-        val payloadJson = String(Base64.getUrlDecoder().decode(tokenResponse.idToken.split(".")[1]))
+        val rawIdToken = tokenResponse.idToken
+            ?: error("Telegram token response is missing id_token")
+        val parts = rawIdToken.split(".")
+        require(parts.size >= 3) { "Unexpected id_token format: expected 3 segments, got ${parts.size}" }
+
+        // Signature verification is intentionally skipped: the token is received directly from
+        // Telegram's token endpoint over TLS (server-to-server), so the transport guarantees integrity.
+        val payloadJson = String(Base64.getUrlDecoder().decode(parts[1]))
+        @Suppress("UNCHECKED_CAST")
         val claims = objectMapper.readValue(payloadJson, Map::class.java) as Map<String, Any?>
 
         return TelegramUserInfo(
-            id = claims["id"].toString().toLong(),
+            id = (claims["id"] as? Number)?.toLong()
+                ?: claims["id"]?.toString()?.toLongOrNull()
+                ?: error("Missing or invalid 'id' claim in id_token"),
             firstName = claims["name"] as? String,
             username = claims["preferred_username"] as? String,
             photoUrl = claims["picture"] as? String,

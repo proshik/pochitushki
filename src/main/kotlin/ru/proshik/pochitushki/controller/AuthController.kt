@@ -64,7 +64,7 @@ class AuthController(
             )
             response.addCookie(authCookie(jwtService.createToken(user.id)))
             "redirect:/"
-        } catch (e: FeignException) {
+        } catch (e: Exception) {
             "redirect:/login?error=server"
         }
     }
