@@ -55,7 +55,7 @@
       </div>
 
       <!-- Settings -->
-      <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;">
+      <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;" hx-ext="json-enc">
         <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.08em;
                     color:var(--muted); margin-bottom:1rem;">Настройки</div>
 
@@ -68,13 +68,13 @@
                     hx-post="/api/v1/profile/settings"
                     hx-vals='{"languageCode":"ru"}'
                     hx-swap="none"
-                    onclick="activateSettingBtn(this, 'lang-btns')">RU</button>
+                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'lang-btns')">RU</button>
             <button class="settings-btn"
                     th:classappend="${user.settings.languageCode == 'en'} ? ' settings-btn-active' : ''"
                     hx-post="/api/v1/profile/settings"
                     hx-vals='{"languageCode":"en"}'
                     hx-swap="none"
-                    onclick="activateSettingBtn(this, 'lang-btns')">EN</button>
+                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'lang-btns')">EN</button>
           </div>
         </div>
 
@@ -87,19 +87,19 @@
                     hx-post="/api/v1/profile/settings"
                     hx-vals='{"tgFeedEntriesNumber":5}'
                     hx-swap="none"
-                    onclick="activateSettingBtn(this, 'feed-btns')">5</button>
+                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'feed-btns')">5</button>
             <button class="settings-btn"
                     th:classappend="${user.settings.tgFeedEntriesNumber == 10} ? ' settings-btn-active' : ''"
                     hx-post="/api/v1/profile/settings"
                     hx-vals='{"tgFeedEntriesNumber":10}'
                     hx-swap="none"
-                    onclick="activateSettingBtn(this, 'feed-btns')">10</button>
+                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'feed-btns')">10</button>
             <button class="settings-btn"
                     th:classappend="${user.settings.tgFeedEntriesNumber == 20} ? ' settings-btn-active' : ''"
                     hx-post="/api/v1/profile/settings"
                     hx-vals='{"tgFeedEntriesNumber":20}'
                     hx-swap="none"
-                    onclick="activateSettingBtn(this, 'feed-btns')">20</button>
+                    hx-on--after-request="if(event.detail.successful) activateSettingBtn(this, 'feed-btns')">20</button>
           </div>
         </div>
       </div>
