@@ -29,7 +29,7 @@ class UserService(private val userDao: UserDao) {
         userDao.updateUserSettings(userId, updatedUserSettings)
     }
 
-    fun getOrCreateUser(telegramId: Long, firstName: String, username: String?, languageCode: String): UserData {
+    fun getOrCreateUser(telegramId: Long, firstName: String?, username: String?, languageCode: String): UserData {
         val existing = userDao.findUserByChatId(telegramId)
         if (existing != null) return existing
 
