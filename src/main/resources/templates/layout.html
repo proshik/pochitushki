@@ -229,9 +229,9 @@
      style="display: flex; flex-shrink: 0;">
 
   <!-- Dark icon rail (48px) -->
-  <div style="width: 48px; min-height: 100vh; background: #1A1714; position: sticky; top: 0;
+  <div style="width: 48px; height: 100vh; background: #1A1714; position: sticky; top: 0;
               display: flex; flex-direction: column; align-items: center;
-              padding: 0.75rem 0; gap: 0.25rem;">
+              padding: 0.75rem 0; gap: 0.25rem; overflow-y: auto; flex-shrink: 0;">
     <!-- Logo -->
     <a href="/" style="width: 32px; height: 32px; border-radius: 8px; background: var(--accent);
                        display: flex; align-items: center; justify-content: center;
@@ -248,9 +248,10 @@
   </div>
 
   <!-- Text nav (200px) -->
-  <div style="width: 200px; min-height: 100vh; border-right: 1px solid var(--border);
+  <div style="width: 200px; height: 100vh; border-right: 1px solid var(--border);
               padding: 1.25rem 1rem; position: sticky; top: 0;
-              display: flex; flex-direction: column; background: var(--bg);">
+              display: flex; flex-direction: column; background: var(--bg);
+              overflow-y: auto; flex-shrink: 0;">
     <div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
                 color: var(--muted); margin-bottom: 0.75rem; padding: 0 0.4rem;">Закладки</div>
     <ul style="list-style: none; padding: 0; margin: 0;
