@@ -4,29 +4,128 @@
 <body>
 <div style="display: flex; min-height: 100vh;">
   <nav th:replace="~{layout :: nav('profile')}"></nav>
-  <main style="flex: 1; padding: 2.5rem; min-width: 0;">
-    <h1 class="font-display" style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;"
-        th:text="${user.username}">username</h1>
-    <p style="color: var(--muted); margin-bottom: 2.5rem;"
-       th:text="${user.firstName != null ? user.firstName : ''}">First</p>
-    <div style="display: flex; gap: 3rem;">
-      <div>
-        <div class="font-display" style="font-size: 2.5rem; font-weight: 700;"
-             th:text="${unreadCount}">0</div>
-        <div style="color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem;">Непрочитанных</div>
+  <main style="flex: 1; padding: 2.5rem; min-width: 0; max-width: 680px;">
+
+    <!-- Account row -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 2rem;">
+      <div style="display:flex; align-items:center; gap: 1rem;">
+        <div th:text="${user.firstName != null ? #strings.substring(user.firstName, 0, 1) : '?'}"
+             style="width:52px; height:52px; border-radius:50%; background:#5288C1;
+                    display:flex; align-items:center; justify-content:center;
+                    font-size:1.3rem; font-weight:700; color:white; flex-shrink:0;"></div>
+        <div>
+          <div class="font-display" style="font-size:1.3rem; font-weight:700;"
+               th:text="${user.firstName != null ? user.firstName : user.username}">Name</div>
+          <div style="color:var(--muted); font-size:0.85rem;"
+               th:text="${user.username != null ? '@' + user.username + ' · Telegram' : 'Telegram'}">@username</div>
+        </div>
       </div>
-      <div>
-        <div class="font-display" style="font-size: 2.5rem; font-weight: 700;"
-             th:text="${archiveCount}">0</div>
-        <div style="color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem;">В архиве</div>
+      <a href="/logout"
+         style="font-size:.85rem; color:var(--muted); text-decoration:none;
+                border:1px solid var(--border); padding:.35rem .8rem;
+                border-radius:5px; white-space:nowrap;"
+         onmouseover="this.style.background='var(--border)'"
+         onmouseout="this.style.background='none'">Выйти</a>
+    </div>
+
+    <!-- Stats + Settings grid -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+
+      <!-- Stats -->
+      <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;">
+        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.08em;
+                    color:var(--muted); margin-bottom:1rem;">Статистика</div>
+        <div style="display:flex; flex-direction:column; gap:.6rem;">
+          <div>
+            <span class="font-display" style="font-size:1.4rem; font-weight:700;"
+                  th:text="${unreadCount}">0</span>
+            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;">непрочитанных</span>
+          </div>
+          <div>
+            <span class="font-display" style="font-size:1.4rem; font-weight:700;"
+                  th:text="${archiveCount}">0</span>
+            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;">в архиве</span>
+          </div>
+          <div>
+            <span class="font-display" style="font-size:1.4rem; font-weight:700;"
+                  th:text="${favoritesCount}">0</span>
+            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;">избранных</span>
+          </div>
+        </div>
       </div>
-      <div>
-        <div class="font-display" style="font-size: 2.5rem; font-weight: 700;"
-             th:text="${favoritesCount}">0</div>
-        <div style="color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem;">Избранных</div>
+
+      <!-- Settings -->
+      <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;">
+        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.08em;
+                    color:var(--muted); margin-bottom:1rem;">Настройки</div>
+
+        <!-- Language -->
+        <div style="margin-bottom:1rem;">
+          <div style="font-size:.8rem; color:var(--muted); margin-bottom:.4rem;">Язык бота</div>
+          <div id="lang-btns" style="display:flex; gap:.35rem;">
+            <button class="settings-btn"
+                    th:classappend="${user.settings.languageCode == 'ru'} ? ' settings-btn-active' : ''"
+                    hx-post="/api/v1/profile/settings"
+                    hx-vals='{"languageCode":"ru"}'
+                    hx-swap="none"
+                    onclick="activateSettingBtn(this, 'lang-btns')">RU</button>
+            <button class="settings-btn"
+                    th:classappend="${user.settings.languageCode == 'en'} ? ' settings-btn-active' : ''"
+                    hx-post="/api/v1/profile/settings"
+                    hx-vals='{"languageCode":"en"}'
+                    hx-swap="none"
+                    onclick="activateSettingBtn(this, 'lang-btns')">EN</button>
+          </div>
+        </div>
+
+        <!-- Feed count -->
+        <div>
+          <div style="font-size:.8rem; color:var(--muted); margin-bottom:.4rem;">Записей в ленте бота</div>
+          <div id="feed-btns" style="display:flex; gap:.35rem;">
+            <button class="settings-btn"
+                    th:classappend="${user.settings.tgFeedEntriesNumber == 5} ? ' settings-btn-active' : ''"
+                    hx-post="/api/v1/profile/settings"
+                    hx-vals='{"tgFeedEntriesNumber":5}'
+                    hx-swap="none"
+                    onclick="activateSettingBtn(this, 'feed-btns')">5</button>
+            <button class="settings-btn"
+                    th:classappend="${user.settings.tgFeedEntriesNumber == 10} ? ' settings-btn-active' : ''"
+                    hx-post="/api/v1/profile/settings"
+                    hx-vals='{"tgFeedEntriesNumber":10}'
+                    hx-swap="none"
+                    onclick="activateSettingBtn(this, 'feed-btns')">10</button>
+            <button class="settings-btn"
+                    th:classappend="${user.settings.tgFeedEntriesNumber == 20} ? ' settings-btn-active' : ''"
+                    hx-post="/api/v1/profile/settings"
+                    hx-vals='{"tgFeedEntriesNumber":20}'
+                    hx-swap="none"
+                    onclick="activateSettingBtn(this, 'feed-btns')">20</button>
+          </div>
+        </div>
       </div>
+
     </div>
   </main>
 </div>
+
+<style>
+  .settings-btn {
+    padding: .25rem .7rem; border-radius: 5px; font-size: .85rem;
+    border: 1px solid var(--border); background: none;
+    color: var(--muted); cursor: pointer; font-family: inherit;
+    transition: background .1s, color .1s;
+  }
+  .settings-btn:hover { background: var(--border); color: var(--text); }
+  .settings-btn-active { background: var(--accent) !important; color: white !important; border-color: var(--accent) !important; }
+</style>
+
+<script>
+  function activateSettingBtn(btn, groupId) {
+    document.getElementById(groupId).querySelectorAll('.settings-btn').forEach(function(b) {
+      b.classList.remove('settings-btn-active');
+    });
+    btn.classList.add('settings-btn-active');
+  }
+</script>
 </body>
 </html>
