@@ -207,11 +207,51 @@
       if (mode === 'grid') initOgImages();
     }
 
+    /* ── Infinite scroll ── */
+    function initScrollSentinel() {
+      var sentinel = document.querySelector('.load-more-sentinel:not([data-sentinel-init])');
+      if (!sentinel) return;
+      sentinel.setAttribute('data-sentinel-init', '1');
+
+      function doLoad() {
+        if (sentinel.dataset.loading) return;
+        sentinel.dataset.loading = '1';
+        htmx.ajax('GET', sentinel.dataset.url, { target: '#post-list', swap: 'beforeend' })
+          .then(function () { sentinel.remove(); })
+          .catch(function () {
+            delete sentinel.dataset.loading;
+            sentinel.removeAttribute('data-sentinel-init');
+          });
+      }
+
+      var observer = new IntersectionObserver(function (entries, obs) {
+        if (!entries[0].isIntersecting) return;
+        var userScrolled = window.scrollY > 50;
+        var pageShort    = document.body.scrollHeight <= window.innerHeight + 100;
+        if (userScrolled || pageShort) {
+          obs.disconnect();
+          doLoad();
+        } else {
+          /* sentinel is already visible but user hasn't scrolled — wait for real scroll */
+          obs.disconnect();
+          window.addEventListener('scroll', function onScroll() {
+            if (sentinel.getBoundingClientRect().top < window.innerHeight) {
+              window.removeEventListener('scroll', onScroll);
+              doLoad();
+            }
+          }, { passive: true });
+        }
+      }, { threshold: 0.1 });
+
+      observer.observe(sentinel);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
       var icon = document.getElementById('theme-icon-rail');
       if (icon) icon.textContent = document.documentElement.classList.contains('dark') ? '🌙' : '☀️';
       initFavicons();
       setViewMode(localStorage.getItem('pochitushki-view') || 'list');
+      initScrollSentinel();
     });
 
     document.addEventListener('htmx:afterSwap', function (e) {
@@ -225,6 +265,7 @@
       if (postList && postList.classList.contains('view-grid')) {
         initOgImages(root);
       }
+      initScrollSentinel();
     });
   </script>
 </head>
