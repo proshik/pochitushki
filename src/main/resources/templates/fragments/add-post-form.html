@@ -6,7 +6,8 @@
       hx-post="/api/v1/posts"
       hx-target="#post-list"
       hx-swap="afterbegin"
-      hx-on--after-request="if(event.detail.successful) this.reset()"
+      hx-on--before-request="this._url=this.querySelector('input').value; this.querySelector('input').value=''; this.querySelector('input').disabled=true; this.querySelector('button').disabled=true;"
+      hx-on--after-request="var inp=this.querySelector('input'); var btn=this.querySelector('button'); if(!event.detail.successful){inp.value=this._url;} inp.disabled=false; btn.disabled=false; inp.focus();"
       style="display: flex; gap: 0.75rem; margin-bottom: 2rem;">
   <input type="url"
          name="url"

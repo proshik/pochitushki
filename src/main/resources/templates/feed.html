@@ -13,7 +13,7 @@
       </div>
     </div>
     <div th:replace="~{fragments/add-post-form :: form}"></div>
-    <div id="post-list">
+    <div id="post-list" th:classappend="${viewMode == 'grid' ? 'view-grid' : ''}"
       <div th:replace="~{fragments/post-list :: posts(${posts}, ${pageType}, ${offset}, ${hasMore})}"></div>
     </div>
   </main>

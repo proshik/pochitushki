@@ -204,6 +204,7 @@
       document.getElementById('view-list-btn')?.classList.toggle('active', mode === 'list');
       document.getElementById('view-grid-btn')?.classList.toggle('active', mode === 'grid');
       localStorage.setItem('pochitushki-view', mode);
+      document.cookie = 'pochitushki-view=' + mode + '; path=/; max-age=31536000; SameSite=Lax';
       if (mode === 'grid') initOgImages();
     }
 
@@ -245,7 +246,12 @@
       var icon = document.getElementById('theme-icon-rail');
       if (icon) icon.textContent = document.documentElement.classList.contains('dark') ? '🌙' : '☀️';
       initFavicons();
-      setViewMode(localStorage.getItem('pochitushki-view') || 'list');
+      /* view-grid class is already applied server-side from cookie — only sync button states */
+      var postList = document.getElementById('post-list');
+      var mode = postList && postList.classList.contains('view-grid') ? 'grid' : 'list';
+      document.getElementById('view-list-btn')?.classList.toggle('active', mode === 'list');
+      document.getElementById('view-grid-btn')?.classList.toggle('active', mode === 'grid');
+      if (mode === 'grid') initOgImages();
       initScrollSentinel();
     });
 

@@ -2,6 +2,7 @@ package ru.proshik.pochitushki.controller
 
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.web.bind.annotation.CookieValue
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestAttribute
 import org.springframework.dao.DataAccessException
@@ -17,54 +18,66 @@ class WebController(
 ) {
 
     @GetMapping("/")
-    fun feed(@RequestAttribute("userId") userId: Long, model: Model): String {
+    fun feed(
+        @RequestAttribute("userId") userId: Long,
+        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        model: Model
+    ): String {
         val posts = postService.getPosts(userId, PostType.UNREAD, PAGE_SIZE, 0)
-
         model.addAttribute("posts", posts)
         model.addAttribute("pageType", PostType.UNREAD.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute("viewMode", viewMode)
         addUserInfo(userId, model)
-
         return "feed"
     }
 
     @GetMapping("/all")
-    fun all(@RequestAttribute("userId") userId: Long, model: Model): String {
+    fun all(
+        @RequestAttribute("userId") userId: Long,
+        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        model: Model
+    ): String {
         val posts = postService.getPosts(userId, PostType.ALL, PAGE_SIZE, 0)
-
         model.addAttribute("posts", posts)
         model.addAttribute("pageType", PostType.ALL.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute("viewMode", viewMode)
         addUserInfo(userId, model)
-
         return "all"
     }
 
     @GetMapping("/archive")
-    fun archive(@RequestAttribute("userId") userId: Long, model: Model): String {
+    fun archive(
+        @RequestAttribute("userId") userId: Long,
+        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        model: Model
+    ): String {
         val posts = postService.getPosts(userId, PostType.ARCHIVE, PAGE_SIZE, 0)
-
         model.addAttribute("posts", posts)
         model.addAttribute("pageType", PostType.ARCHIVE.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute("viewMode", viewMode)
         addUserInfo(userId, model)
-
         return "archive"
     }
 
     @GetMapping("/favorites")
-    fun favorites(@RequestAttribute("userId") userId: Long, model: Model): String {
+    fun favorites(
+        @RequestAttribute("userId") userId: Long,
+        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        model: Model
+    ): String {
         val posts = postService.getPosts(userId, PostType.FAVORITES, PAGE_SIZE, 0)
-
         model.addAttribute("posts", posts)
         model.addAttribute("pageType", PostType.FAVORITES.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute("viewMode", viewMode)
         addUserInfo(userId, model)
-
         return "favorites"
     }
 
