@@ -130,8 +130,10 @@ class PostApiController(private val postService: PostService) {
         @RequestParam(defaultValue = "unread") type: String
     ): ResponseEntity<Map<String, String>> {
         val postType = PostType.entries.firstOrNull { it.value == type } ?: PostType.UNREAD
+
         val post = postService.getPost(id, postType)
             ?: return ResponseEntity.notFound().build()
+
         return try {
             val doc = Jsoup.connect(post.url).timeout(5000).get()
             val ogImage = doc.select("meta[property=og:image]").attr("content").takeIf { it.isNotBlank() }

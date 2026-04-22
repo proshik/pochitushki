@@ -35,7 +35,9 @@ class ProfileApiController(private val userService: UserService) {
             languageCode = patch.languageCode ?: current.languageCode,
             tgFeedEntriesNumber = patch.tgFeedEntriesNumber ?: current.tgFeedEntriesNumber,
         )
+
         userService.updateUserSettings(userId, updated)
+
         return ResponseEntity.ok().build()
     }
 }

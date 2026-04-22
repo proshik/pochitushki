@@ -15,6 +15,7 @@ class JwtService(private val jwtProperties: JwtProperties) {
 
     private val signingKey by lazy {
         val keyBytes = Base64.getDecoder().decode(jwtProperties.secret)
+
         SecretKeySpec(keyBytes, "HmacSHA256")
     }
 

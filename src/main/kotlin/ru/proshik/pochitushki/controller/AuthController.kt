@@ -77,7 +77,9 @@ class AuthController(
     @GetMapping("/logout")
     fun logout(response: HttpServletResponse): String {
         logger.debug("Logout endpoint called")
+
         clearCookie(response, "auth_token")
+
         return "redirect:/login"
     }
 

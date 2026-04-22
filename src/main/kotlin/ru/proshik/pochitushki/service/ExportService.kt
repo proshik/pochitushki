@@ -58,6 +58,7 @@ class ExportService(
         }
 
         logger.info("export: ZIP created for userId={}, posts={}", userId, allPosts.size)
+
         return file
     }
 
@@ -77,6 +78,7 @@ class ExportService(
                 printer.printRecord(post.title, post.url, timeAdded, tags, status, post.isFavorite)
             }
         }
+
         return out.toByteArray()
     }
 }

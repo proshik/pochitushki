@@ -77,7 +77,7 @@
        become direct grid items. :not(.post-card) prevents the rule from matching
        cards inserted directly by HTMX afterbegin (which are already at depth 1). */
     #post-list.view-grid > div:not(.post-card),
-    #post-list.view-grid > div:not(.post-card) > div { display: contents; }
+    #post-list.view-grid > div:not(.post-card) > div:not(.load-more-sentinel) { display: contents; }
     .view-grid .post-card { display: flex; flex-direction: column; padding: 0; border-bottom: none; }
     .view-grid .card-list-view { display: none; }
     .view-grid .card-grid-view { display: flex; flex-direction: column; flex: 1; }

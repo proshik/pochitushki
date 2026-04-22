@@ -25,6 +25,7 @@ class TelegramController(private val botProvider: BotProvider) {
     @PostMapping("/\${telegram.token}")
     suspend fun processUpdate(@RequestBody data: String) {
         botProvider.getBot().processUpdate(data)
+
         logger.debug("Processed Telegram update: {}", data)
     }
 }

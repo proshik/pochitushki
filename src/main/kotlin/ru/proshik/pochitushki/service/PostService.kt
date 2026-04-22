@@ -22,6 +22,7 @@ class PostService(
 
     fun addPost(url: URL, userId: Long): Pair<Long, String?> {
         logger.debug("User {} adding post: {}", userId, url)
+
         val urlString = url.toString()
         val title = loadTitle(urlString)
 
