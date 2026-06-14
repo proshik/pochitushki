@@ -294,7 +294,10 @@ class TelegramService(
             logger.warn("favoritesToArchive: post not found postId={}", postId)
             return
         }
-        val newArchiveId = postService.archivePost(postId, user.id)
+        val newArchiveId = postService.archivePost(postId, user.id) ?: run {
+            logger.warn("favoritesToArchive: post not owned/found postId={}", postId)
+            return
+        }
         val messageText = buildPostMessage(post.url, post.title)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newArchiveId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = true)
         editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
@@ -308,7 +311,10 @@ class TelegramService(
             logger.warn("favoritesToUnread: post not found postId={}", postId)
             return
         }
-        val newUnreadId = postService.unreadPost(postId, user.id)
+        val newUnreadId = postService.unreadPost(postId, user.id) ?: run {
+            logger.warn("favoritesToUnread: post not owned/found postId={}", postId)
+            return
+        }
         val messageText = buildPostMessage(post.url, post.title)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newUnreadId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = false)
         editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
@@ -467,7 +473,10 @@ class TelegramService(
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType)
+        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType) ?: run {
+            logger.warn("toggleFavorite: post not owned/found postId={}", postId)
+            return
+        }
         val post = postService.getPost(postId, user.id, postType)
         if (post == null) {
             logger.warn("toggleFavorite: post not found postId={}", postId)
@@ -493,7 +502,10 @@ class TelegramService(
         logger.debug("toggleFavoriteFromFavorites: chatId={}, postId={}, postType={}", chatId, postId, postType)
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType)
+        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType) ?: run {
+            logger.warn("toggleFavoriteFromFavorites: post not owned/found postId={}", postId)
+            return
+        }
 
         if (!newIsFavorite) {
             // Post removed from favorites — delete the card from the list
@@ -517,7 +529,10 @@ class TelegramService(
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        val newIsFavorite = postService.toggleFavorite(postId, user.id, PostType.UNREAD)
+        val newIsFavorite = postService.toggleFavorite(postId, user.id, PostType.UNREAD) ?: run {
+            logger.warn("toggleFavoriteForRandomPost: post not owned/found postId={}", postId)
+            return
+        }
         val post = postService.getPost(postId, user.id, PostType.UNREAD)
         if (post == null) {
             logger.warn("toggleFavoriteForRandomPost: post not found postId={}", postId)

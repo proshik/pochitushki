@@ -171,7 +171,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("url", post.url)
             .addValue("user_id", post.userId)
 
-        return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)!!
+        return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)
+            ?: error("addPost: INSERT did not return an id")
     }
 
     fun addPosts(posts: List<PostStoreDataWithId>, postType: PostType) {
@@ -221,7 +222,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         return namedParameterJdbcTemplate.update(sql, params)
     }
 
-    fun addToArchivePost(postId: Long, userId: Long): Long {
+    // Returns the new archive-post id, or null if no matching unread post is owned by the user.
+    fun addToArchivePost(postId: Long, userId: Long): Long? {
         val sql = """
             INSERT INTO archive_post(title, url, tags, user_id, is_favorite)
             SELECT title, url, tags, user_id, is_favorite
@@ -234,10 +236,13 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("post_id", postId)
             .addValue("user_id", userId)
 
-        return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)!!
+        return DataAccessUtils.singleResult(
+            namedParameterJdbcTemplate.query(sql, params) { rs, _ -> rs.getLong("id") }
+        )
     }
 
-    fun addToUnreadPost(postId: Long, userId: Long): Long {
+    // Returns the new unread-post id, or null if no matching archive post is owned by the user.
+    fun addToUnreadPost(postId: Long, userId: Long): Long? {
         val sql = """
             INSERT INTO post(title, url, tags, user_id, is_favorite)
             SELECT title, url, tags, user_id, is_favorite
@@ -250,10 +255,13 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("post_id", postId)
             .addValue("user_id", userId)
 
-        return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)!!
+        return DataAccessUtils.singleResult(
+            namedParameterJdbcTemplate.query(sql, params) { rs, _ -> rs.getLong("id") }
+        )
     }
 
-    fun toggleFavorite(postId: Long, userId: Long, postType: PostType): Boolean {
+    // Returns the new is_favorite value, or null if no matching post is owned by the user.
+    fun toggleFavorite(postId: Long, userId: Long, postType: PostType): Boolean? {
         val tableName = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
@@ -271,7 +279,9 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("post_id", postId)
             .addValue("user_id", userId)
 
-        return namedParameterJdbcTemplate.queryForObject(sql, params, Boolean::class.java)!!
+        return DataAccessUtils.singleResult(
+            namedParameterJdbcTemplate.query(sql, params) { rs, _ -> rs.getBoolean("is_favorite") }
+        )
     }
 
     fun getRandomPost(userId: Long): PostData? {
@@ -302,7 +312,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             val params = MapSqlParameterSource()
                 .addValue("user_id", userId)
 
-            return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java)!!
+            return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java) ?: 0
         }
 
         if (postType == PostType.FAVORITES) {
@@ -317,7 +327,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             val params = MapSqlParameterSource()
                 .addValue("user_id", userId)
 
-            return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java)!!
+            return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java) ?: 0
         }
 
         val tableName = when (postType) {
@@ -335,6 +345,6 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val params = MapSqlParameterSource()
             .addValue("user_id", userId)
 
-        return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java)!!
+        return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java) ?: 0
     }
 }

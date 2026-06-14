@@ -62,10 +62,10 @@ class PostServiceTest : BaseIntegrationTest() {
         val postId = postDao.addPost(PostStoreData("Title", "https://example.com", userId))
 
         val first = postService.toggleFavorite(postId, userId, PostType.UNREAD)
-        assertTrue(first)
+        assertTrue(first!!)
 
         val second = postService.toggleFavorite(postId, userId, PostType.UNREAD)
-        assertFalse(second)
+        assertFalse(second!!)
     }
 
     @Test

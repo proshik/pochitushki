@@ -4,7 +4,6 @@ import java.io.IOException
 import java.net.MalformedURLException
 import java.net.URL
 import org.jsoup.Jsoup
-import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Controller
@@ -79,11 +78,8 @@ class PostApiController(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
     ): ResponseEntity<Void> {
-        try {
-            postService.archivePost(id, userId)
-        } catch (e: EmptyResultDataAccessException) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
-        }
+        postService.archivePost(id, userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         return ResponseEntity.ok().build()
     }
 
@@ -92,11 +88,8 @@ class PostApiController(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
     ): ResponseEntity<Void> {
-        try {
-            postService.unreadPost(id, userId)
-        } catch (e: EmptyResultDataAccessException) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
-        }
+        postService.unreadPost(id, userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         return ResponseEntity.ok().build()
     }
 
@@ -109,11 +102,8 @@ class PostApiController(
     ): String {
         val postType = PostType.entries.firstOrNull { it.value == type }
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown post type: $type")
-        try {
-            postService.toggleFavorite(id, userId, postType)
-        } catch (e: EmptyResultDataAccessException) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
-        }
+        postService.toggleFavorite(id, userId, postType)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         val post = postService.getPost(id, userId, postType)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         model.addAttribute("post", post)

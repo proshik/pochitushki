@@ -66,18 +66,20 @@ class PostService(
         return postDao.deletePost(postId, userId, postType)
     }
 
+    /** Returns the new archive-post id, or null if the user has no such unread post. */
     @Transactional
-    fun archivePost(postId: Long, userId: Long): Long {
+    fun archivePost(postId: Long, userId: Long): Long? {
         logger.debug("Archiving post {} for user {}", postId, userId)
-        val newId = postDao.addToArchivePost(postId, userId)
+        val newId = postDao.addToArchivePost(postId, userId) ?: return null
         postDao.deletePost(postId, userId, PostType.UNREAD)
         return newId
     }
 
+    /** Returns the new unread-post id, or null if the user has no such archive post. */
     @Transactional
-    fun unreadPost(postId: Long, userId: Long): Long {
+    fun unreadPost(postId: Long, userId: Long): Long? {
         logger.debug("Moving post {} to unread for user {}", postId, userId)
-        val newId = postDao.addToUnreadPost(postId, userId)
+        val newId = postDao.addToUnreadPost(postId, userId) ?: return null
         postDao.deletePost(postId, userId, PostType.ARCHIVE)
         return newId
     }
@@ -90,7 +92,8 @@ class PostService(
         return postDao.getPostCount(userId, postType)
     }
 
-    fun toggleFavorite(postId: Long, userId: Long, postType: PostType): Boolean {
+    /** Returns the new favorite flag, or null if the user has no such post. */
+    fun toggleFavorite(postId: Long, userId: Long, postType: PostType): Boolean? {
         val newValue = postDao.toggleFavorite(postId, userId, postType)
         logger.debug("Toggled favorite for post {} user {} (type={}), now={}", postId, userId, postType, newValue)
         return newValue

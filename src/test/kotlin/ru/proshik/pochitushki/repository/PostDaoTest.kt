@@ -58,13 +58,13 @@ class PostDaoTest : BaseIntegrationTest() {
         val postId = postDao.addPost(PostStoreData("Test Title", "https://example.com", userId))
 
         val afterFirstToggle = postDao.toggleFavorite(postId, userId, PostType.UNREAD)
-        assertTrue(afterFirstToggle)
+        assertTrue(afterFirstToggle!!)
 
         val post = postDao.getPost(postId, userId, PostType.UNREAD)
         assertTrue(post!!.isFavorite)
 
         val afterSecondToggle = postDao.toggleFavorite(postId, userId, PostType.UNREAD)
-        assertFalse(afterSecondToggle)
+        assertFalse(afterSecondToggle!!)
 
         val postAfterSecond = postDao.getPost(postId, userId, PostType.UNREAD)
         assertFalse(postAfterSecond!!.isFavorite)
@@ -146,7 +146,7 @@ class PostDaoTest : BaseIntegrationTest() {
         )!!
 
         val newState = postDao.toggleFavorite(archivePostId, userId, PostType.ARCHIVE)
-        assertTrue(newState)
+        assertTrue(newState!!)
 
         val archivePost = postDao.getPost(archivePostId, userId, PostType.ARCHIVE)
         assertTrue(archivePost!!.isFavorite)
