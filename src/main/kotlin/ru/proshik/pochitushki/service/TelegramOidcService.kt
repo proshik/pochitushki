@@ -86,6 +86,19 @@ class TelegramOidcService(
         @Suppress("UNCHECKED_CAST")
         val claims = objectMapper.readValue(payloadJson, Map::class.java) as Map<String, Any?>
 
+        // Defense-in-depth claim checks (signature is not verified — see note above). Each claim
+        // is enforced only when present, since this nonstandard Telegram OIDC may omit some.
+        val now = java.time.Instant.now().epochSecond
+        (claims["exp"] as? Number)?.let {
+            require(it.toLong() > now) { "id_token has expired" }
+        }
+        (claims["aud"] as? String)?.let {
+            require(it == props.clientId) { "id_token aud mismatch (expected ${props.clientId})" }
+        }
+        (claims["iss"] as? String)?.let {
+            require(it.contains("telegram", ignoreCase = true)) { "id_token iss mismatch: $it" }
+        }
+
         return TelegramUserInfo(
             id = (claims["id"] as? Number)?.toLong()
                 ?: claims["id"]?.toString()?.toLongOrNull()

@@ -14,6 +14,8 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import ru.proshik.pochitushki.BaseIntegrationTest
+import java.time.Instant
+import java.util.Base64
 
 @AutoConfigureMockMvc
 class AuthControllerTest : BaseIntegrationTest() {
@@ -178,6 +180,40 @@ class AuthControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `GET callback rejects expired id_token`() {
+        val past = Instant.now().epochSecond - 3600
+        stubTokenWithIdToken(fakeIdToken("""{"id":"55501","name":"T","preferred_username":"t","exp":$past}"""))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55501))
+    }
+
+    @Test
+    fun `GET callback rejects id_token with wrong aud`() {
+        val future = Instant.now().epochSecond + 3600
+        stubTokenWithIdToken(fakeIdToken("""{"id":"55502","name":"T","preferred_username":"t","exp":$future,"aud":"someone-else"}"""))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55502))
+    }
+
+    @Test
+    fun `GET callback accepts id_token with valid exp and aud`() {
+        val future = Instant.now().epochSecond + 3600
+        stubTokenWithIdToken(fakeIdToken("""{"id":"55503","name":"T","preferred_username":"t","exp":$future,"aud":"test-client-id"}"""))
+
+        val (location, cookie) = runCallback()
+
+        assertEquals("/", location)
+        assertNotNull(cookie)
+        assertEquals(1, userCount(55503))
+    }
+
+    @Test
     fun `GET logout clears auth cookie and redirects to login`() {
         val result = mockMvc.perform(get("/logout").with(withAuth(1L)))
             .andExpect(status().is3xxRedirection)
@@ -187,4 +223,42 @@ class AuthControllerTest : BaseIntegrationTest() {
         val authCookie = result.response.cookies.firstOrNull { it.name == "auth_token" }
         assertTrue(authCookie == null || authCookie.maxAge == 0, "auth_token cookie должен быть удалён")
     }
+
+    // --- Helpers for id_token claim-validation tests ---
+
+    private fun fakeIdToken(payloadJson: String): String {
+        fun b64(s: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(s.toByteArray())
+        return "${b64("""{"alg":"RS256","typ":"JWT"}""")}.${b64(payloadJson)}.fakesig"
+    }
+
+    private fun stubTokenWithIdToken(idToken: String) {
+        wireMockOidc.stubFor(
+            post(urlEqualTo("/token")).willReturn(
+                aResponse().withStatus(200)
+                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                    .withBody("""{"access_token":"tok","token_type":"Bearer","id_token":"$idToken"}""")
+            )
+        )
+    }
+
+    /** Drives the full OIDC init + callback and returns (redirect location, auth_token value?). */
+    private fun runCallback(): Pair<String?, String?> {
+        val init = mockMvc.perform(get("/auth/telegram")).andReturn()
+        val state = init.response.cookies.first { it.name == "oidc_state" }
+        val verifier = init.response.cookies.first { it.name == "oidc_code_verifier" }
+
+        val result = mockMvc.perform(
+            get("/auth/telegram/callback")
+                .param("code", "test-code")
+                .param("state", state.value)
+                .cookie(state)
+                .cookie(verifier)
+        ).andReturn()
+
+        return result.response.getHeader("Location") to
+            result.response.cookies.firstOrNull { it.name == "auth_token" }?.value
+    }
+
+    private fun userCount(telegramId: Long): Int =
+        jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users WHERE telegram_id = ?", Int::class.java, telegramId)!!
 }
