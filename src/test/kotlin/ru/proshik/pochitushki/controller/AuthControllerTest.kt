@@ -89,6 +89,34 @@ class AuthControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `GET callback sets auth_token cookie with SameSite Lax, HttpOnly and Secure`() {
+        wireMockOidc.stubFor(
+            post(urlEqualTo("/token"))
+                .willReturn(aResponse().withStatus(200)
+                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                    .withBody("""{"access_token":"test-tok","token_type":"Bearer","id_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MjIyMCIsImlkIjoiOTk5OTkiLCJuYW1lIjoiVGVzdCIsInByZWZlcnJlZF91c2VybmFtZSI6InRlc3R1c2VyIiwicGljdHVyZSI6bnVsbH0.fakesig"}"""))
+        )
+
+        val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
+        val stateCookie = initResult.response.cookies.first { it.name == "oidc_state" }
+        val verifierCookie = initResult.response.cookies.first { it.name == "oidc_code_verifier" }
+
+        val callbackResult = mockMvc.perform(
+            get("/auth/telegram/callback")
+                .param("code", "test-code")
+                .param("state", stateCookie.value)
+                .cookie(stateCookie)
+                .cookie(verifierCookie)
+        ).andReturn()
+
+        val authSetCookie = callbackResult.response.getHeaders("Set-Cookie")
+            .first { it.startsWith("auth_token=") }
+        assertTrue(authSetCookie.contains("SameSite=Lax"), "auth_token должен иметь SameSite=Lax: $authSetCookie")
+        assertTrue(authSetCookie.contains("HttpOnly"), "auth_token должен быть HttpOnly: $authSetCookie")
+        assertTrue(authSetCookie.contains("Secure"), "auth_token должен быть Secure: $authSetCookie")
+    }
+
+    @Test
     fun `GET callback with wrong state redirects to login with error=state`() {
         val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
         val verifierCookie = initResult.response.cookies.first { it.name == "oidc_code_verifier" }

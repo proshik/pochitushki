@@ -1,9 +1,10 @@
 package ru.proshik.pochitushki.controller
 
-import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
+import org.springframework.http.ResponseCookie
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -31,8 +32,8 @@ class AuthController(
         val codeVerifier = telegramOidcService.generateCodeVerifier()
         val codeChallenge = telegramOidcService.computeCodeChallenge(codeVerifier)
 
-        response.addCookie(shortLivedCookie("oidc_state", state, 300))
-        response.addCookie(shortLivedCookie("oidc_code_verifier", codeVerifier, 300))
+        addCookie(response, shortLivedCookie("oidc_state", state, 300))
+        addCookie(response, shortLivedCookie("oidc_code_verifier", codeVerifier, 300))
 
         return "redirect:${telegramOidcService.buildAuthorizationUrl(state, codeChallenge)}"
     }
@@ -65,7 +66,7 @@ class AuthController(
                 username = userInfo.username,
                 languageCode = request.locale.language,
             )
-            response.addCookie(authCookie(jwtService.createToken(user.id)))
+            addCookie(response, authCookie(jwtService.createToken(user.id)))
             logger.info("User {} logged in (telegramId={})", user.id, userInfo.id)
             "redirect:/"
         } catch (e: Exception) {
@@ -83,12 +84,26 @@ class AuthController(
         return "redirect:/login"
     }
 
+    // SameSite=Lax is the CSRF defense for cookie-based auth: the browser won't attach
+    // these cookies to cross-site state-changing requests (e.g. an attacker's auto-submitted form).
+    private fun baseCookie(name: String, value: String, maxAgeSeconds: Long): ResponseCookie =
+        ResponseCookie.from(name, value)
+            .httpOnly(true)
+            .secure(true)
+            .path("/")
+            .maxAge(maxAgeSeconds)
+            .sameSite("Lax")
+            .build()
+
     private fun shortLivedCookie(name: String, value: String, maxAgeSeconds: Int) =
-        Cookie(name, value).apply { isHttpOnly = true; secure = true; path = "/"; maxAge = maxAgeSeconds }
+        baseCookie(name, value, maxAgeSeconds.toLong())
 
     private fun authCookie(jwt: String) =
-        Cookie("auth_token", jwt).apply { isHttpOnly = true; secure = true; path = "/"; maxAge = 7 * 24 * 60 * 60 }
+        baseCookie("auth_token", jwt, 7L * 24 * 60 * 60)
+
+    private fun addCookie(response: HttpServletResponse, cookie: ResponseCookie) =
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString())
 
     private fun clearCookie(response: HttpServletResponse, name: String) =
-        response.addCookie(Cookie(name, "").apply { isHttpOnly = true; secure = true; path = "/"; maxAge = 0 })
+        addCookie(response, baseCookie(name, "", 0))
 }
