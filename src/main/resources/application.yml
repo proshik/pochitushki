@@ -58,4 +58,6 @@ logging:
 jwt:
   # No default: the app must fail fast if JWT_SECRET is not provided (≥32 bytes, base64).
   secret: ${JWT_SECRET}
-  ttl-days: 7
+  # Short-lived: a stolen/forgotten token (logout can't revoke a stateless JWT) stays valid
+  # for at most this long. The auth_token cookie max-age is derived from the same value.
+  ttl-days: 1
