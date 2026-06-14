@@ -51,6 +51,9 @@ class TelegramBotConfiguration(
                 webhook {
                     url = telegramProperties.webhookUrl
                     allowedUpdates = listOf("message")
+                    // Telegram echoes this back in the X-Telegram-Bot-Api-Secret-Token header
+                    // so the webhook endpoint can authenticate that updates really come from Telegram.
+                    telegramProperties.webhookSecret?.takeIf { it.isNotBlank() }?.let { secretToken = it }
                 }
             }
         }

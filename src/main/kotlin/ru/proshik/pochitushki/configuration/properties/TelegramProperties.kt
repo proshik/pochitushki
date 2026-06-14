@@ -28,4 +28,9 @@ data class TelegramProperties(
      * Base URL для Telegram Bot API. Оставляем дефолт, но переопределяется в тестах для подмены через WireMock.
      */
     val apiUrl: String = "https://api.telegram.org/",
+    /**
+     * Секрет, который Telegram присылает в заголовке X-Telegram-Bot-Api-Secret-Token при вызове webhook.
+     * Если задан — webhook-запросы без совпадающего заголовка отклоняются. Пусто => проверка выключена.
+     */
+    val webhookSecret: String? = null,
 )
