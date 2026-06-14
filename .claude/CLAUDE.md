@@ -2,8 +2,10 @@
 
 ## Overview
 
-Read-it-later сервис на Kotlin + Spring Boot. Пользователи сохраняют ссылки через Telegram-бота.
-Веб-интерфейс и аутентификация планируются (реализация в разработке).
+Read-it-later сервис на Kotlin + Spring Boot. Пользователи сохраняют ссылки
+через Telegram-бота и через веб-интерфейс. Реализованы: веб-UI на Thymeleaf,
+аутентификация через Telegram OIDC/OAuth (PKCE) + JWT, экспорт/импорт постов
+(Pocket CSV), избранное и генерация PDF из ссылок.
 
 ## Build & Run
 
@@ -11,32 +13,61 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 ./gradlew build          # Сборка
 ./gradlew test           # Тесты (поднимает PostgreSQL через TestContainers)
 ./gradlew bootJar        # Собрать JAR
-docker compose up --build  # Запустить с базой
+./gradlew bootRun        # Запустить локально (нужен PostgreSQL на localhost:5432)
 ```
+
+В репозитории есть только `Dockerfile` (compose-файла нет). PostgreSQL для
+локального запуска поднимается отдельно.
+
+### Required env vars
+
+| Переменная | Назначение |
+|------------|-----------|
+| `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` | Telegram OAuth-приложение |
+| `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка |
+| `JWT_SECRET` | Подпись JWT (≥32 байт base64; по умолчанию dev-заглушка) |
 
 ## Architecture
 
 **Слои**: Controller → Service → Repository (DAO) → PostgreSQL
 **БД**: PostgreSQL 16, Spring JDBC + NamedParameterJdbcTemplate (без ORM), миграции Liquibase
 **Telegram**: поддержка polling и webhook, через kotlin-telegram-bot
+**Web**: Thymeleaf-страницы (`feed/all/archive/favorites/profile/login`) + HTML-фрагменты
+**Auth**: Telegram OIDC/OAuth + JWT в cookie `auth_token`; `JwtAuthInterceptor`
+кладёт `userId` в request-атрибут и защищает `/`, `/all`, `/archive`,
+`/favorites`, `/profile`, `/api/v1/**` (см. `WebConfig`)
 
 ### Key packages
 
 ```
 ru.proshik.pochitushki/
-├── controller/          # TelegramController (webhook), FileController (импорт)
-├── service/             # Бизнес-логика
-├── service/telegram/    # Обработчики команд и callback-кнопок
-├── configuration/       # Spring конфигурация Telegram-бота
-├── model/               # Data-классы (PostData, UserData)
-└── repository/          # DAO (UserDao, PostDao)
+├── controller/          # WebController, AuthController, PostApiController,
+│                        #   ProfileApiController, TelegramController (webhook)
+├── service/             # Бизнес-логика (Post/User/Jwt/TelegramOidc/Export/Import/Pdf)
+├── service/telegram/    # Обработчики команд и callback-кнопок бота
+├── configuration/       # Spring-конфиги: бот, JwtAuthInterceptor, WebConfig, Pdf
+├── model/               # Data-классы (PostData, UserData, PostType, ...)
+└── repository/          # DAO (UserDao, PostDao, UserToPostDao)
 ```
 
 ### Post storage
 
-- Таблица `post` — непрочитанные ссылки
-- Таблица `archive_post` — архив (та же структура)
-- JSONB-колонка `settings` в таблице `users` для настроек пользователя
+- Таблица `post` — непрочитанные ссылки, `archive_post` — архив (та же структура)
+- Флаг `is_favorite` в обеих таблицах (миграция `3_add_favorites`)
+- JSONB-колонка `settings` в таблице `users` (`languageCode`, `tgFeedEntriesNumber`)
+- `PostType`: `UNREAD` / `ARCHIVE` / `FAVORITES` / `ALL`
+- Перенос поста между unread/archive — через `@Transactional` (insert + delete)
+
+### REST API (`/api/v1`, cookie-JWT)
+
+- `POST /posts`, `GET /posts/fragment`, `POST /posts/{id}/archive|unread|favorite`,
+  `DELETE /posts/{id}`, `GET /posts/{id}/og-image`
+- `POST /profile/settings`
+
+### PDF generation
+
+Две реализации интерфейса `PdfGenerator`: `PlaywrightPdfGenerator` (по умолчанию,
+`pdf.playwright.enabled=true`) и `OpenhtmlPdfGenerator`. Выбор в `PdfConfiguration`.
 
 ## Code Conventions
 
