@@ -154,6 +154,37 @@ class ImportServiceTest : BaseIntegrationTest() {
         assertTrue(posts[0].isFavorite)
     }
 
+    @Test
+    fun `importZipArchive rejects archive with too many CSV entries`() {
+        val tmpFile = File.createTempFile("test_import_bomb_", ".zip").also { tempFiles.add(it) }
+        ZipOutputStream(tmpFile.outputStream()).use { zip ->
+            repeat(ImportService.MAX_CSV_ENTRIES + 1) { i ->
+                zip.putNextEntry(ZipEntry("posts_$i.csv"))
+                zip.write(pocketCsv(row("T$i", "https://e$i.com", 1712000000L, "", "unread")).toByteArray())
+                zip.closeEntry()
+            }
+        }
+
+        org.junit.jupiter.api.Assertions.assertThrows(ImportLimitException::class.java) {
+            importService.importZipArchive(userId, tmpFile)
+        }
+    }
+
+    @Test
+    fun `importZipArchive skips blank-url rows and tolerates blank time_added`() {
+        val csv = """
+            title,url,time_added,tags,status,is_favorite
+            Good Post,https://good.com,,,unread,false
+            No Url Post,,1712000000,,unread,false
+        """.trimIndent()
+        val zip = createZip("export.csv", csv)
+
+        importService.importZipArchive(userId, zip)
+
+        // blank-url row skipped; blank time_added row still imported (createdDate defaulted)
+        assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
+    }
+
     // --- Helpers ---
 
     private fun pocketCsv(vararg rows: String): String {
