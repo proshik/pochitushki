@@ -1,5 +1,16 @@
 # Pochitushki Service
 
+[![Build and push to GHCR](https://github.com/proshik/pochitushki/actions/workflows/build.yml/badge.svg)](https://github.com/proshik/pochitushki/actions/workflows/build.yml)
+[![Release](https://github.com/proshik/pochitushki/actions/workflows/release.yml/badge.svg)](https://github.com/proshik/pochitushki/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/proshik/pochitushki?sort=semver)](https://github.com/proshik/pochitushki/releases/latest)
+[![GHCR image](https://img.shields.io/badge/ghcr.io-pochitushki-2496ED?logo=docker&logoColor=white)](https://github.com/proshik/pochitushki/pkgs/container/pochitushki)
+[![Last commit](https://img.shields.io/github/last-commit/proshik/pochitushki)](https://github.com/proshik/pochitushki/commits)
+
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.9.25-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)](https://adoptium.net)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+
 Сервис представляет собой Telegram-бота для сохранения и управления ссылками, аналог сервисов "отложенного чтения" (read-it-later), таких как Pocket.
 
 ## Основные возможности
