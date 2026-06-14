@@ -62,8 +62,9 @@ dependencies {
 
     implementation("org.apache.commons:commons-compress:1.28.0")
 
-    // TestContainers
-    testImplementation("org.testcontainers:testcontainers:2.0.3")
+    // TestContainers — keep core aligned with the modules (postgresql/jdbc are 1.21.x).
+    // A 2.x core mixed with 1.21.x modules breaks class init (NoClassDefFoundError).
+    testImplementation("org.testcontainers:testcontainers:1.21.4")
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.testcontainers:postgresql:1.21.4")
 
