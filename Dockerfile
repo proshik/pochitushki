@@ -24,9 +24,10 @@ COPY --from=build /app/build/libs/*.jar app.jar
 # Extract the fat JAR so classpath works correctly at runtime (required for Playwright native driver)
 RUN java -Djarmode=tools -jar app.jar extract --destination /app/extracted && rm app.jar
 
-# Install fonts, Playwright Chromium browser and OS dependencies in a single layer to save disk space.
-# To skip Playwright: docker build --build-arg INSTALL_PLAYWRIGHT=false
-ARG INSTALL_PLAYWRIGHT=true
+# Install fonts (used by the OpenHTMLToPDF engine). Chromium/Playwright is NOT installed by default
+# since PDF generation runs on the pure-JVM OpenHTMLToPDF engine (pdf.playwright.enabled=false).
+# To include Playwright again: docker build --build-arg INSTALL_PLAYWRIGHT=true
+ARG INSTALL_PLAYWRIGHT=false
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 RUN apt-get update && \
     apt-get install -y --no-install-recommends fonts-dejavu-core && \
@@ -40,6 +41,15 @@ RUN addgroup --system spring && adduser --system --ingroup spring spring && \
     if [ -d "$PLAYWRIGHT_BROWSERS_PATH" ]; then chown -R spring:spring "$PLAYWRIGHT_BROWSERS_PATH"; fi
 
 USER spring:spring
+
+# JVM memory tuning for a low-traffic bot:
+#  - SerialGC: smallest footprint (no parallel GC threads / heap reservations like G1)
+#  - Xmx256m: explicit max heap — predictable, works with or without a container memory limit
+#  - MaxMetaspaceSize: cap class-metadata growth
+#  - ExitOnOutOfMemoryError: fail fast so the orchestrator restarts instead of limping
+# Total RSS ≈ heap + metaspace + thread stacks + code cache (~150m overhead). Tune -Xmx after measuring.
+# Override at runtime: `docker run -e JAVA_TOOL_OPTIONS="..."`
+ENV JAVA_TOOL_OPTIONS="-XX:+UseSerialGC -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError"
 
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/extracted/app.jar"]

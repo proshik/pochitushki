@@ -20,7 +20,7 @@ spring:
 
 pdf:
   playwright:
-    enabled: true
+    enabled: false
 
 telegram:
   enabled: true
