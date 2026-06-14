@@ -142,7 +142,14 @@ class OpenhtmlPdfGenerator(
             connection.readTimeout = 10000
             connection.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; Pochitushki/1.0)")
 
-            val image = connection.getInputStream().use { ImageIO.read(it) }
+            // Cap the download to avoid decompression-bomb / huge images exhausting memory.
+            val imageBytes = connection.getInputStream().use { readUpTo(it, MAX_IMAGE_BYTES) }
+                ?: run {
+                    logger.debug("Skipping oversized image (> {} bytes): {}", MAX_IMAGE_BYTES, imageUrl)
+                    return null
+                }
+
+            val image = imageBytes.inputStream().use { ImageIO.read(it) }
                 ?: return null
 
             val pngBytes = ByteArrayOutputStream().use { baos ->
@@ -157,6 +164,21 @@ class OpenhtmlPdfGenerator(
             logger.warn("Failed to convert image: {} => {}", imageUrl, e.message)
             null
         }
+    }
+
+    /** Read up to [limit] bytes; return null if the stream has more (oversized). */
+    private fun readUpTo(input: java.io.InputStream, limit: Int): ByteArray? {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read == -1) break
+            total += read
+            if (total > limit) return null
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
     }
 
     private fun isSupportedImageFormat(url: String): Boolean {
@@ -187,6 +209,7 @@ class OpenhtmlPdfGenerator(
 
     companion object {
         private const val FONT_FAMILY = "document-font"
+        private const val MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB per image
         private val SUPPORTED_IMAGE_EXTENSIONS = listOf(".png", ".jpg", ".jpeg", ".gif", ".bmp")
 
         private val FONT_SEARCH_PATHS = listOf(
