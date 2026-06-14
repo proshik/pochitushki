@@ -62,11 +62,12 @@ dependencies {
 
     implementation("org.apache.commons:commons-compress:1.28.0")
 
-    // TestContainers — keep core aligned with the modules (postgresql/jdbc are 1.21.x).
-    // A 2.x core mixed with 1.21.x modules breaks class init (NoClassDefFoundError).
-    testImplementation("org.testcontainers:testcontainers:1.21.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
-    testImplementation("org.testcontainers:postgresql:1.21.4")
+    // TestContainers 2.x renamed the module artifacts with a `testcontainers-` prefix
+    // (the old `postgresql`/`junit-jupiter` coordinates are frozen at 1.21.4). Versions are
+    // managed by testcontainers-bom:2.0.5 (see dependencyManagement) to keep the line consistent.
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
 
     testImplementation("org.wiremock:wiremock-standalone:3.13.0")
 
@@ -80,6 +81,8 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.cloud:spring-cloud-dependencies:${property("springCloudVersion")}")
+        // Override Spring Boot's managed Testcontainers version with the latest 2.x line.
+        mavenBom("org.testcontainers:testcontainers-bom:2.0.5")
     }
 }
 
