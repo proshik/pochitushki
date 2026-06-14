@@ -25,6 +25,7 @@ class ExportService(
     companion object {
         private val HEADERS = arrayOf("title", "url", "time_added", "tags", "status", "is_favorite")
         const val CHUNK_SIZE = 1000
+        private val CSV_FORMULA_TRIGGERS = charArrayOf('=', '+', '-', '@', '\t', '\r')
     }
 
     fun export(userId: Long): File? {
@@ -75,10 +76,22 @@ class ExportService(
                     .atZone(TimeZone.getDefault().toZoneId())
                     .toEpochSecond()
                 val tags = post.tags?.joinToString(",") ?: ""
-                printer.printRecord(post.title, post.url, timeAdded, tags, status, post.isFavorite)
+                printer.printRecord(
+                    sanitizeForCsv(post.title), sanitizeForCsv(post.url), timeAdded,
+                    sanitizeForCsv(tags), status, post.isFavorite
+                )
             }
         }
 
         return out.toByteArray()
+    }
+
+    /**
+     * Neutralize CSV formula injection: spreadsheet apps execute a cell that starts with
+     * = + - @ (or a leading tab/CR). Prefix such user-controlled values with a single quote.
+     */
+    private fun sanitizeForCsv(value: String?): String {
+        val v = value ?: ""
+        return if (v.isNotEmpty() && v.first() in CSV_FORMULA_TRIGGERS) "'$v" else v
     }
 }

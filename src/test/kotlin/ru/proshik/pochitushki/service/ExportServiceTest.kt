@@ -131,6 +131,20 @@ class ExportServiceTest : BaseIntegrationTest() {
         assertTrue(post.isFavorite)
     }
 
+    @Test
+    fun `export neutralizes CSV formula injection in title`() {
+        jdbcTemplate.update(
+            "INSERT INTO post (title, url, user_id) VALUES ('=cmd|''/c calc''!A1', 'https://evil.com', $userId)"
+        )
+
+        val file = exportService.export(userId)!!.also { tempFiles.add(it) }
+        val csvContent = readFirstCsvFromZip(file)
+        val dataLine = csvContent.trim().lines()[1]
+
+        // the dangerous leading '=' must be neutralized with a leading apostrophe
+        assertTrue(dataLine.contains("'=cmd"), "formula trigger should be prefixed: $dataLine")
+    }
+
     // --- Helpers ---
 
     private fun readFirstCsvFromZip(file: File): String {
