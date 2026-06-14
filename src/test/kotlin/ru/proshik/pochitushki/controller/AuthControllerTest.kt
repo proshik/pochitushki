@@ -40,6 +40,16 @@ class AuthControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `responses carry baseline security headers`() {
+        mockMvc.perform(get("/login"))
+            .andExpect(status().isOk)
+            .andExpect(header().string("X-Frame-Options", "DENY"))
+            .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+            .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+            .andExpect(header().string("Content-Security-Policy", "frame-ancestors 'none'"))
+    }
+
+    @Test
     fun `GET auth-telegram redirects to Telegram OIDC and sets state + verifier cookies`() {
         val result = mockMvc.perform(get("/auth/telegram"))
             .andExpect(status().is3xxRedirection)
