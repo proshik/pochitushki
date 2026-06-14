@@ -45,7 +45,7 @@ class PostDaoTest : BaseIntegrationTest() {
     fun `addPost creates post with isFavorite false by default`() {
         val postId = postDao.addPost(PostStoreData("Test Title", "https://example.com", userId))
 
-        val post = postDao.getPost(postId, PostType.UNREAD)
+        val post = postDao.getPost(postId, userId, PostType.UNREAD)
 
         assertNotNull(post)
         assertFalse(post!!.isFavorite)
@@ -57,16 +57,16 @@ class PostDaoTest : BaseIntegrationTest() {
     fun `toggleFavorite sets isFavorite to true then back to false`() {
         val postId = postDao.addPost(PostStoreData("Test Title", "https://example.com", userId))
 
-        val afterFirstToggle = postDao.toggleFavorite(postId, PostType.UNREAD)
+        val afterFirstToggle = postDao.toggleFavorite(postId, userId, PostType.UNREAD)
         assertTrue(afterFirstToggle)
 
-        val post = postDao.getPost(postId, PostType.UNREAD)
+        val post = postDao.getPost(postId, userId, PostType.UNREAD)
         assertTrue(post!!.isFavorite)
 
-        val afterSecondToggle = postDao.toggleFavorite(postId, PostType.UNREAD)
+        val afterSecondToggle = postDao.toggleFavorite(postId, userId, PostType.UNREAD)
         assertFalse(afterSecondToggle)
 
-        val postAfterSecond = postDao.getPost(postId, PostType.UNREAD)
+        val postAfterSecond = postDao.getPost(postId, userId, PostType.UNREAD)
         assertFalse(postAfterSecond!!.isFavorite)
     }
 
@@ -75,7 +75,7 @@ class PostDaoTest : BaseIntegrationTest() {
         val favPostId = postDao.addPost(PostStoreData("Fav Post", "https://fav.com", userId))
         postDao.addPost(PostStoreData("Regular Post", "https://regular.com", userId))
 
-        postDao.toggleFavorite(favPostId, PostType.UNREAD)
+        postDao.toggleFavorite(favPostId, userId, PostType.UNREAD)
 
         val favorites = postDao.getPosts(userId, PostType.FAVORITES, 10, 0)
 
@@ -90,7 +90,7 @@ class PostDaoTest : BaseIntegrationTest() {
         postDao.addPost(PostStoreData("Post 2", "https://two.com", userId))
         postDao.addPost(PostStoreData("Post 3", "https://three.com", userId))
 
-        postDao.toggleFavorite(postId1, PostType.UNREAD)
+        postDao.toggleFavorite(postId1, userId, PostType.UNREAD)
 
         assertEquals(1, postDao.getPostCount(userId, PostType.FAVORITES))
         assertEquals(3, postDao.getPostCount(userId, PostType.UNREAD))
@@ -99,10 +99,10 @@ class PostDaoTest : BaseIntegrationTest() {
     @Test
     fun `addToArchivePost preserves is_favorite flag`() {
         val postId = postDao.addPost(PostStoreData("Fav Post", "https://fav.com", userId))
-        postDao.toggleFavorite(postId, PostType.UNREAD)
+        postDao.toggleFavorite(postId, userId, PostType.UNREAD)
 
-        postDao.addToArchivePost(postId)
-        postDao.deletePost(postId, PostType.UNREAD)
+        postDao.addToArchivePost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
 
         val archiveCount = jdbcTemplate.queryForObject(
             "SELECT count(*) FROM archive_post WHERE user_id = ? AND is_favorite = true", Int::class.java, userId
@@ -113,16 +113,16 @@ class PostDaoTest : BaseIntegrationTest() {
     @Test
     fun `addToUnreadPost preserves is_favorite flag`() {
         val postId = postDao.addPost(PostStoreData("Fav Post", "https://fav.com", userId))
-        postDao.toggleFavorite(postId, PostType.UNREAD)
-        postDao.addToArchivePost(postId)
-        postDao.deletePost(postId, PostType.UNREAD)
+        postDao.toggleFavorite(postId, userId, PostType.UNREAD)
+        postDao.addToArchivePost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
 
         val archivePostId = jdbcTemplate.queryForObject(
             "SELECT id FROM archive_post WHERE user_id = ?", Long::class.java, userId
         )!!
 
-        postDao.addToUnreadPost(archivePostId)
-        postDao.deletePost(archivePostId, PostType.ARCHIVE)
+        postDao.addToUnreadPost(archivePostId, userId)
+        postDao.deletePost(archivePostId, userId, PostType.ARCHIVE)
 
         val unreadPosts = postDao.getPosts(userId, PostType.UNREAD, 10, 0)
         assertEquals(1, unreadPosts.size)
@@ -131,24 +131,24 @@ class PostDaoTest : BaseIntegrationTest() {
 
     @Test
     fun `getPost returns null for non-existing post`() {
-        val result = postDao.getPost(999999L, PostType.UNREAD)
+        val result = postDao.getPost(999999L, userId, PostType.UNREAD)
         assertNull(result)
     }
 
     @Test
     fun `toggleFavorite on archive_post table works correctly`() {
         val postId = postDao.addPost(PostStoreData("Post", "https://example.com", userId))
-        postDao.addToArchivePost(postId)
-        postDao.deletePost(postId, PostType.UNREAD)
+        postDao.addToArchivePost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
 
         val archivePostId = jdbcTemplate.queryForObject(
             "SELECT id FROM archive_post WHERE user_id = ?", Long::class.java, userId
         )!!
 
-        val newState = postDao.toggleFavorite(archivePostId, PostType.ARCHIVE)
+        val newState = postDao.toggleFavorite(archivePostId, userId, PostType.ARCHIVE)
         assertTrue(newState)
 
-        val archivePost = postDao.getPost(archivePostId, PostType.ARCHIVE)
+        val archivePost = postDao.getPost(archivePostId, userId, PostType.ARCHIVE)
         assertTrue(archivePost!!.isFavorite)
     }
 
@@ -157,7 +157,7 @@ class PostDaoTest : BaseIntegrationTest() {
         val postId = postDao.addPost(PostStoreData("My Title", "https://test.com/page", userId))
 
         assertTrue(postId > 0)
-        val post = postDao.getPost(postId, PostType.UNREAD)
+        val post = postDao.getPost(postId, userId, PostType.UNREAD)
         assertNotNull(post)
         assertEquals("My Title", post!!.title)
         assertEquals("https://test.com/page", post.url)
@@ -168,9 +168,9 @@ class PostDaoTest : BaseIntegrationTest() {
     fun `deletePost removes post`() {
         val postId = postDao.addPost(PostStoreData("To Delete", "https://delete.com", userId))
 
-        postDao.deletePost(postId, PostType.UNREAD)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
 
-        assertNull(postDao.getPost(postId, PostType.UNREAD))
+        assertNull(postDao.getPost(postId, userId, PostType.UNREAD))
     }
 
     @Test
@@ -243,10 +243,10 @@ class PostDaoTest : BaseIntegrationTest() {
     fun `addToArchivePost moves post to archive table`() {
         val postId = postDao.addPost(PostStoreData("Archive Me", "https://archive.com", userId))
 
-        postDao.addToArchivePost(postId)
-        postDao.deletePost(postId, PostType.UNREAD)
+        postDao.addToArchivePost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
 
-        assertNull(postDao.getPost(postId, PostType.UNREAD))
+        assertNull(postDao.getPost(postId, userId, PostType.UNREAD))
         val archiveCount = postDao.getPostCount(userId, PostType.ARCHIVE)
         assertEquals(1, archiveCount)
     }
@@ -254,15 +254,15 @@ class PostDaoTest : BaseIntegrationTest() {
     @Test
     fun `addToUnreadPost moves post back from archive`() {
         val postId = postDao.addPost(PostStoreData("Unread Me", "https://unread.com", userId))
-        postDao.addToArchivePost(postId)
-        postDao.deletePost(postId, PostType.UNREAD)
+        postDao.addToArchivePost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
 
         val archivePostId = jdbcTemplate.queryForObject(
             "SELECT id FROM archive_post WHERE user_id = ?", Long::class.java, userId
         )!!
 
-        postDao.addToUnreadPost(archivePostId)
-        postDao.deletePost(archivePostId, PostType.ARCHIVE)
+        postDao.addToUnreadPost(archivePostId, userId)
+        postDao.deletePost(archivePostId, userId, PostType.ARCHIVE)
 
         assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
         assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))

@@ -9,7 +9,9 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
-class PlaywrightPdfGenerator : PdfGenerator, AutoCloseable {
+class PlaywrightPdfGenerator(
+    private val urlSecurityValidator: UrlSecurityValidator,
+) : PdfGenerator, AutoCloseable {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -29,6 +31,9 @@ class PlaywrightPdfGenerator : PdfGenerator, AutoCloseable {
 
     override fun generatePdf(url: String): ByteArray {
         logger.debug("generatePdf: url={}", url)
+
+        // SSRF guard: a headless browser navigates here and executes the page's JS.
+        urlSecurityValidator.validate(url)
 
         return executor.submit<ByteArray> {
             val browser = browserFuture.join().second

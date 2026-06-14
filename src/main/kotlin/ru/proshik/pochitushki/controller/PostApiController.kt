@@ -20,10 +20,15 @@ import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.server.ResponseStatusException
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.service.PostService
+import ru.proshik.pochitushki.service.SsrfValidationException
+import ru.proshik.pochitushki.service.UrlSecurityValidator
 
 @Controller
 @RequestMapping("/api/v1/posts")
-class PostApiController(private val postService: PostService) {
+class PostApiController(
+    private val postService: PostService,
+    private val urlSecurityValidator: UrlSecurityValidator,
+) {
 
     @GetMapping("/fragment")
     fun fragment(
@@ -57,23 +62,25 @@ class PostApiController(private val postService: PostService) {
         } catch (e: MalformedURLException) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid URL")
         }
-        val (postId, _) = postService.addPost(parsedUrl, userId)
-        val post = postService.getPost(postId, PostType.UNREAD)
+        val (postId, _) = try {
+            postService.addPost(parsedUrl, userId)
+        } catch (e: SsrfValidationException) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "URL not allowed")
+        }
+        val post = postService.getPost(postId, userId, PostType.UNREAD)
             ?: throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Post not found after insert")
         model.addAttribute("post", post)
         model.addAttribute("type", PostType.UNREAD.value)
         return "fragments/post-card :: card"
     }
 
-    // Dev mode: userId is in scope but service methods do not scope by user_id.
-    // This is intentional pre-auth (Phase 5 will add authorization at the service layer).
     @PostMapping("/{id}/archive")
     fun archive(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
     ): ResponseEntity<Void> {
         try {
-            postService.archivePost(id)
+            postService.archivePost(id, userId)
         } catch (e: EmptyResultDataAccessException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         }
@@ -86,7 +93,7 @@ class PostApiController(private val postService: PostService) {
         @PathVariable id: Long
     ): ResponseEntity<Void> {
         try {
-            postService.unreadPost(id)
+            postService.unreadPost(id, userId)
         } catch (e: EmptyResultDataAccessException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         }
@@ -102,8 +109,12 @@ class PostApiController(private val postService: PostService) {
     ): String {
         val postType = PostType.entries.firstOrNull { it.value == type }
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown post type: $type")
-        postService.toggleFavorite(id, postType)
-        val post = postService.getPost(id, postType)
+        try {
+            postService.toggleFavorite(id, userId, postType)
+        } catch (e: EmptyResultDataAccessException) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
+        }
+        val post = postService.getPost(id, userId, postType)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         model.addAttribute("post", post)
         model.addAttribute("type", type)
@@ -118,7 +129,10 @@ class PostApiController(private val postService: PostService) {
     ): ResponseEntity<Void> {
         val postType = PostType.entries.firstOrNull { it.value == type }
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown post type: $type")
-        postService.deletePost(id, postType)
+        val deleted = postService.deletePost(id, userId, postType)
+        if (deleted == 0) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
+        }
         return ResponseEntity.ok().build()
     }
 
@@ -131,11 +145,15 @@ class PostApiController(private val postService: PostService) {
     ): ResponseEntity<Map<String, String>> {
         val postType = PostType.entries.firstOrNull { it.value == type } ?: PostType.UNREAD
 
-        val post = postService.getPost(id, postType)
+        val post = postService.getPost(id, userId, postType)
             ?: return ResponseEntity.notFound().build()
 
+        if (!urlSecurityValidator.isAllowed(post.url)) {
+            return ResponseEntity.notFound().build()
+        }
+
         return try {
-            val doc = Jsoup.connect(post.url).timeout(5000).get()
+            val doc = Jsoup.connect(post.url).followRedirects(false).timeout(5000).get()
             val ogImage = doc.select("meta[property=og:image]").attr("content").takeIf { it.isNotBlank() }
                 ?: doc.select("meta[name=twitter:image]").attr("content").takeIf { it.isNotBlank() }
             if (ogImage != null) ResponseEntity.ok(mapOf("ogImageUrl" to ogImage))

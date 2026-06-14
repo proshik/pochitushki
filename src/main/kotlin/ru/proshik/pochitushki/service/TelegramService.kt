@@ -172,7 +172,17 @@ class TelegramService(
         if (storedPost.isEmpty()) {
             logger.debug("post not found: chatId={}, url={}", chatId, url)
 
-            val (storedPostId, storedPostTitle) = postService.addPost(url, user.id)
+            val (storedPostId, storedPostTitle) = try {
+                postService.addPost(url, user.id)
+            } catch (e: SsrfValidationException) {
+                logger.debug("blocked SSRF url from bot: chatId={}, url={}", chatId, url)
+                val result = botProvider.getBot().sendMessage(
+                    chatId = ChatId.fromId(chatId),
+                    text = i18nService.getMessage("command.feed.unrecognized_url", user.settings.languageCode),
+                )
+                handleTgErrorResponse(result, chatId)
+                return
+            }
 
             val textMessage = i18nService.getMessage("command.feed.add_post", user.settings.languageCode)
             val message = if (storedPostTitle != null) {
@@ -240,7 +250,7 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("toArchivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.archivePost(postId)
+        postService.archivePost(postId, user.id)
 
         botProvider.getBot().deleteMessage(
             chatId = ChatId.fromId(chatId),
@@ -256,7 +266,7 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("archivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.archivePost(postId)
+        postService.archivePost(postId, user.id)
 
         logger.info("archivePost success: chatId={}, postId={}", chatId, postId)
     }
@@ -267,7 +277,7 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("toUnreadPost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.unreadPost(postId)
+        postService.unreadPost(postId, user.id)
 
         botProvider.getBot().deleteMessage(
             chatId = ChatId.fromId(chatId),
@@ -280,11 +290,11 @@ class TelegramService(
     fun favoritesToArchive(chatId: Long, messageId: Long, postId: Long) {
         logger.debug("favoritesToArchive: chatId={}, postId={}", chatId, postId)
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        val post = postService.getPost(postId, PostType.UNREAD) ?: run {
+        val post = postService.getPost(postId, user.id, PostType.UNREAD) ?: run {
             logger.warn("favoritesToArchive: post not found postId={}", postId)
             return
         }
-        val newArchiveId = postService.archivePost(postId)
+        val newArchiveId = postService.archivePost(postId, user.id)
         val messageText = buildPostMessage(post.url, post.title)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newArchiveId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = true)
         editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
@@ -294,11 +304,11 @@ class TelegramService(
     fun favoritesToUnread(chatId: Long, messageId: Long, postId: Long) {
         logger.debug("favoritesToUnread: chatId={}, postId={}", chatId, postId)
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        val post = postService.getPost(postId, PostType.ARCHIVE) ?: run {
+        val post = postService.getPost(postId, user.id, PostType.ARCHIVE) ?: run {
             logger.warn("favoritesToUnread: post not found postId={}", postId)
             return
         }
-        val newUnreadId = postService.unreadPost(postId)
+        val newUnreadId = postService.unreadPost(postId, user.id)
         val messageText = buildPostMessage(post.url, post.title)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newUnreadId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = false)
         editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
@@ -311,7 +321,7 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("toDeletePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.deletePost(postId, postType)
+        postService.deletePost(postId, user.id, postType)
 
         botProvider.getBot().deleteMessage(
             chatId = ChatId.fromId(chatId),
@@ -327,7 +337,7 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("deletePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.deletePost(postId, postType)
+        postService.deletePost(postId, user.id, postType)
 
         logger.info("deletePost success: chatId={}, postId={}, postType={}", chatId, postId, postType)
     }
@@ -457,8 +467,8 @@ class TelegramService(
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        val newIsFavorite = postService.toggleFavorite(postId, postType)
-        val post = postService.getPost(postId, postType)
+        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType)
+        val post = postService.getPost(postId, user.id, postType)
         if (post == null) {
             logger.warn("toggleFavorite: post not found postId={}", postId)
             return
@@ -482,15 +492,15 @@ class TelegramService(
     fun toggleFavoriteFromFavorites(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
         logger.debug("toggleFavoriteFromFavorites: chatId={}, postId={}, postType={}", chatId, postId, postType)
 
-        val newIsFavorite = postService.toggleFavorite(postId, postType)
+        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
+        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType)
 
         if (!newIsFavorite) {
             // Post removed from favorites — delete the card from the list
             botProvider.getBot().deleteMessage(chatId = ChatId.fromId(chatId), messageId = messageId)
         } else {
             // Re-added to favorites (edge case) — update keyboard in place
-            val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-            val post = postService.getPost(postId, postType) ?: run {
+            val post = postService.getPost(postId, user.id, postType) ?: run {
                 logger.warn("toggleFavoriteFromFavorites: post not found postId={}", postId)
                 return
             }
@@ -507,8 +517,8 @@ class TelegramService(
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        val newIsFavorite = postService.toggleFavorite(postId, PostType.UNREAD)
-        val post = postService.getPost(postId, PostType.UNREAD)
+        val newIsFavorite = postService.toggleFavorite(postId, user.id, PostType.UNREAD)
+        val post = postService.getPost(postId, user.id, PostType.UNREAD)
         if (post == null) {
             logger.warn("toggleFavoriteForRandomPost: post not found postId={}", postId)
             return
@@ -559,7 +569,7 @@ class TelegramService(
 
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        val post = postService.getPost(postId, postType)
+        val post = postService.getPost(postId, user.id, postType)
         if (post == null) {
             logger.warn("sendPostPdf: post not found postId={}", postId)
             return

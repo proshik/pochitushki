@@ -16,6 +16,7 @@ import ru.proshik.pochitushki.repository.PostDao
 @Service
 class PostService(
     private val postDao: PostDao,
+    private val urlSecurityValidator: UrlSecurityValidator,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -24,6 +25,8 @@ class PostService(
         logger.debug("User {} adding post: {}", userId, url)
 
         val urlString = url.toString()
+        // SSRF guard: refuse to store/fetch URLs that target internal/non-public addresses.
+        urlSecurityValidator.validate(urlString)
         val title = loadTitle(urlString)
 
         val postStoreData = PostStoreData(title, urlString, userId)
@@ -43,9 +46,12 @@ class PostService(
 
     private fun loadTitle(url: String): String? {
         val title = try {
-            // Connect to the URL and parse the HTML document
-            val doc: Document = Jsoup.connect(url).get()
-            // Get the title element's text
+            // followRedirects(false): a public URL must not 3xx-redirect into an internal address
+            // after the SSRF check. timeout: avoid hanging the request thread on a slow/hostile host.
+            val doc: Document = Jsoup.connect(url)
+                .followRedirects(false)
+                .timeout(5000)
+                .get()
             return doc.title()
         } catch (e: IOException) {
             logger.warn("Failed to load title: $url", e)
@@ -55,24 +61,24 @@ class PostService(
         return title
     }
 
-    fun deletePost(postId: Long, postType: PostType) {
-        logger.debug("Deleting post {} (type={})", postId, postType)
-        postDao.deletePost(postId, postType)
+    fun deletePost(postId: Long, userId: Long, postType: PostType): Int {
+        logger.debug("Deleting post {} for user {} (type={})", postId, userId, postType)
+        return postDao.deletePost(postId, userId, postType)
     }
 
     @Transactional
-    fun archivePost(postId: Long): Long {
-        logger.debug("Archiving post {}", postId)
-        val newId = postDao.addToArchivePost(postId)
-        postDao.deletePost(postId, PostType.UNREAD)
+    fun archivePost(postId: Long, userId: Long): Long {
+        logger.debug("Archiving post {} for user {}", postId, userId)
+        val newId = postDao.addToArchivePost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
         return newId
     }
 
     @Transactional
-    fun unreadPost(postId: Long): Long {
-        logger.debug("Moving post {} to unread", postId)
-        val newId = postDao.addToUnreadPost(postId)
-        postDao.deletePost(postId, PostType.ARCHIVE)
+    fun unreadPost(postId: Long, userId: Long): Long {
+        logger.debug("Moving post {} to unread for user {}", postId, userId)
+        val newId = postDao.addToUnreadPost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.ARCHIVE)
         return newId
     }
 
@@ -84,13 +90,13 @@ class PostService(
         return postDao.getPostCount(userId, postType)
     }
 
-    fun toggleFavorite(postId: Long, postType: PostType): Boolean {
-        val newValue = postDao.toggleFavorite(postId, postType)
-        logger.debug("Toggled favorite for post {} (type={}), now={}", postId, postType, newValue)
+    fun toggleFavorite(postId: Long, userId: Long, postType: PostType): Boolean {
+        val newValue = postDao.toggleFavorite(postId, userId, postType)
+        logger.debug("Toggled favorite for post {} user {} (type={}), now={}", postId, userId, postType, newValue)
         return newValue
     }
 
-    fun getPost(postId: Long, postType: PostType): PostData? {
-        return postDao.getPost(postId, postType)
+    fun getPost(postId: Long, userId: Long, postType: PostType): PostData? {
+        return postDao.getPost(postId, userId, postType)
     }
 }

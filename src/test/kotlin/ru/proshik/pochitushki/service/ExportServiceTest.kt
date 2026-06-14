@@ -111,12 +111,12 @@ class ExportServiceTest : BaseIntegrationTest() {
             "INSERT INTO post (title, url, user_id, tags) VALUES ('Round Trip', 'https://rt.com', $userId, ARRAY['a','b']) RETURNING id",
             Long::class.java
         )!!
-        postDao.toggleFavorite(postId, PostType.UNREAD)
+        postDao.toggleFavorite(postId, userId, PostType.UNREAD)
 
         val zipFile = exportService.export(userId)!!.also { tempFiles.add(it) }
 
         // Delete original post so we can verify import independently
-        postDao.deletePost(postId, PostType.UNREAD)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
         assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
 
         // Re-import

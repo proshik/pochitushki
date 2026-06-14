@@ -30,3 +30,9 @@ telegram:
 jwt:
   secret: dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktMzI=
   ttl-days: 7
+
+app:
+  security:
+    ssrf:
+      # WireMock stubs in tests are served from localhost; exempt it from the SSRF IP checks.
+      allowed-hosts: localhost,127.0.0.1

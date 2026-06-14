@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration
 import ru.proshik.pochitushki.service.OpenhtmlPdfGenerator
 import ru.proshik.pochitushki.service.PdfGenerator
 import ru.proshik.pochitushki.service.PlaywrightPdfGenerator
+import ru.proshik.pochitushki.service.UrlSecurityValidator
 
 @Configuration
 class PdfConfiguration {
@@ -14,15 +15,15 @@ class PdfConfiguration {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Bean
-    fun openhtmlPdfGenerator(): PdfGenerator {
+    fun openhtmlPdfGenerator(urlSecurityValidator: UrlSecurityValidator): PdfGenerator {
         logger.info("Using OpenHTML PDF engine")
-        return OpenhtmlPdfGenerator()
+        return OpenhtmlPdfGenerator(urlSecurityValidator)
     }
 
     @Bean
     @ConditionalOnProperty(name = ["pdf.playwright.enabled"], havingValue = "true")
-    fun playwrightPdfGenerator(): PdfGenerator {
+    fun playwrightPdfGenerator(urlSecurityValidator: UrlSecurityValidator): PdfGenerator {
         logger.info("Using Playwright PDF engine")
-        return PlaywrightPdfGenerator()
+        return PlaywrightPdfGenerator(urlSecurityValidator)
     }
 }

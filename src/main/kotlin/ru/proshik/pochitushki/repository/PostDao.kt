@@ -38,7 +38,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         )
     }
 
-    fun getPost(postId: Long, postType: PostType): PostData? {
+    fun getPost(postId: Long, userId: Long, postType: PostType): PostData? {
         val (tableName, isArchived) = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> Pair("post", false)
             PostType.ARCHIVE -> Pair("archive_post", true)
@@ -48,11 +48,12 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val sql = """
             SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, created_date, updated_date
             FROM $tableName
-            WHERE id = :post_id
+            WHERE id = :post_id AND user_id = :user_id
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("post_id", postId)
+            .addValue("user_id", userId)
 
         return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
     }
@@ -200,7 +201,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         namedParameterJdbcTemplate.batchUpdate(sql, batchArgs)
     }
 
-    fun deletePost(postId: Long, postType: PostType) {
+    fun deletePost(postId: Long, userId: Long, postType: PostType): Int {
         val tableName = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
@@ -210,46 +211,49 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val sql = """
             DELETE
             FROM $tableName
-            WHERE id = :post_id
+            WHERE id = :post_id AND user_id = :user_id
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("post_id", postId)
+            .addValue("user_id", userId)
 
-        namedParameterJdbcTemplate.update(sql, params)
+        return namedParameterJdbcTemplate.update(sql, params)
     }
 
-    fun addToArchivePost(postId: Long): Long {
+    fun addToArchivePost(postId: Long, userId: Long): Long {
         val sql = """
             INSERT INTO archive_post(title, url, tags, user_id, is_favorite)
             SELECT title, url, tags, user_id, is_favorite
             FROM post
-            WHERE post.id = :post_id
+            WHERE post.id = :post_id AND post.user_id = :user_id
             RETURNING id
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("post_id", postId)
+            .addValue("user_id", userId)
 
         return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)!!
     }
 
-    fun addToUnreadPost(postId: Long): Long {
+    fun addToUnreadPost(postId: Long, userId: Long): Long {
         val sql = """
             INSERT INTO post(title, url, tags, user_id, is_favorite)
             SELECT title, url, tags, user_id, is_favorite
             FROM archive_post
-            WHERE archive_post.id = :post_id
+            WHERE archive_post.id = :post_id AND archive_post.user_id = :user_id
             RETURNING id
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("post_id", postId)
+            .addValue("user_id", userId)
 
         return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)!!
     }
 
-    fun toggleFavorite(postId: Long, postType: PostType): Boolean {
+    fun toggleFavorite(postId: Long, userId: Long, postType: PostType): Boolean {
         val tableName = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> "post"
             PostType.ARCHIVE -> "archive_post"
@@ -259,12 +263,13 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         val sql = """
             UPDATE $tableName
             SET is_favorite = NOT is_favorite
-            WHERE id = :post_id
+            WHERE id = :post_id AND user_id = :user_id
             RETURNING is_favorite
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("post_id", postId)
+            .addValue("user_id", userId)
 
         return namedParameterJdbcTemplate.queryForObject(sql, params, Boolean::class.java)!!
     }

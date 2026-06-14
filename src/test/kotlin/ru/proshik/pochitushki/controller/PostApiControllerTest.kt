@@ -35,12 +35,20 @@ class PostApiControllerTest : BaseIntegrationTest() {
     private lateinit var postDao: PostDao
 
     private var userId: Long = 0L
+    private var otherUserId: Long = 0L
 
     @BeforeEach
     fun setUp() {
         userId = jdbcTemplate.queryForObject(
             """INSERT INTO users(telegram_id, username, first_name, last_name, settings)
                VALUES (7002, 'apitest', 'Api', 'Test',
+                       '{"languageCode":"en","tgFeedEntriesNumber":3}'::jsonb)
+               RETURNING id""",
+            Long::class.java
+        )!!
+        otherUserId = jdbcTemplate.queryForObject(
+            """INSERT INTO users(telegram_id, username, first_name, last_name, settings)
+               VALUES (7003, 'attacker', 'Mal', 'Lory',
                        '{"languageCode":"en","tgFeedEntriesNumber":3}'::jsonb)
                RETURNING id""",
             Long::class.java
@@ -65,6 +73,18 @@ class PostApiControllerTest : BaseIntegrationTest() {
         jdbcTemplate.queryForObject(
             "INSERT INTO archive_post(title, url, user_id) VALUES (?, ?, ?) RETURNING id",
             Long::class.java, title, url, userId
+        )!!
+
+    private fun insertPostFor(ownerId: Long, title: String = "Owned", url: String = "https://owned.com"): Long =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO post(title, url, user_id) VALUES (?, ?, ?) RETURNING id",
+            Long::class.java, title, url, ownerId
+        )!!
+
+    private fun insertArchivePostFor(ownerId: Long, title: String = "Owned", url: String = "https://owned.com"): Long =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO archive_post(title, url, user_id) VALUES (?, ?, ?) RETURNING id",
+            Long::class.java, title, url, ownerId
         )!!
 
     @Test
@@ -129,6 +149,17 @@ class PostApiControllerTest : BaseIntegrationTest() {
             .andExpect(content().string(containsString("My Great Article")))
 
         assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `POST posts rejects internal address URL (SSRF) and stores nothing`() {
+        mockMvc.perform(
+            post("/api/v1/posts")
+                .param("url", "http://169.254.169.254/latest/meta-data/")
+                .with(withAuth(userId))
+        ).andExpect(status().isBadRequest)
+
+        assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
     }
 
     @Test
@@ -257,5 +288,83 @@ class PostApiControllerTest : BaseIntegrationTest() {
                 .with(withAuth(userId))
         )
             .andExpect(status().isNotFound)
+    }
+
+    // --- Authorization (IDOR) — a user must not touch another user's posts ---
+
+    @Test
+    fun `DELETE another user's post returns 404 and leaves it intact`() {
+        val victimPostId = insertPostFor(userId, url = "https://victim.com")
+
+        mockMvc.perform(
+            delete("/api/v1/posts/$victimPostId")
+                .param("type", "unread")
+                .with(withAuth(otherUserId))
+        ).andExpect(status().isNotFound)
+
+        assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `POST archive on another user's post returns 404 and does not move it`() {
+        val victimPostId = insertPostFor(userId, url = "https://victim.com")
+
+        mockMvc.perform(
+            post("/api/v1/posts/$victimPostId/archive").with(withAuth(otherUserId))
+        ).andExpect(status().isNotFound)
+
+        assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
+        assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
+    }
+
+    @Test
+    fun `POST unread on another user's archive post returns 404 and does not move it`() {
+        val victimPostId = insertArchivePostFor(userId, url = "https://victim.com")
+
+        mockMvc.perform(
+            post("/api/v1/posts/$victimPostId/unread").with(withAuth(otherUserId))
+        ).andExpect(status().isNotFound)
+
+        assertEquals(1, postDao.getPostCount(userId, PostType.ARCHIVE))
+        assertEquals(0, postDao.getPostCount(userId, PostType.UNREAD))
+    }
+
+    @Test
+    fun `POST favorite on another user's post returns 404 and does not toggle it`() {
+        val victimPostId = insertPostFor(userId, url = "https://victim.com")
+
+        mockMvc.perform(
+            post("/api/v1/posts/$victimPostId/favorite")
+                .param("type", "unread")
+                .with(withAuth(otherUserId))
+        ).andExpect(status().isNotFound)
+
+        val isFavorite = jdbcTemplate.queryForObject(
+            "SELECT is_favorite FROM post WHERE id = ?", Boolean::class.java, victimPostId
+        )
+        assertEquals(false, isFavorite)
+    }
+
+    @Test
+    fun `GET og-image on another user's post returns 404 and does not disclose it`() {
+        val articlePath = "/victim-og"
+        val victimUrl = "http://localhost:${BaseIntegrationTest.wireMockTelegramApi.port()}$articlePath"
+        val victimPostId = insertPostFor(userId, url = victimUrl)
+
+        // Even though the URL would yield an og:image, a non-owner must get 404.
+        BaseIntegrationTest.wireMockTelegramApi.stubFor(
+            wmGet(urlEqualTo(articlePath)).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=UTF-8")
+                    .withBody("""<html><head><meta property="og:image" content="https://example.com/secret.jpg"/></head></html>""")
+            )
+        )
+
+        mockMvc.perform(
+            get("/api/v1/posts/$victimPostId/og-image")
+                .param("type", "unread")
+                .with(withAuth(otherUserId))
+        ).andExpect(status().isNotFound)
     }
 }

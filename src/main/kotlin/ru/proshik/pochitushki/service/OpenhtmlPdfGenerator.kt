@@ -13,7 +13,9 @@ import org.jsoup.safety.Cleaner
 import org.jsoup.safety.Safelist
 import org.slf4j.LoggerFactory
 
-class OpenhtmlPdfGenerator : PdfGenerator {
+class OpenhtmlPdfGenerator(
+    private val urlSecurityValidator: UrlSecurityValidator,
+) : PdfGenerator {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -30,8 +32,12 @@ class OpenhtmlPdfGenerator : PdfGenerator {
     override fun generatePdf(url: String): ByteArray {
         logger.debug("generatePdf: url={}", url)
 
+        // SSRF guard: the page and all its sub-resources are fetched server-side.
+        urlSecurityValidator.validate(url)
+
         val doc = Jsoup.connect(url)
             .userAgent("Mozilla/5.0 (compatible; Pochitushki/1.0)")
+            .followRedirects(false)
             .timeout(15000)
             .get()
 
@@ -52,7 +58,12 @@ class OpenhtmlPdfGenerator : PdfGenerator {
             val src = img.attr("src")
             if (src.isNotBlank() && !src.startsWith("data:")) {
                 val resolved = img.absUrl("src").ifBlank { resolveUrl(url, src) }
-                if (isSupportedImageFormat(resolved)) {
+                // SSRF guard: every remote image is fetched server-side (by the renderer for
+                // supported formats, or by convertToDataPng otherwise). Drop non-public targets.
+                if (!urlSecurityValidator.isAllowed(resolved)) {
+                    logger.debug("Removing image with disallowed URL: {}", resolved)
+                    img.remove()
+                } else if (isSupportedImageFormat(resolved)) {
                     img.attr("src", resolved)
                 } else {
                     val dataUri = convertToDataPng(resolved)
