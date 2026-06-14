@@ -19,11 +19,20 @@ class CallbackQueryHandler(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     override fun registerHandlers(dispatcher: Dispatcher) {
-        dispatcher.callbackQuery { handleCallbacks(callbackQuery) }
+        dispatcher.callbackQuery {
+            try {
+                handleCallbacks(callbackQuery)
+            } catch (e: Exception) {
+                // A malformed/forged callback must not crash the dispatcher coroutine.
+                logger.warn("callback handling failed: data={}", callbackQuery.data, e)
+            }
+        }
     }
 
     fun parseCallbackData(callbackData: String): Pair<String, String> {
-        val (action, data) = callbackData.split("|")
+        val parts = callbackData.split("|", limit = 2)
+        val action = parts[0]
+        val data = parts.getOrElse(1) { "" }
 
         return Pair(action, data)
     }

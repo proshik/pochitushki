@@ -39,7 +39,9 @@ dependencies {
 
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.6.4")
+    // Version managed by the Spring Boot BOM so it stays aligned with kotlinx-coroutines-core
+    // (a stale standalone pin like 1.6.4 caused version skew against the managed core).
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 
     implementation("io.github.kotlin-telegram-bot.kotlin-telegram-bot:telegram:6.3.0")
 

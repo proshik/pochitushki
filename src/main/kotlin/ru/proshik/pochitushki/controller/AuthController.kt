@@ -9,6 +9,7 @@ import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
 import feign.FeignException
+import ru.proshik.pochitushki.configuration.properties.JwtProperties
 import ru.proshik.pochitushki.service.JwtService
 import ru.proshik.pochitushki.service.TelegramOidcService
 import ru.proshik.pochitushki.service.UserService
@@ -19,6 +20,7 @@ class AuthController(
     private val telegramOidcService: TelegramOidcService,
     private val jwtService: JwtService,
     private val userService: UserService,
+    private val jwtProperties: JwtProperties,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -98,8 +100,9 @@ class AuthController(
     private fun shortLivedCookie(name: String, value: String, maxAgeSeconds: Int) =
         baseCookie(name, value, maxAgeSeconds.toLong())
 
+    // Keep the cookie lifetime in sync with the JWT's own TTL so they never drift apart.
     private fun authCookie(jwt: String) =
-        baseCookie("auth_token", jwt, 7L * 24 * 60 * 60)
+        baseCookie("auth_token", jwt, jwtProperties.ttlDays * 24 * 60 * 60)
 
     private fun addCookie(response: HttpServletResponse, cookie: ResponseCookie) =
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString())

@@ -2,6 +2,8 @@ package ru.proshik.pochitushki.configuration
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
@@ -14,6 +16,8 @@ class JwtAuthInterceptor(
     private val jwtService: JwtService,
     private val userService: UserService,
 ) : HandlerInterceptor {
+
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     override fun preHandle(
         request: HttpServletRequest,
@@ -36,7 +40,8 @@ class JwtAuthInterceptor(
 
         val languageCode = try {
             userService.getUserByUserId(userId).settings.languageCode
-        } catch (e: Exception) {
+        } catch (e: DataAccessException) {
+            logger.warn("Failed to load locale for userId={}, defaulting to 'ru'", userId, e)
             "ru"
         }
         request.setAttribute("_userLocale", Locale(languageCode))
