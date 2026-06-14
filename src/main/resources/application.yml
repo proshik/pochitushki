@@ -18,12 +18,33 @@ spring:
   liquibase:
     change-log: classpath:liquibase/changelog-master.yml
 
+# Lock down Actuator: only liveness/readiness exposed, no detailed health (which can leak
+# component/infra info). Sensitive endpoints (env, heapdump, loggers, threaddump) stay disabled.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+# Never leak stack traces / internal messages in error responses.
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
 pdf:
   playwright:
     enabled: false
 
 telegram:
   enabled: true
+  # Optional shared secret validated against the X-Telegram-Bot-Api-Secret-Token header on the
+  # webhook. When blank the check is skipped (e.g. polling/dev). Set in production.
+  webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
   oauth:
     base-url: https://oauth.telegram.org
     client-id: ${TELEGRAM_CLIENT_ID}
@@ -35,5 +56,6 @@ logging:
     ru.proshik.pochitushki: DEBUG
 
 jwt:
+  # No default: the app must fail fast if JWT_SECRET is not provided (≥32 bytes, base64).
   secret: ${JWT_SECRET}
   ttl-days: 7

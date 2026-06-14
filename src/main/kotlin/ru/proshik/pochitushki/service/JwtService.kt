@@ -13,9 +13,18 @@ import javax.crypto.spec.SecretKeySpec
 @EnableConfigurationProperties(JwtProperties::class)
 class JwtService(private val jwtProperties: JwtProperties) {
 
-    private val signingKey by lazy {
-        val keyBytes = Base64.getDecoder().decode(jwtProperties.secret)
-
+    // Validate eagerly at startup (fail fast) rather than on first token use.
+    private val signingKey: SecretKeySpec = run {
+        val keyBytes = try {
+            Base64.getDecoder().decode(jwtProperties.secret)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalStateException(
+                "jwt.secret must be valid base64 (set the JWT_SECRET env var to a >=32-byte base64 value)", e
+            )
+        }
+        require(keyBytes.size >= 32) {
+            "jwt.secret must decode to at least 32 bytes for HS256 (got ${keyBytes.size})"
+        }
         SecretKeySpec(keyBytes, "HmacSHA256")
     }
 
