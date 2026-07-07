@@ -26,12 +26,14 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 | `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` | Telegram OAuth-приложение |
 | `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка |
 | `JWT_SECRET` | Подпись JWT (≥32 байт base64; по умолчанию dev-заглушка) |
+| `TELEGRAM_ENABLED` | Опц. Запуск бота (polling/webhook). `false` — стартовать без бота, bot-токен не нужен (логин через Telegram работает независимо). По умолчанию `true` |
 
 ## Architecture
 
 **Слои**: Controller → Service → Repository (DAO) → PostgreSQL
 **БД**: PostgreSQL 16, Spring JDBC + NamedParameterJdbcTemplate (без ORM), миграции Liquibase
-**Telegram**: поддержка polling и webhook, через kotlin-telegram-bot
+**Telegram**: поддержка polling и webhook, через kotlin-telegram-bot;
+бот включается флагом `telegram.enabled` (см. `TelegramBotConfiguration`) — независим от входа через Telegram
 **Web**: Thymeleaf-страницы (`feed/all/archive/favorites/profile/login`) + HTML-фрагменты
 **Auth**: Telegram OIDC/OAuth + JWT в cookie `auth_token`; `JwtAuthInterceptor`
 кладёт `userId` в request-атрибут и защищает `/`, `/all`, `/archive`,
@@ -71,7 +73,7 @@ ru.proshik.pochitushki/
 
 ## Code Conventions
 
-- Kotlin, Spring Boot 3.5.4, Java 21
+- Kotlin 2.4, Spring Boot 3.5.16, Java 25
 - Стиль: официальный Kotlin style guide
 - Нет ORM — только `NamedParameterJdbcTemplate` с ручным SQL
 - Интернационализация через `I18nService` (EN/RU)
