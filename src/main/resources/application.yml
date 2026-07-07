@@ -41,7 +41,9 @@ pdf:
     enabled: false
 
 telegram:
-  enabled: true
+  # Управляет подключением бота на старте. false => бот не запускается (ни polling, ни webhook),
+  # bot-токен не требуется. Вход через Telegram (telegram.oauth.*) работает независимо от этого флага.
+  enabled: ${TELEGRAM_ENABLED:true}
   # Optional shared secret validated against the X-Telegram-Bot-Api-Secret-Token header on the
   # webhook. When blank the check is skipped (e.g. polling/dev). Set in production.
   webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}

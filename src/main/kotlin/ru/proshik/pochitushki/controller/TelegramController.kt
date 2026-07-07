@@ -1,6 +1,7 @@
 package ru.proshik.pochitushki.controller
 
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PostMapping
@@ -18,6 +19,10 @@ import ru.proshik.pochitushki.configuration.properties.TelegramProperties
  */
 @RestController
 @EnableConfigurationProperties(value = [TelegramProperties::class])
+// Webhook-эндпоинт нужен только когда бот включён. При enabled=false бин не создаётся,
+// поэтому маппинг "/${telegram.token}" не регистрируется (и не схлопывается в "POST /"),
+// а обращение к botProvider.getBot() отсюда исключено.
+@ConditionalOnProperty(prefix = "telegram", name = ["enabled"], havingValue = "true")
 class TelegramController(
     private val botProvider: BotProvider,
     private val telegramProperties: TelegramProperties,

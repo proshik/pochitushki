@@ -28,7 +28,11 @@ class TelegramBotConfiguration(
     fun telegramBot(): Bot {
         if (!telegramProperties.enabled) {
             logger.info("telegram bot is disabled")
-            return bot { token = "disabled" }
+            // Кладём заглушку в провайдер, чтобы случайный getBot() не падал на lateinit.
+            // Polling/webhook не стартуют, обработчики не регистрируются.
+            val stub = bot { token = "disabled" }
+            botProvider.setBot(stub)
+            return stub
         }
 
         logger.info("initializing telegram bot")

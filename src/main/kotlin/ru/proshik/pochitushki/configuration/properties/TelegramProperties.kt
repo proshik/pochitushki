@@ -9,17 +9,18 @@ data class TelegramProperties(
      */
     val enabled: Boolean,
     /**
-     * Токен к боту
+     * Токен к боту. Обязателен только когда бот включён (enabled=true); при выключенном боте
+     * можно не задавать, чтобы приложение стартовало без Telegram-конфигурации.
      */
-    val token: String,
+    val token: String = "",
     /**
      * Имя токена, для отображения на странице куда редиректит Strava
      */
-    val tokenName: String,
+    val tokenName: String = "",
     /**
      * Базовый url сервиса
      */
-    val baseUrl: String,
+    val baseUrl: String = "",
     /**
      * Установка url до сервиса для режима webhook, одновременно и включает его. В url содержится ещё и token
      */
