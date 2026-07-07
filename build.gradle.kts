@@ -1,8 +1,8 @@
 plugins {
-    kotlin("jvm") version "1.9.25"
-    kotlin("plugin.spring") version "1.9.25"
+    kotlin("jvm") version "2.4.0"
+    kotlin("plugin.spring") version "2.4.0"
     id("java-library")
-    id("org.springframework.boot") version "3.5.4"
+    id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -11,7 +11,7 @@ version = "0.0.1-SNAPSHOT"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -21,7 +21,11 @@ repositories {
 }
 
 
-extra["springCloudVersion"] = "2025.0.0"
+// Keep Spring's BOM-managed Kotlin artifacts (stdlib, reflect, coroutines) aligned with the
+// Kotlin plugin version above; otherwise io.spring.dependency-management pins them to the older
+// version shipped in the Spring Boot BOM.
+extra["kotlin.version"] = "2.4.0"
+extra["springCloudVersion"] = "2025.0.3"
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -44,6 +48,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 
     implementation("io.github.kotlin-telegram-bot.kotlin-telegram-bot:telegram:6.3.0")
+    // kotlin-telegram-bot exposes retrofit2.Response in its public API (return types of Bot.*).
+    // The K2 compiler (Kotlin 2.x) requires those types on the compile classpath, while the
+    // library declares retrofit as `implementation` (runtime-only). Pin it to the version the
+    // bot resolves transitively (see runtimeClasspath) so nothing changes at runtime.
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
 
     implementation("org.apache.commons:commons-csv:1.14.1")
 
