@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Войти — Почитушки</title>
+  <link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
   <script>
     (function () {
       if (localStorage.getItem('pochitushki-theme') === 'dark') {
@@ -11,8 +12,21 @@
       }
     })();
   </script>
-  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Same faces as layout.html: this page does not extend it, so it needs its own link. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap">
+
   <style>
+    /* ── Reset ── */
+    *, ::before, ::after { box-sizing: border-box; }
+    body { margin: 0; }
+    h1, p { margin: 0; font-size: inherit; font-weight: inherit; }
+    svg { display: block; }
+
+    /* ── Palettes ── */
     :root {
       --bg: #F5F0E8; --text: #1A1714; --accent: #C0622A;
       --muted: #8B7355; --border: #DDD5C4;
@@ -21,15 +35,53 @@
       --bg: #1A1714; --text: #E8E0D0;
       --accent: #D4784A; --muted: #9C8B72; --border: #3A3228;
     }
-    body { background: var(--bg); color: var(--text); font-family: 'Source Serif 4', serif; }
+
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Serif 4', Georgia, serif;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .login-card {
+      text-align: center;
+      max-width: 24rem; width: 100%;
+      padding: 0 1.5rem;
+    }
+
+    .login-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.875rem; line-height: 2.25rem; font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .login-subtitle { color: var(--muted); margin-bottom: 2rem; }
+
+    .login-error {
+      margin-bottom: 1rem; padding: 0.75rem;
+      border-radius: 0.25rem;
+      font-size: 0.875rem; line-height: 1.25rem;
+      background: #fde8e8; color: #c0392b;
+    }
+
+    .login-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      background: var(--accent); color: #fff;
+      font-family: inherit; font-weight: 500;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+    .login-btn:hover { opacity: 0.9; }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center">
-  <div class="text-center max-w-sm w-full px-6">
-    <h1 class="text-3xl font-bold mb-2" style="font-family: 'Playfair Display', serif;">Почитушки</h1>
-    <p class="mb-8" style="color: var(--muted);">Сохраняйте и читайте статьи в удобное время</p>
+<body>
+  <div class="login-card">
+    <h1 class="login-title">Почитушки</h1>
+    <p class="login-subtitle">Сохраняйте и читайте статьи в удобное время</p>
 
-    <div th:if="${param.error}" class="mb-4 p-3 rounded text-sm" style="background:#fde8e8;color:#c0392b;">
+    <div th:if="${param.error}" class="login-error">
       <span th:switch="${param.error[0]}">
         <span th:case="'state'">Ошибка безопасности. Попробуйте ещё раз.</span>
         <span th:case="'cancelled'">Вход отменён.</span>
@@ -38,9 +90,7 @@
       </span>
     </div>
 
-    <a href="/auth/telegram"
-       class="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-white font-medium transition-opacity hover:opacity-90"
-       style="background: var(--accent);">
+    <a href="/auth/telegram" class="login-btn">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.67l-2.938-.919c-.64-.203-.654-.64.136-.954l11.44-4.408c.534-.194 1.003.131.832.946l.234-.114z"/>
       </svg>
