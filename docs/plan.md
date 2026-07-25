@@ -10,9 +10,9 @@
 | 3.5 | Bot UX улучшения + ImportServiceTest | ✅ Готово |
 | 3.7 | Export & Import доработки | ✅ Готово |
 | 4 | Web UI Foundation (без auth) | ✅ Готово |
+| 5 | Auth + защита Web | ✅ Готово |
 | 4.5 | Mobile UI | ⏳ В очереди |
 | 4.6 | Random | ⏳ В очереди |
-| 5 | Auth + защита Web | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
 | 7 | Chrome Extension | 🔮 Будущее |
 | 8 | iOS App | 🔮 Будущее |
@@ -67,7 +67,11 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 - Если качество плохое — переключиться на **Playwright Java**
 
 ### Новые файлы
-- [x] `service/PdfService.kt` — `generatePdf(url): ByteArray` (Jsoup → Cleaner → XHTML → openhtmltopdf)
+- [x] `service/PdfGenerator.kt` — интерфейс `generatePdf(url): ByteArray`
+  (планировался как единый `PdfService.kt`; разделён на интерфейс + реализации)
+- [x] `service/OpenhtmlPdfGenerator.kt` — дефолтная реализация (Jsoup → Cleaner → XHTML → openhtmltopdf)
+- [x] `service/PlaywrightPdfGenerator.kt` — включается флагом `pdf.playwright.enabled=true`;
+  движок выбирает пользователь inline-кнопкой, если доступен больше одного
 - [ ] Опционально: кеш `post_pdf(post_id, content BYTEA, created_at)`
 
 ### Telegram
@@ -209,10 +213,11 @@ DELETE /api/v1/posts/{id}
 
 ### Новые файлы
 
-- [x] `controller/WebController.kt` — страницы `/feed`, `/archive`, `/favorites`, `/profile`
+- [x] `controller/WebController.kt` — страницы `/` (лента), `/all`, `/archive`, `/favorites`, `/profile`
 - [x] `controller/PostApiController.kt` — REST API для постов
-- [x] `configuration/WebConfig.kt` — DevUserInterceptor, injects userId from config
-- [x] `configuration/properties/WebProperties.kt` — `web.dev-user-id`
+- [x] `configuration/WebConfig.kt` — регистрация интерцептора. Dev-вариант
+      (`DevUserInterceptor` + `configuration/properties/WebProperties.kt` с `web.dev-user-id`)
+      был временным решением фазы 4 и удалён в фазе 5 вместе с приходом реальной auth
 - [x] `templates/layout.html` — базовый layout (nav + content area)
 - [x] `templates/feed.html`, `templates/archive.html`, `templates/favorites.html`, `templates/profile.html`
 - [x] `templates/fragments/post-card.html`, `post-list.html`, `add-post-form.html`
@@ -262,7 +267,7 @@ DELETE /api/v1/posts/{id}
 - `src/main/resources/templates/fragments/post-card.html` — изменений нет
 
 ### Проверка
-1. `docker compose up --build`
+1. `./gradlew bootRun` (compose-файла в репозитории нет, PostgreSQL поднимается отдельно — см. README)
 2. Chrome DevTools → Device toolbar → iPhone SE (375×667), Pixel 7 (412×915)
 3. Убедиться: нижний таббар отображается, навигация работает, active-state корректен
 4. Десктоп (>767px): сайдбар без изменений, регрессий нет
@@ -311,24 +316,44 @@ DELETE /api/v1/posts/{id}
 
 ## Фаза 5 — Auth + защита Web
 
-### Технологии
-- Telegram Login Widget (https://core.telegram.org/bots/telegram-login)
-- JWT (JJWT 0.12.5)
+> **Реализовано иначе, чем планировалось.** Изначально закладывался Telegram Login
+> Widget с проверкой HMAC-подписи и `auth_date`. В итоге сделан полноценный
+> **OAuth 2.0 / OIDC Authorization Code Flow с PKCE** через `oauth.telegram.org`:
+> нет виджета на странице, нет HMAC-верификации, данные пользователя приходят в
+> `id_token`. Актуальные правила — в `.claude/rules/security.md`, диаграммы флоу — в `README.md`.
 
-### Алгоритм верификации hash
-```kotlin
-// 1. data_check_string из параметров без hash, sorted by key, joined by \n
-// 2. secret_key = SHA256(bot_token)  ← НЕ HMAC
-// 3. hash = HMAC-SHA256(key=secret_key, data=data_check_string)
-// 4. Проверка hash + auth_date <= 24ч
+### Технологии
+- Telegram OIDC/OAuth 2.0 + PKCE (`oauth.telegram.org`, scope `openid profile`)
+- JWT (JJWT 0.12.5) в HttpOnly-куке `auth_token`
+
+### Как работает вход
+```
+GET /auth/telegram          → генерация state (UUID) + PKCE code_verifier/challenge (S256),
+                              оба в HttpOnly-куках на 5 минут, redirect на oauth.telegram.org
+GET /auth/telegram/callback → сверка state из куки с параметром,
+                              POST /token (code + code_verifier + client_secret),
+                              разбор id_token, getOrCreateUser, выдача auth_token
+GET /logout                 → auth_token с maxAge=0, redirect на /login
 ```
 
+Подпись `id_token` не верифицируется осознанно (токен получен server-to-server по TLS);
+дополнительно проверяются claim'ы `exp`, `aud` и `iss`. Telegram ID лежит в
+нестандартном claim `id`, а не в `sub`.
+
 ### Новые файлы
-- [ ] `service/TelegramAuthService.kt`
-- [ ] `service/JwtService.kt`
-- [ ] `configuration/JwtAuthInterceptor.kt`
-- [ ] `controller/AuthController.kt` — GET /login, GET /auth/telegram/callback, GET /logout
-- [ ] `templates/login.html`
+- [x] `service/TelegramOidcService.kt` — вместо запланированного `TelegramAuthService.kt`
+- [x] `service/JwtService.kt` — subject токена = внутренний `userId`
+- [x] `configuration/JwtAuthInterceptor.kt` — 401 для `/api/**`, redirect на `/login` для страниц
+- [x] `controller/AuthController.kt` — GET /login, /auth/telegram, /auth/telegram/callback, /logout
+- [x] `templates/login.html`
+- [x] `configuration/properties/TelegramOAuthProperties.kt`, `JwtProperties.kt`
+- [x] `configuration/SecurityHeadersFilter.kt` — сверх плана: X-Frame-Options, CSP, Referrer-Policy
+
+### Защита путей
+- [x] `WebConfig` навешивает интерцептор на `/`, `/all`, `/archive`, `/favorites`,
+      `/profile`, `/api/v1/**`; открыты `/login`, `/auth/**` и webhook
+- [x] Dev-режим из фазы 4 (`web.dev-user-id`, `DevUserInterceptor`) удалён —
+      `userId` теперь приходит из JWT
 
 ### Dependencies
 ```kotlin
@@ -336,6 +361,9 @@ implementation("io.jsonwebtoken:jjwt-api:0.12.5")
 runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
 runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
 ```
+
+### Тесты
+- [x] `AuthControllerTest`, `JwtServiceTest` — WireMock подменяет `oauth.telegram.org`
 
 ---
 
