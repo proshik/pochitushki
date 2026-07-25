@@ -1,5 +1,7 @@
 # Build stage
-FROM eclipse-temurin:21-jdk-jammy AS build
+# Must match the Java toolchain in build.gradle.kts (25): Gradle has no toolchain download
+# repository configured, so a mismatched JDK here fails with "Cannot find a Java installation".
+FROM eclipse-temurin:25-jdk-jammy AS build
 
 WORKDIR /app
 
@@ -15,7 +17,7 @@ COPY src src
 RUN ./gradlew bootJar
 
 # Run stage
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:25-jre-jammy
 
 WORKDIR /app
 
