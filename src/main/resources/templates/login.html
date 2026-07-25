@@ -5,19 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Войти — Почитушки</title>
   <link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
-  <script>
-    (function () {
-      if (localStorage.getItem('pochitushki-theme') === 'dark') {
-        document.documentElement.classList.add('dark');
-      }
-    })();
-  </script>
+  <!-- Anti-flash: must run before any paint, so no defer. -->
+  <script src="/js/theme-init.js"></script>
 
   <!-- Same faces as layout.html: this page does not extend it, so it needs its own link. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap">
+  <link rel="stylesheet" href="/css/fonts.css">
 
   <style>
     /* ── Reset ── */

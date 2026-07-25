@@ -13,11 +13,37 @@ import org.springframework.web.filter.OncePerRequestFilter
  * - X-Content-Type-Options: stop MIME sniffing.
  * - Referrer-Policy: don't leak full URLs (which carry post URLs) to third parties.
  *
- * The CSP is intentionally limited to frame-ancestors so it does not break the inline scripts
- * and CDN assets the pages rely on; tighten it further once assets are self-hosted with nonces.
+ * The CSP matters here because post titles and OG metadata are scraped from arbitrary
+ * third-party sites. Thymeleaf's `th:text` escaping is the first line of defence against
+ * injected markup; `script-src 'self'` is the second.
+ *
+ * Keeping `script-src 'self'` (no `'unsafe-inline'`, no `'unsafe-eval'`) constrains the
+ * templates — see the notes at the top of static/js/app.js before adding markup:
+ * no inline `<script>`, no `on*=""` handlers, and no htmx `hx-on` / `js:` expressions.
+ *
+ * Two directives stay deliberately loose:
+ * - `style-src` allows `'unsafe-inline'`: the templates carry ~100 inline `style=""`
+ *   attributes plus inline `<style>` blocks. Style injection is far less dangerous than
+ *   script execution, so this is the accepted trade-off rather than a nonce pipeline.
+ * - `img-src` allows any https host: post cards load favicons from google.com and OG
+ *   images straight from the linked sites. Narrowing this to 'self' would mean proxying
+ *   every image through the app.
  */
 @Component
 class SecurityHeadersFilter : OncePerRequestFilter() {
+
+    private val contentSecurityPolicy = listOf(
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' https:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "form-action 'self'",
+        "base-uri 'none'",
+        "object-src 'none'",
+        "frame-ancestors 'none'",
+    ).joinToString("; ")
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -27,7 +53,7 @@ class SecurityHeadersFilter : OncePerRequestFilter() {
         response.setHeader("X-Frame-Options", "DENY")
         response.setHeader("X-Content-Type-Options", "nosniff")
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.setHeader("Content-Security-Policy", "frame-ancestors 'none'")
+        response.setHeader("Content-Security-Policy", contentSecurityPolicy)
         filterChain.doFilter(request, response)
     }
 }

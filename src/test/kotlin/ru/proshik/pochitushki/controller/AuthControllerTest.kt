@@ -43,12 +43,26 @@ class AuthControllerTest : BaseIntegrationTest() {
 
     @Test
     fun `responses carry baseline security headers`() {
-        mockMvc.perform(get("/login"))
+        val result = mockMvc.perform(get("/login"))
             .andExpect(status().isOk)
             .andExpect(header().string("X-Frame-Options", "DENY"))
             .andExpect(header().string("X-Content-Type-Options", "nosniff"))
             .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
-            .andExpect(header().string("Content-Security-Policy", "frame-ancestors 'none'"))
+            .andReturn()
+
+        val csp = result.response.getHeader("Content-Security-Policy") ?: ""
+
+        assertTrue(csp.contains("default-src 'self'"), "CSP should default to same-origin: $csp")
+        assertTrue(csp.contains("frame-ancestors 'none'"), "CSP should forbid framing: $csp")
+
+        // The point of the policy: scripts run only from this origin. Reintroducing
+        // 'unsafe-inline' or 'unsafe-eval' for scripts would silently gut the XSS
+        // defence, so guard it here rather than trusting review. See app.js for the
+        // template rules that keep this achievable.
+        assertTrue(csp.contains("script-src 'self'"), "CSP should pin scripts to 'self': $csp")
+        val scriptSrc = csp.split(";").first { it.trim().startsWith("script-src") }
+        assertFalse(scriptSrc.contains("unsafe-inline"), "script-src must not allow inline: $csp")
+        assertFalse(csp.contains("unsafe-eval"), "CSP must not allow eval anywhere: $csp")
     }
 
     @Test

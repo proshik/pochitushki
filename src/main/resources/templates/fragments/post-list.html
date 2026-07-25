@@ -17,7 +17,7 @@
     <div th:replace="~{fragments/post-card :: card(${post}, ${post.isArchived ? 'archive' : 'unread'})}"></div>
   </div>
 
-  <!-- Infinite scroll sentinel — observer managed by initScrollSentinel() in layout.html;
+  <!-- Infinite scroll sentinel — observer managed by initScrollSentinel() in /js/app.js;
        htmx fires on custom 'loadMore' event so IntersectionObserver controls timing -->
   <div th:if="${hasMore and !posts.isEmpty()}"
        class="load-more-sentinel"
@@ -25,7 +25,7 @@
        hx-trigger="loadMore"
        hx-target="#post-list"
        hx-swap="beforeend"
-       hx-on--after-request="if(event.detail.successful) this.remove()"
+       data-remove-on-success
        style="padding: 1rem; text-align: center; color: var(--muted); font-size: 0.9rem;">
     <span th:text="#{web.list.loading}">Загрузка...</span>
   </div>

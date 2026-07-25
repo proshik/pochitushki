@@ -8,8 +8,8 @@
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
       <h1 class="font-display" style="font-size: 2rem; font-weight: 700;" th:text="#{web.page.archive}">Архив</h1>
       <div style="display: flex; gap: 0.25rem;">
-        <button id="view-list-btn" class="view-btn" onclick="setViewMode('list')" title="Список">☰</button>
-        <button id="view-grid-btn" class="view-btn" onclick="setViewMode('grid')" title="Сетка">⊞</button>
+        <button id="view-list-btn" class="view-btn" data-view-mode="list" title="Список">☰</button>
+        <button id="view-grid-btn" class="view-btn" data-view-mode="grid" title="Сетка">⊞</button>
       </div>
     </div>
     <div id="post-list" th:classappend="${viewMode == 'grid' ? 'view-grid' : ''}">

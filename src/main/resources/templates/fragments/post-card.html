@@ -60,10 +60,9 @@
                     data-fav-btn
                     th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
                     hx-swap="none"
-                    hx-on--after-request="if(event.detail.successful) toggleFavBtn(this)"
                     th:text="${post.isFavorite} ? '⭐' : '☆'">☆</button>
             <button class="card-action-btn"
-                    th:attr="onclick='showDeleteConfirm(' + ${post.id} + ')'">🗑</button>
+                    data-action="delete-show">🗑</button>
           </div>
           <div class="delete-confirm"
                style="position: absolute; inset: 0; gap: 0.4rem; align-items: center;
@@ -76,7 +75,7 @@
                     hx-swap="delete">Да</button>
             <button class="delete-confirm-no"
                     th:text="#{web.post.delete.no}"
-                    th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
+                    data-action="delete-hide">Нет</button>
           </div>
         </div>
       </div>
@@ -151,11 +150,10 @@
                     data-fav-btn
                     th:attr="hx-post=@{/api/v1/posts/{id}/favorite(id=${post.id},type=${type})}"
                     hx-swap="none"
-                    hx-on--after-request="if(event.detail.successful) toggleFavBtn(this)"
                     th:text="${post.isFavorite} ? '⭐' : '☆'">☆</button>
             <button class="card-action-btn"
                     title="Удалить"
-                    th:attr="onclick='showDeleteConfirm(' + ${post.id} + ')'">🗑</button>
+                    data-action="delete-show">🗑</button>
           </div>
           <div class="delete-confirm"
                style="position: absolute; inset: 0; gap: 0.3rem; align-items: center;
@@ -168,7 +166,7 @@
                     hx-swap="delete">Да</button>
             <button class="delete-confirm-no"
                     th:text="#{web.post.delete.no}"
-                    th:attr="onclick='hideDeleteConfirm(' + ${post.id} + ')'">Нет</button>
+                    data-action="delete-hide">Нет</button>
           </div>
         </div>
       </div>

@@ -73,13 +73,13 @@
                     hx-post="/api/v1/profile/settings"
                     hx-vals='{"languageCode":"ru"}'
                     hx-swap="none"
-                    hx-on--after-request="if(event.detail.successful) location.reload()">RU</button>
+                    data-reload-on-success>RU</button>
             <button class="settings-btn"
                     th:classappend="${user.settings.languageCode == 'en'} ? ' settings-btn-active' : ''"
                     hx-post="/api/v1/profile/settings"
                     hx-vals='{"languageCode":"en"}'
                     hx-swap="none"
-                    hx-on--after-request="if(event.detail.successful) location.reload()">EN</button>
+                    data-reload-on-success>EN</button>
           </div>
         </div>
 
@@ -100,13 +100,5 @@
   .settings-btn-active { background: var(--accent) !important; color: white !important; border-color: var(--accent) !important; }
 </style>
 
-<script>
-  function activateSettingBtn(btn, groupId) {
-    document.getElementById(groupId).querySelectorAll('.settings-btn').forEach(function(b) {
-      b.classList.remove('settings-btn-active');
-    });
-    btn.classList.add('settings-btn-active');
-  }
-</script>
 </body>
 </html>
