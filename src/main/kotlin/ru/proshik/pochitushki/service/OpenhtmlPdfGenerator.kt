@@ -3,6 +3,7 @@ package ru.proshik.pochitushki.service
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URI
 import java.util.Base64
 import javax.imageio.ImageIO
@@ -53,26 +54,19 @@ class OpenhtmlPdfGenerator(
         val cleaner = Cleaner(Safelist.relaxed())
         val cleanDoc = cleaner.clean(doc)
 
-        // Resolve relative image URLs to absolute; convert unsupported formats to PNG
+        // Inline every remote image as a data URI so the renderer performs no network I/O of
+        // its own. Handing it a remote src would put the fetch outside our SSRF guard: the
+        // guard vets the URL we were given, while the renderer would follow redirects from it.
         for (img in cleanDoc.select("img[src]")) {
             val src = img.attr("src")
             if (src.isNotBlank() && !src.startsWith("data:")) {
                 val resolved = img.absUrl("src").ifBlank { resolveUrl(url, src) }
-                // SSRF guard: every remote image is fetched server-side (by the renderer for
-                // supported formats, or by convertToDataPng otherwise). Drop non-public targets.
-                if (!urlSecurityValidator.isAllowed(resolved)) {
-                    logger.debug("Removing image with disallowed URL: {}", resolved)
-                    img.remove()
-                } else if (isSupportedImageFormat(resolved)) {
-                    img.attr("src", resolved)
+                val dataUri = inlineImage(resolved)
+                if (dataUri != null) {
+                    img.attr("src", dataUri)
                 } else {
-                    val dataUri = convertToDataPng(resolved)
-                    if (dataUri != null) {
-                        img.attr("src", dataUri)
-                    } else {
-                        logger.debug("Removing unconvertible image: {}", resolved)
-                        img.remove()
-                    }
+                    logger.debug("Removing image that could not be inlined: {}", resolved)
+                    img.remove()
                 }
             }
         }
@@ -135,35 +129,86 @@ class OpenhtmlPdfGenerator(
 </html>"""
     }
 
-    private fun convertToDataPng(imageUrl: String): String? {
+    /**
+     * Fetches [imageUrl] and returns it as a data URI, or null if it must be dropped.
+     *
+     * Formats PDFBox embeds directly are passed through untouched; anything else (WebP, TIFF, …)
+     * is decoded and re-encoded as PNG.
+     */
+    private fun inlineImage(imageUrl: String): String? {
+        val (bytes, contentType) = fetchImage(imageUrl) ?: return null
+
+        val mediaType = contentType ?: guessMediaTypeFromPath(imageUrl)
+        if (mediaType in DIRECTLY_EMBEDDABLE_MEDIA_TYPES) {
+            return "data:$mediaType;base64,${Base64.getEncoder().encodeToString(bytes)}"
+        }
+
         return try {
-            val connection = URI(imageUrl).toURL().openConnection()
+            val image = bytes.inputStream().use { ImageIO.read(it) } ?: return null
+            val pngBytes = ByteArrayOutputStream().use { baos ->
+                ImageIO.write(image, "png", baos)
+                baos.toByteArray()
+            }
+            logger.debug("Re-encoded image to PNG: {} ({} bytes)", imageUrl, pngBytes.size)
+            "data:image/png;base64,${Base64.getEncoder().encodeToString(pngBytes)}"
+        } catch (e: Exception) {
+            logger.warn("Failed to convert image: {} => {}", imageUrl, e.message)
+            null
+        }
+    }
+
+    /**
+     * Fetches a remote image with the SSRF guard applied to the request that is actually made.
+     *
+     * Redirects are refused rather than followed. [UrlSecurityValidator] can only vet the URL it
+     * is handed, and `HttpURLConnection` follows redirects by default — so a public URL that
+     * 3xx-redirects to 169.254.169.254 or an RFC1918 address would otherwise walk straight past
+     * the guard. Article images have no legitimate need for a redirect, so refusing is simpler
+     * and safer than following-and-revalidating.
+     */
+    private fun fetchImage(imageUrl: String): Pair<ByteArray, String?>? {
+        if (!urlSecurityValidator.isAllowed(imageUrl)) {
+            logger.debug("Refusing image with disallowed URL: {}", imageUrl)
+            return null
+        }
+
+        return try {
+            val connection = URI(imageUrl).toURL().openConnection() as? HttpURLConnection
+            if (connection == null) {
+                logger.debug("Refusing non-HTTP image URL: {}", imageUrl)
+                return null
+            }
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = 5000
             connection.readTimeout = 10000
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; Pochitushki/1.0)")
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+
+            if (connection.responseCode !in 200..299) {
+                logger.debug("Skipping image, HTTP {}: {}", connection.responseCode, imageUrl)
+                return null
+            }
 
             // Cap the download to avoid decompression-bomb / huge images exhausting memory.
-            val imageBytes = connection.getInputStream().use { readUpTo(it, MAX_IMAGE_BYTES) }
+            val bytes = connection.inputStream.use { readUpTo(it, MAX_IMAGE_BYTES) }
                 ?: run {
                     logger.debug("Skipping oversized image (> {} bytes): {}", MAX_IMAGE_BYTES, imageUrl)
                     return null
                 }
 
-            val image = imageBytes.inputStream().use { ImageIO.read(it) }
-                ?: return null
-
-            val pngBytes = ByteArrayOutputStream().use { baos ->
-                ImageIO.write(image, "png", baos)
-                baos.toByteArray()
-            }
-
-            val base64 = Base64.getEncoder().encodeToString(pngBytes)
-            logger.debug("Converted image to PNG data URI: {} ({} bytes)", imageUrl, pngBytes.size)
-            "data:image/png;base64,$base64"
+            bytes to connection.contentType?.substringBefore(';')?.trim()?.lowercase()
         } catch (e: Exception) {
-            logger.warn("Failed to convert image: {} => {}", imageUrl, e.message)
+            logger.warn("Failed to fetch image: {} => {}", imageUrl, e.message)
             null
         }
+    }
+
+    private fun guessMediaTypeFromPath(url: String): String? {
+        val path = try {
+            URI(url).path?.lowercase() ?: ""
+        } catch (e: Exception) {
+            url.lowercase()
+        }
+        return EXTENSION_MEDIA_TYPES.entries.firstOrNull { path.endsWith(it.key) }?.value
     }
 
     /** Read up to [limit] bytes; return null if the stream has more (oversized). */
@@ -179,15 +224,6 @@ class OpenhtmlPdfGenerator(
             out.write(buffer, 0, read)
         }
         return out.toByteArray()
-    }
-
-    private fun isSupportedImageFormat(url: String): Boolean {
-        val path = try {
-            URI(url).path?.lowercase() ?: ""
-        } catch (e: Exception) {
-            url.lowercase()
-        }
-        return SUPPORTED_IMAGE_EXTENSIONS.any { path.endsWith(it) }
     }
 
     private fun resolveUrl(baseUrl: String, relative: String): String {
@@ -210,7 +246,19 @@ class OpenhtmlPdfGenerator(
     companion object {
         private const val FONT_FAMILY = "document-font"
         private const val MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB per image
-        private val SUPPORTED_IMAGE_EXTENSIONS = listOf(".png", ".jpg", ".jpeg", ".gif", ".bmp")
+        private const val USER_AGENT = "Mozilla/5.0 (compatible; Pochitushki/1.0)"
+
+        /** Embedded as-is — no decode/re-encode round trip. */
+        private val DIRECTLY_EMBEDDABLE_MEDIA_TYPES =
+            setOf("image/png", "image/jpeg", "image/gif", "image/bmp")
+
+        private val EXTENSION_MEDIA_TYPES = mapOf(
+            ".png" to "image/png",
+            ".jpg" to "image/jpeg",
+            ".jpeg" to "image/jpeg",
+            ".gif" to "image/gif",
+            ".bmp" to "image/bmp",
+        )
 
         private val FONT_SEARCH_PATHS = listOf(
             // Linux (Debian/Ubuntu) — DejaVu Sans

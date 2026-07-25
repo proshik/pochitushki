@@ -48,6 +48,87 @@ class PdfServiceTest : BaseIntegrationTest() {
         wireMock.stop()
     }
 
+    /**
+     * Regression: image fetches must not follow redirects.
+     *
+     * UrlSecurityValidator only vets the URL it is handed, so a public image URL that
+     * 3xx-redirects to 169.254.169.254 or an RFC1918 address used to walk straight past it —
+     * `HttpURLConnection` follows redirects by default. The redirect target must never be
+     * requested. Both extensions are covered because the two image paths used to differ: the
+     * renderer fetched "supported" formats itself while the app fetched the rest.
+     */
+    @Test
+    fun `generatePdf does not follow redirects when fetching images`() {
+        for (name in listOf("redirected.png", "redirected.tiff")) {
+            wireMock.stubFor(
+                get(urlEqualTo("/$name")).willReturn(
+                    aResponse().withStatus(302).withHeader("Location", "/internal-target.png")
+                )
+            )
+        }
+        wireMock.stubFor(
+            get(urlEqualTo("/internal-target.png")).willReturn(
+                aResponse().withStatus(200).withHeader("Content-Type", "image/png").withBody(TINY_PNG)
+            )
+        )
+        wireMock.stubFor(
+            get(urlEqualTo("/article-with-redirects")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody(
+                        """
+                        <html><head><title>Redirecting images</title></head>
+                        <body>
+                            <p>Body text.</p>
+                            <img src="/redirected.png" alt="supported extension"/>
+                            <img src="/redirected.tiff" alt="unsupported extension"/>
+                        </body></html>
+                        """.trimIndent()
+                    )
+            )
+        )
+
+        val pdfBytes = pdfGenerator.generatePdf("http://localhost:${wireMock.port()}/article-with-redirects")
+
+        assertTrue(String(pdfBytes.copyOfRange(0, 5)) == "%PDF-", "Should still produce a PDF")
+        wireMock.verify(0, getRequestedFor(urlEqualTo("/internal-target.png")))
+    }
+
+    /**
+     * Images are embedded as data URIs from the bytes we fetched, so a server lying about the
+     * content type must not abort the whole document — the image is skipped instead.
+     */
+    @Test
+    fun `generatePdf survives a body that is not really an image`() {
+        wireMock.stubFor(
+            get(urlEqualTo("/not-really.png")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "image/png")
+                    .withBody("<html>this is an error page, not a PNG</html>")
+            )
+        )
+        wireMock.stubFor(
+            get(urlEqualTo("/article-bad-image")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody(
+                        """
+                        <html><head><title>Bad image</title></head>
+                        <body><p>Text survives.</p><img src="/not-really.png" alt="bad"/></body></html>
+                        """.trimIndent()
+                    )
+            )
+        )
+
+        val pdfBytes = pdfGenerator.generatePdf("http://localhost:${wireMock.port()}/article-bad-image")
+
+        assertTrue(String(pdfBytes.copyOfRange(0, 5)) == "%PDF-", "Should still produce a PDF")
+        assertTrue(pdfBytes.size > 100, "PDF should still contain the page text")
+    }
+
     @Test
     fun `generatePdf produces valid PDF from simple HTML page`() {
         wireMock.stubFor(
