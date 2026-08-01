@@ -1,4 +1,4 @@
-/* Web UI behaviour, extracted from layout.html so the CSP can stay on
+/* Web UI behaviour, kept out of templates so the CSP can stay on
    script-src 'self' (no 'unsafe-inline', no 'unsafe-eval').
 
    Two rules keep it that way — please preserve them when editing templates:
@@ -19,6 +19,16 @@ function initAddPostForm() {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function showAddError() {
+    var msg = form.dataset.errorText || 'Error';
+    var toast = document.createElement('div');
+    toast.className = 'add-error';
+    toast.setAttribute('role', 'alert');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(function () { toast.remove(); }, 4000);
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var inp  = document.getElementById('add-post-url');
@@ -34,40 +44,38 @@ function initAddPostForm() {
     try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch (ex) {}
     var abbr      = esc(domain.substring(0, 2).toUpperCase());
     var domainEsc = esc(domain);
+    var adding    = esc(form.dataset.addingText || '…');
+
+    var postList = document.getElementById('post-list');
+    var shelf    = postList && postList.classList.contains('shelf');
 
     var tempId   = 'card-optimistic-' + Date.now();
     var tempCard = document.createElement('div');
     tempCard.id        = tempId;
     tempCard.className = 'post-card';
-    tempCard.style.opacity = '0.5';
-    tempCard.innerHTML =
-      '<div class="card-list-view">' +
-        '<div style="width:32px;height:32px;flex-shrink:0;border-radius:6px;background:var(--border);' +
-             'display:flex;align-items:center;justify-content:center;">' +
-          '<span style="font-size:0.62rem;color:var(--muted);font-family:sans-serif;">' + abbr + '</span>' +
-        '</div>' +
-        '<div style="flex:1;min-width:0;">' +
-          '<span class="font-display" style="font-size:1.05rem;font-weight:600;color:var(--text);' +
-               'display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + domainEsc + '</span>' +
-          '<p style="color:var(--muted);font-style:italic;font-size:0.82rem;margin:0.15rem 0 0;">Добавляется…</p>' +
-        '</div>' +
-      '</div>' +
-      '<div class="card-grid-view" style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg);width:100%;">' +
-        '<div style="aspect-ratio:16/9;background:var(--border);"></div>' +
-        '<div class="card-grid-body" style="padding:0.65rem 0.75rem;">' +
-          '<span class="font-display" style="font-size:0.88rem;font-weight:600;color:var(--text);' +
-               'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + domainEsc + '</span>' +
-          '<p style="font-size:0.72rem;color:var(--muted);font-style:italic;margin:auto 0 0;">Добавляется…</p>' +
-        '</div>' +
-      '</div>';
+    tempCard.style.opacity = '0.55';
+    /* Simplified cover placeholder — the real card fragment replaces it on success. */
+    tempCard.innerHTML = shelf
+      ? '<span class="cover co-mono cv-5">' +
+          '<span class="cover-dom">' + domainEsc + '</span>' +
+          '<span class="cover-big">' + abbr + '</span>' +
+          '<span class="cover-cap">' + adding + '</span>' +
+        '</span>' +
+        '<span class="cell-title">' + domainEsc + '</span>' +
+        '<span class="cell-meta">' + adding + '</span>'
+      : '<span class="mini-cover cv-5">' + abbr + '</span>' +
+        '<span style="min-width:0;">' +
+          '<span class="row-title">' + domainEsc + '</span>' +
+          '<span class="row-sub">' + adding + '</span>' +
+        '</span>' +
+        '<span></span>';
 
-    var postList = document.getElementById('post-list');
     if (postList) postList.insertBefore(tempCard, postList.firstChild);
 
     fetch('/api/v1/posts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'url=' + encodeURIComponent(url)
+      body: 'url=' + encodeURIComponent(url) + '&view=' + (shelf ? 'shelf' : 'list')
     })
     .then(function (r) {
       if (!r.ok) throw new Error('error');
@@ -82,15 +90,13 @@ function initAddPostForm() {
       if (realCard) {
         temp.parentNode.replaceChild(realCard, temp);
         if (typeof htmx !== 'undefined') htmx.process(realCard);
-        initFavicons(realCard);
-        var pl = document.getElementById('post-list');
-        if (pl && pl.classList.contains('view-grid')) initOgImages(realCard);
       }
     })
     .catch(function () {
       var temp = document.getElementById(tempId);
       if (temp) temp.remove();
       inp.value = url;
+      showAddError();
     })
     .finally(function () {
       inp.disabled = false;
@@ -100,68 +106,26 @@ function initAddPostForm() {
   });
 }
 
-/* ── Theme ── */
+/* ── Theme — icon swap is pure CSS (html.dark .icon-sun / .icon-moon) ── */
 function toggleTheme() {
   var isDark = document.documentElement.classList.toggle('dark');
   localStorage.setItem('pochitushki-theme', isDark ? 'dark' : 'sepia');
-  var icon = document.getElementById('theme-icon-rail');
-  if (icon) icon.textContent = isDark ? '🌙' : '☀️';
-}
-
-/* ── Favicon loader ── */
-function initFavicons(root) {
-  (root || document).querySelectorAll('.post-favicon[data-url]').forEach(function (el) {
-    try {
-      var domain = new URL(el.dataset.url).hostname;
-      var img = el.querySelector('img');
-      var fallback = el.querySelector('.fav-fallback');
-      fallback.textContent = domain.replace(/^www\./, '').substring(0, 2).toUpperCase();
-      img.src = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=32';
-      img.onload  = function () { img.style.display = 'block'; fallback.style.display = 'none'; };
-      img.onerror = function () { img.style.display = 'none'; };
-    } catch (e) {}
-  });
-}
-
-/* ── OG image loader (grid mode only) ── */
-function initOgImages(root) {
-  (root || document).querySelectorAll('.post-og[data-id]:not([data-og-loaded])').forEach(function (el) {
-    el.setAttribute('data-og-loaded', '1');
-    var id = el.dataset.id;
-    var type = el.dataset.type || 'unread';
-    fetch('/api/v1/posts/' + id + '/og-image?type=' + type)
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-      .then(function (data) {
-        var img = el.querySelector('img.og-img');
-        var fallback = el.querySelector('.og-fallback');
-        img.src = data.ogImageUrl;
-        img.onload = function () {
-          img.style.display = 'block';
-          if (fallback) fallback.style.display = 'none';
-        };
-        img.onerror = function () { img.style.display = 'none'; };
-      })
-      .catch(function () { /* keep fallback visible */ });
-  });
 }
 
 /* ── Favorite toggle (client-side only, no card re-render) ── */
 function toggleFavBtn(btn) {
   btn.closest('.post-card').querySelectorAll('[data-fav-btn]').forEach(function (b) {
-    b.textContent = b.textContent.trim() === '☆' ? '⭐' : '☆';
+    var fav = b.classList.toggle('is-fav');
+    b.setAttribute('aria-pressed', fav ? 'true' : 'false');
   });
 }
 
-/* ── View mode ── */
+/* ── View mode — the server renders one markup per mode, so switching reloads.
+   Cookie value keeps the legacy names: list | grid (grid == shelf). ── */
 function setViewMode(mode) {
-  var postList = document.getElementById('post-list');
-  if (!postList) return;
-  postList.classList.toggle('view-grid', mode === 'grid');
-  document.getElementById('view-list-btn')?.classList.toggle('active', mode === 'list');
-  document.getElementById('view-grid-btn')?.classList.toggle('active', mode === 'grid');
   localStorage.setItem('pochitushki-view', mode);
   document.cookie = 'pochitushki-view=' + mode + '; path=/; max-age=31536000; SameSite=Lax';
-  if (mode === 'grid') initOgImages();
+  location.reload();
 }
 
 /* ── Infinite scroll ── */
@@ -198,6 +162,15 @@ function initScrollSentinel() {
   observer.observe(sentinel);
 }
 
+/* ── Broken og:image → typographic fallback (error doesn't bubble, so capture) ── */
+document.addEventListener('error', function (e) {
+  var t = e.target;
+  if (t && t.matches && t.matches('img.cover-img')) {
+    var cover = t.closest('.cover');
+    if (cover) cover.classList.add('og-failed');
+  }
+}, true);
+
 /* ── Delegated clicks ──
    One listener on document, so it also covers cards HTMX inserts later.
    Replaces the former on*="" attributes. */
@@ -231,7 +204,10 @@ document.addEventListener('htmx:afterRequest', function (e) {
   var el = e.detail.elt;
   if (!el || !el.matches) return;
 
-  if (el.matches('[data-fav-btn]')) {
+  if (el.matches('[data-unfav-remove]')) {
+    /* Favorites showcase: removing the star removes the card right away. */
+    el.closest('.post-card')?.remove();
+  } else if (el.matches('[data-fav-btn]')) {
     toggleFavBtn(el);
   } else if (el.matches('[data-reload-on-success]')) {
     location.reload();
@@ -245,29 +221,23 @@ document.addEventListener('DOMContentLoaded', function () {
      quietly needing 'unsafe-eval' again. */
   if (typeof htmx !== 'undefined') htmx.config.allowEval = false;
 
-  var icon = document.getElementById('theme-icon-rail');
-  if (icon) icon.textContent = document.documentElement.classList.contains('dark') ? '🌙' : '☀️';
-  initFavicons();
+  /* Covers whose og image failed BEFORE this (deferred) script attached the
+     capture listener above. */
+  document.querySelectorAll('img.cover-img').forEach(function (img) {
+    if (img.complete && img.naturalWidth === 0) {
+      img.closest('.cover')?.classList.add('og-failed');
+    }
+  });
+
   initAddPostForm();
-  /* view-grid class is already applied server-side from cookie — only sync button states */
+  /* The mode class is applied server-side from the cookie — only sync button states. */
   var postList = document.getElementById('post-list');
-  var mode = postList && postList.classList.contains('view-grid') ? 'grid' : 'list';
+  var mode = postList && postList.classList.contains('shelf') ? 'grid' : 'list';
   document.getElementById('view-list-btn')?.classList.toggle('active', mode === 'list');
   document.getElementById('view-grid-btn')?.classList.toggle('active', mode === 'grid');
-  if (mode === 'grid') initOgImages();
   initScrollSentinel();
 });
 
-document.addEventListener('htmx:afterSwap', function (e) {
-  /* For outerHTML swaps the target is already detached; search from its
-     parent so the newly inserted element is found. Fall back to document. */
-  var root = document.contains(e.detail.target)
-    ? e.detail.target
-    : (e.detail.target.parentElement || document);
-  initFavicons(root);
-  var postList = document.getElementById('post-list');
-  if (postList && postList.classList.contains('view-grid')) {
-    initOgImages(root);
-  }
+document.addEventListener('htmx:afterSwap', function () {
   initScrollSentinel();
 });

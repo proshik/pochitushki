@@ -1,40 +1,40 @@
 <!DOCTYPE html>
-<!-- src/main/resources/templates/fragments/post-list.html -->
-<html xmlns:th="http://www.thymeleaf.org">
+<!-- src/main/resources/templates/fragments/post-list.html
 
-<!--
   Parameters:
-    posts    : List<PostData>
-    pageType : "unread" | "archive" | "favorites"  (used for scroll trigger URL)
+    covers   : List<CoverView>
+    pageType : "unread" | "all" | "archive" | "favorites"  (scroll trigger URL + chips)
     offset   : Int  (next offset to load)
     hasMore  : Boolean
+    viewMode : "shelf" | "list"
 -->
-<div th:fragment="posts(posts, pageType, offset, hasMore)">
+<html xmlns:th="http://www.thymeleaf.org">
 
-  <!-- Post cards — card type is derived from post.isArchived, never "favorites" -->
-  <div th:each="post, iter : ${posts}"
+<div th:fragment="posts(covers, pageType, offset, hasMore, viewMode)">
+
+  <!-- Card type is derived from post.isArchived, never "favorites"/"all" -->
+  <div th:each="cv, iter : ${covers}"
        th:style="'--card-index: ' + ${iter.index}">
-    <div th:replace="~{fragments/post-card :: card(${post}, ${post.isArchived ? 'archive' : 'unread'})}"></div>
+    <div th:replace="~{fragments/post-card :: card(${cv}, ${cv.post.isArchived ? 'archive' : 'unread'}, ${viewMode}, ${pageType})}"></div>
   </div>
 
   <!-- Infinite scroll sentinel — observer managed by initScrollSentinel() in /js/app.js;
        htmx fires on custom 'loadMore' event so IntersectionObserver controls timing -->
-  <div th:if="${hasMore and !posts.isEmpty()}"
+  <div th:if="${hasMore and !covers.isEmpty()}"
        class="load-more-sentinel"
        th:attr="hx-get=@{/api/v1/posts/fragment(type=${pageType},offset=${offset})}"
        hx-trigger="loadMore"
        hx-target="#post-list"
        hx-swap="beforeend"
-       data-remove-on-success
-       style="padding: 1rem; text-align: center; color: var(--muted); font-size: 0.9rem;">
+       data-remove-on-success>
     <span th:text="#{web.list.loading}">Загрузка...</span>
   </div>
 
-  <!-- Empty state -->
-  <div th:if="${posts.isEmpty()}"
-       th:text="#{web.list.empty}"
-       style="padding: 3rem 0; text-align: center; color: var(--muted);">
-    Список пуст
+  <!-- Empty state: an invitation, not an apology -->
+  <div th:if="${covers.isEmpty()}" class="empty-state">
+    <div class="empty-cover" aria-hidden="true">+</div>
+    <h2 th:text="#{web.empty.title}">Полка пуста</h2>
+    <p th:text="#{web.empty.text}">Вставьте ссылку в поле сверху или отправьте её боту — обложка появится сама.</p>
   </div>
 
 </div>

@@ -17,224 +17,96 @@
   <script src="/js/htmx-ext-json-enc.js" defer></script>
   <script src="/js/app.js" defer></script>
   <link rel="stylesheet" href="/css/fonts.css">
-
-  <style>
-    /* ── Reset ──
-       Replaces the parts of Tailwind's Preflight the markup used to rely on.
-       Everything else (links, buttons, inputs, lists) already sets its own
-       colours, borders and fonts inline, so nothing more is needed here. */
-    *, ::before, ::after { box-sizing: border-box; }
-    body { margin: 0; }
-    h1, h2, h3, p { margin: 0; font-size: inherit; font-weight: inherit; }
-    img, svg { display: block; max-width: 100%; }
-
-    /* ── Palettes ── */
-    :root {
-      --bg: #F5F0E8; --text: #1A1714; --accent: #C0622A;
-      --muted: #8B7355; --border: #DDD5C4;
-      --sidebar-bg: #EAE4D8;
-    }
-    html.dark {
-      --bg: #1A1714; --text: #E8E0D0;
-      --border: #3A3330; --muted: #8B7B6B;
-      --sidebar-bg: #211D1A;
-    }
-    body {
-      background-color: var(--bg); color: var(--text);
-      font-family: 'Source Serif 4', Georgia, serif;
-      transition: background-color 0.2s, color 0.2s;
-    }
-    .font-display { font-family: 'Playfair Display', Georgia, serif; }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ── Post card — list mode (default) ── */
-    .post-card {
-      display: flex; gap: 0.75rem; align-items: flex-start;
-      padding-top: 1rem; padding-bottom: 1rem;
-      border-bottom: 1px solid var(--border);
-      animation: fadeIn 0.3s ease-out both;
-      animation-delay: calc(var(--card-index, 0) * 60ms);
-    }
-    .card-list-view { display: contents; }
-    .card-grid-view { display: none; }
-    .post-card .card-actions {
-      display: flex; opacity: 0; pointer-events: none; transition: opacity 0.15s;
-    }
-    .post-card:hover .card-actions { opacity: 1; pointer-events: auto; }
-    .post-card .delete-confirm {
-      display: flex; opacity: 0; pointer-events: none; transition: opacity 0.15s;
-    }
-    .post-card.confirming .card-actions { opacity: 0 !important; pointer-events: none !important; }
-    .post-card.confirming .delete-confirm { opacity: 1 !important; pointer-events: auto !important; }
-    .htmx-added { animation: fadeIn 0.3s ease-out both; }
-
-    /* ── Post card — grid mode ── */
-    #post-list.view-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
-      gap: 1rem;
-    }
-    /* Make intermediate Thymeleaf wrapper divs transparent so .post-card elements
-       become direct grid items. :not(.post-card) prevents the rule from matching
-       cards inserted directly by HTMX afterbegin (which are already at depth 1). */
-    #post-list.view-grid > div:not(.post-card),
-    #post-list.view-grid > div:not(.post-card) > div:not(.load-more-sentinel) { display: contents; }
-    .view-grid .post-card { display: flex; flex-direction: column; padding: 0; border-bottom: none; }
-    .view-grid .card-list-view { display: none; }
-    .view-grid .card-grid-view { display: flex; flex-direction: column; flex: 1; }
-    .view-grid .card-grid-body { min-height: 5.5rem; flex: 1; display: flex; flex-direction: column; }
-
-    /* ── Action button (ghost style) ── */
-    .card-action-btn {
-      background: none; border: 1px solid transparent;
-      border-radius: 5px; padding: 0.2rem 0.55rem;
-      font-size: 0.8rem; color: var(--muted);
-      cursor: pointer; font-family: inherit;
-      transition: background 0.1s, border-color 0.1s, color 0.1s;
-    }
-    .card-action-btn:hover {
-      background: var(--border); border-color: var(--border); color: var(--text);
-    }
-
-    /* ── Delete confirm ── */
-    .delete-confirm {
-      align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--muted);
-    }
-    .delete-confirm-yes {
-      background: var(--accent); color: white; border: none;
-      border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.78rem;
-      cursor: pointer; font-family: inherit;
-    }
-    .delete-confirm-no {
-      background: none; border: 1px solid var(--border);
-      border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.78rem;
-      cursor: pointer; font-family: inherit; color: var(--muted);
-    }
-
-    /* ── Icon rail button ── */
-    .rail-btn {
-      width: 32px; height: 32px; border-radius: 6px;
-      background: none; border: none; cursor: pointer;
-      color: #8B7B6B; font-size: 1rem;
-      display: flex; align-items: center; justify-content: center;
-      text-decoration: none; transition: background 0.1s; font-family: inherit;
-    }
-    .rail-btn:hover, .rail-btn.active { background: #3A3330; color: #E8E0D0; }
-    .rail-btn:disabled { opacity: 0.35; cursor: default; }
-    .rail-btn:disabled:hover { background: none; }
-
-    /* ── View mode buttons ── */
-    .view-btn {
-      width: 30px; height: 30px; border-radius: 5px;
-      background: none; border: 1px solid transparent;
-      cursor: pointer; font-size: 1rem; color: var(--muted);
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.1s; font-family: inherit;
-    }
-    .view-btn.active, .view-btn:hover {
-      background: var(--border); border-color: var(--border); color: var(--text);
-    }
-  </style>
-
+  <link rel="stylesheet" href="/css/app.css">
 </head>
 
-<nav th:fragment="nav(active)"
-     style="display: flex; flex-shrink: 0;">
+<!-- ══ Top bar: logo · nav · add form · theme · account ══ -->
+<header th:fragment="topbar(active)" class="top-bar">
+  <a href="/" class="logo">Почитушки</a>
 
-  <!-- Dark icon rail (48px) -->
-  <div style="width: 48px; height: 100vh; background: #1A1714; position: sticky; top: 0;
-              display: flex; flex-direction: column; align-items: center;
-              padding: 0.75rem 0; gap: 0.25rem; overflow-y: auto; flex-shrink: 0;">
-    <!-- Logo -->
-    <a href="/" style="width: 32px; height: 32px; border-radius: 8px; overflow: hidden;
-                       display: block; margin-bottom: 0.5rem; text-decoration: none; flex-shrink: 0;">
-      <img src="/favicon.svg?v=3" width="32" height="32" alt="Почитушки"></a>
-    <!-- Bottom: theme / profile / settings -->
-    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 0.25rem; align-items: center;">
-      <button id="theme-icon-rail" class="rail-btn" data-action="toggle-theme" title="Тема">☀️</button>
+  <nav class="nav-links">
+    <a href="/" th:classappend="${active == 'feed'} ? 'on'" th:text="#{web.nav.read}">Читать</a>
+    <a href="/all" th:classappend="${active == 'all'} ? 'on'" th:text="#{web.nav.all}">Все</a>
+    <a href="/archive" th:classappend="${active == 'archive'} ? 'on'" th:text="#{web.nav.archive}">Архив</a>
+    <a href="/favorites" th:classappend="${active == 'favorites'} ? 'on'" th:text="#{web.nav.favorites}">Избранное</a>
+  </nav>
 
-      <a href="/profile" class="rail-btn" title="Настройки">⚙️</a>
-    </div>
-  </div>
+  <form th:replace="~{fragments/add-post-form :: form}"></form>
 
-  <!-- Text nav (200px) -->
-  <div style="width: 200px; height: 100vh; border-right: 1px solid var(--border);
-              padding: 1.25rem 1rem; position: sticky; top: 0;
-              display: flex; flex-direction: column; background: var(--sidebar-bg);
-              overflow-y: auto; flex-shrink: 0;">
-    <ul style="list-style: none; padding: 0; margin: 0;
-               display: flex; flex-direction: column; gap: 0.1rem; flex: 1;">
-      <li>
-        <a href="/all"
-           th:text="#{web.nav.all}"
-           th:style="${active == 'all'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
-             : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
-          Все
-        </a>
-      </li>
-      <li>
-        <a href="/"
-           th:text="#{web.nav.unread}"
-           th:style="${active == 'feed'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
-             : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
-          Непрочитанные
-        </a>
-      </li>
-      <li>
-        <a href="/archive"
-           th:text="#{web.nav.archive}"
-           th:style="${active == 'archive'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
-             : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
-          Архив
-        </a>
-      </li>
-      <li>
-        <a href="/favorites"
-           th:text="#{web.nav.favorites}"
-           th:style="${active == 'favorites'}
-             ? 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;background:var(--border);color:var(--accent);font-weight:600;text-decoration:none;font-size:0.88rem;'
-             : 'display:flex;align-items:center;padding:0.3rem 0.5rem;border-radius:5px;color:var(--text);text-decoration:none;font-size:0.88rem;'">
-          Избранное
-        </a>
-      </li>
-    </ul>
-    <!-- User block -->
-    <div style="padding-top: 1rem; border-top: 1px solid var(--border);">
-      <a th:if="${userInfo != null}" href="/profile"
-         style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem;
-                text-decoration:none; border-radius:5px;"
-         onmouseover="this.style.background='var(--border)'"
-         onmouseout="this.style.background='none'">
-        <div th:text="${userInfo.firstName != null ? #strings.substring(userInfo.firstName, 0, 1) : '?'}"
-             style="width:28px;height:28px;border-radius:50%;background:#5288C1;
-                    display:flex;align-items:center;justify-content:center;
-                    font-size:0.75rem;font-weight:600;color:white;flex-shrink:0;"></div>
-        <div>
-          <div th:text="${userInfo.firstName}"
-               style="font-size:0.82rem;color:var(--text);"></div>
-          <div th:if="${userInfo.username != null and !#strings.isEmpty(userInfo.username)}"
-               th:text="'@' + ${userInfo.username}"
-               style="font-size:0.72rem;color:var(--muted);"></div>
-        </div>
-      </a>
-      <a th:if="${userInfo == null}" href="/auth/telegram"
-         style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;
-                border-radius:5px;background:#2AABEE;color:white;text-decoration:none;
-                font-size:0.82rem;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.88 13.958l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.268.601z"/>
-        </svg>
-        <span th:text="#{web.nav.login}">Войти</span>
-      </a>
-    </div>
-  </div>
+  <button type="button" class="icon-btn" data-action="toggle-theme"
+          th:attr="aria-label=#{web.theme.toggle}" th:title="#{web.theme.toggle}">
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4"/>
+    </svg>
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+    </svg>
+  </button>
+
+  <a th:if="${userInfo != null}" href="/profile" class="avatar"
+     th:classappend="${active == 'profile'} ? 'on'"
+     th:text="${userInfo.firstName != null ? #strings.substring(userInfo.firstName, 0, 1) : '?'}"
+     th:attr="aria-label=#{web.nav.profile}" th:title="#{web.nav.profile}">П</a>
+
+  <a th:if="${userInfo == null}" href="/auth/telegram" class="login-link">
+    <span class="tg-dot" aria-hidden="true"></span>
+    <span th:text="#{web.nav.login}">Войти</span>
+  </a>
+</header>
+
+<!-- ══ View mode toggle (list pages) ══ -->
+<div th:fragment="viewtoggle" class="view-toggle">
+  <button type="button" id="view-list-btn" class="view-btn" data-view-mode="list"
+          th:attr="aria-label=#{web.view.list}" th:title="#{web.view.list}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16"/>
+    </svg>
+  </button>
+  <button type="button" id="view-grid-btn" class="view-btn" data-view-mode="grid"
+          th:attr="aria-label=#{web.view.shelf}" th:title="#{web.view.shelf}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+      <rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/>
+      <rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>
+    </svg>
+  </button>
+</div>
+
+<!-- ══ Bottom tabs: mobile-only navigation ══ -->
+<nav th:fragment="tabs(active)" class="bottom-tabs">
+  <a href="/" th:classappend="${active == 'feed'} ? 'on'">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4a2 2 0 0 0-2-2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/>
+      <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>
+    </svg>
+    <span th:text="#{web.nav.read}">Читать</span>
+  </a>
+  <a href="/all" th:classappend="${active == 'all'} ? 'on'">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>
+    </svg>
+    <span th:text="#{web.nav.all}">Все</span>
+  </a>
+  <a href="/archive" th:classappend="${active == 'archive'} ? 'on'">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 4h18v4H3z"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>
+    </svg>
+    <span th:text="#{web.nav.archive}">Архив</span>
+  </a>
+  <a href="/favorites" th:classappend="${active == 'favorites'} ? 'on'">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+      <path d="m12 3 2.7 5.6 6.1.8-4.5 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"/>
+    </svg>
+    <span th:text="#{web.nav.favorites}">Избранное</span>
+  </a>
+  <a href="/profile" th:classappend="${active == 'profile'} ? 'on'">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>
+    </svg>
+    <span th:text="#{web.nav.profile}">Профиль</span>
+  </a>
 </nav>
 
 </html>

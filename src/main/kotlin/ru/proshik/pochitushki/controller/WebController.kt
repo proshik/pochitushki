@@ -1,5 +1,7 @@
 package ru.proshik.pochitushki.controller
 
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.CookieValue
@@ -8,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestAttribute
 import org.springframework.dao.DataAccessException
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserData
+import ru.proshik.pochitushki.service.CoverService
 import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.UserService
 
@@ -15,20 +18,24 @@ import ru.proshik.pochitushki.service.UserService
 class WebController(
     private val postService: PostService,
     private val userService: UserService,
+    private val coverService: CoverService,
 ) {
 
     @GetMapping("/")
     fun feed(
         @RequestAttribute("userId") userId: Long,
-        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         model: Model
     ): String {
-        val posts = postService.getPosts(userId, PostType.UNREAD, PAGE_SIZE, 0)
-        model.addAttribute("posts", posts)
-        model.addAttribute("pageType", PostType.UNREAD.value)
-        model.addAttribute("offset", posts.size)
-        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
-        model.addAttribute("viewMode", viewMode)
+        addListModel(model, userId, PostType.UNREAD, resolveViewMode(viewCookie, PostType.UNREAD))
+
+        val hero = postService.getOldestUnreadPost(userId)?.let { coverService.decorate(it) }
+        model.addAttribute("hero", hero)
+        model.addAttribute(
+            "heroAgeDays",
+            hero?.let { ChronoUnit.DAYS.between(it.post.createdDate.toLocalDate(), LocalDate.now()) }
+        )
+
         addUserInfo(userId, model)
         return "feed"
     }
@@ -36,15 +43,10 @@ class WebController(
     @GetMapping("/all")
     fun all(
         @RequestAttribute("userId") userId: Long,
-        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         model: Model
     ): String {
-        val posts = postService.getPosts(userId, PostType.ALL, PAGE_SIZE, 0)
-        model.addAttribute("posts", posts)
-        model.addAttribute("pageType", PostType.ALL.value)
-        model.addAttribute("offset", posts.size)
-        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
-        model.addAttribute("viewMode", viewMode)
+        addListModel(model, userId, PostType.ALL, resolveViewMode(viewCookie, PostType.ALL))
         addUserInfo(userId, model)
         return "all"
     }
@@ -52,15 +54,10 @@ class WebController(
     @GetMapping("/archive")
     fun archive(
         @RequestAttribute("userId") userId: Long,
-        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         model: Model
     ): String {
-        val posts = postService.getPosts(userId, PostType.ARCHIVE, PAGE_SIZE, 0)
-        model.addAttribute("posts", posts)
-        model.addAttribute("pageType", PostType.ARCHIVE.value)
-        model.addAttribute("offset", posts.size)
-        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
-        model.addAttribute("viewMode", viewMode)
+        addListModel(model, userId, PostType.ARCHIVE, resolveViewMode(viewCookie, PostType.ARCHIVE))
         addUserInfo(userId, model)
         return "archive"
     }
@@ -68,15 +65,10 @@ class WebController(
     @GetMapping("/favorites")
     fun favorites(
         @RequestAttribute("userId") userId: Long,
-        @CookieValue(value = "pochitushki-view", defaultValue = "list") viewMode: String,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         model: Model
     ): String {
-        val posts = postService.getPosts(userId, PostType.FAVORITES, PAGE_SIZE, 0)
-        model.addAttribute("posts", posts)
-        model.addAttribute("pageType", PostType.FAVORITES.value)
-        model.addAttribute("offset", posts.size)
-        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
-        model.addAttribute("viewMode", viewMode)
+        addListModel(model, userId, PostType.FAVORITES, resolveViewMode(viewCookie, PostType.FAVORITES))
         addUserInfo(userId, model)
         return "favorites"
     }
@@ -94,6 +86,16 @@ class WebController(
         return "profile"
     }
 
+    private fun addListModel(model: Model, userId: Long, postType: PostType, viewMode: String) {
+        val posts = postService.getPosts(userId, postType, PAGE_SIZE, 0)
+        model.addAttribute("covers", coverService.decorate(posts))
+        model.addAttribute("pageType", postType.value)
+        model.addAttribute("offset", posts.size)
+        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute("viewMode", viewMode)
+        model.addAttribute("pageCount", postService.getPostCount(userId, postType))
+    }
+
     private fun addUserInfo(userId: Long, model: Model, resolved: UserData? = null) {
         val info = resolved ?: try {
             userService.getUserByUserId(userId)
@@ -107,5 +109,18 @@ class WebController(
     companion object {
         // Delegate to PostApiController so both controllers use the same page size
         val PAGE_SIZE get() = PostApiController.PAGE_SIZE
+
+        /**
+         * Cookie keeps the legacy values list|grid (grid == shelf).
+         * Without a cookie, reading pages open as a shelf, dense pages as a list.
+         */
+        fun resolveViewMode(cookie: String?, postType: PostType): String = when (cookie) {
+            "grid" -> "shelf"
+            "list" -> "list"
+            else -> when (postType) {
+                PostType.UNREAD, PostType.FAVORITES -> "shelf"
+                PostType.ALL, PostType.ARCHIVE -> "list"
+            }
+        }
     }
 }
