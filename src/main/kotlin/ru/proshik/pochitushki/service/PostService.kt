@@ -27,13 +27,13 @@ class PostService(
         val urlString = url.toString()
         // SSRF guard: refuse to store/fetch URLs that target internal/non-public addresses.
         urlSecurityValidator.validate(urlString)
-        val title = loadTitle(urlString)
+        val meta = loadPageMeta(urlString)
 
-        val postStoreData = PostStoreData(title, urlString, userId)
+        val postStoreData = PostStoreData(meta.title, urlString, userId, ogImageUrl = meta.ogImage)
 
         val addedPostId = postDao.addPost(postStoreData)
 
-        return Pair(addedPostId, title)
+        return Pair(addedPostId, meta.title)
     }
 
     fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
@@ -44,22 +44,30 @@ class PostService(
         return postDao.findPost(userId, postType, url.toString())
     }
 
-    private fun loadTitle(url: String): String? {
-        val title = try {
+    private data class PageMeta(val title: String?, val ogImage: String?)
+
+    private fun loadPageMeta(url: String): PageMeta {
+        return try {
             // followRedirects(false): a public URL must not 3xx-redirect into an internal address
             // after the SSRF check. timeout: avoid hanging the request thread on a slow/hostile host.
             val doc: Document = Jsoup.connect(url)
                 .followRedirects(false)
                 .timeout(5000)
                 .get()
-            return doc.title()
+            PageMeta(doc.title().takeIf { it.isNotBlank() }, extractOgImage(doc))
         } catch (e: IOException) {
-            logger.warn("Failed to load title: $url", e)
-            null
+            logger.warn("Failed to load page meta: $url", e)
+            PageMeta(null, null)
         }
-
-        return title
     }
+
+    // Only absolute https urls of sane length: the value is later rendered as an <img src>
+    // for the cover jacket, so relative/insecure/oversized values are dropped, not fixed up.
+    private fun extractOgImage(doc: Document): String? =
+        doc.selectFirst("meta[property=og:image]")
+            ?.attr("content")
+            ?.trim()
+            ?.takeIf { it.startsWith("https://") && it.length <= 2000 }
 
     fun deletePost(postId: Long, userId: Long, postType: PostType): Int {
         logger.debug("Deleting post {} for user {} (type={})", postId, userId, postType)
@@ -86,6 +94,11 @@ class PostService(
 
     fun getRandomPost(userId: Long): PostData? {
         return postDao.getRandomPost(userId)
+    }
+
+    /** The oldest unread post — the web feed's "next to read" hero. */
+    fun getOldestUnreadPost(userId: Long): PostData? {
+        return postDao.getOldestPost(userId)
     }
 
     fun getPostCount(userId: Long, postType: PostType): Int {

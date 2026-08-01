@@ -33,6 +33,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             tags = tags,
             isFavorite = rs.getBoolean("is_favorite"),
             isArchived = rs.getBoolean("is_archived"),
+            ogImageUrl = rs.getString("og_image_url"),
             createdDate = rs.getTimestamp("created_date").toLocalDateTime(),
             updatedDate = rs.getTimestamp("updated_date").toLocalDateTime(),
         )
@@ -46,7 +47,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, og_image_url, created_date, updated_date
             FROM $tableName
             WHERE id = :post_id AND user_id = :user_id
         """.trimIndent()
@@ -61,11 +62,11 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
         if (postType == PostType.ALL) {
             val sql = """
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, created_date, updated_date
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, og_image_url, created_date, updated_date
                 FROM post
                 WHERE user_id = :user_id
                 UNION ALL
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, created_date, updated_date
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, og_image_url, created_date, updated_date
                 FROM archive_post
                 WHERE user_id = :user_id
                 ORDER BY created_date DESC OFFSET :offset LIMIT :limit
@@ -81,11 +82,11 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
         if (postType == PostType.FAVORITES) {
             val sql = """
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, created_date, updated_date
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, og_image_url, created_date, updated_date
                 FROM post
                 WHERE user_id = :user_id AND is_favorite = true
                 UNION ALL
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, created_date, updated_date
+                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, og_image_url, created_date, updated_date
                 FROM archive_post
                 WHERE user_id = :user_id AND is_favorite = true
                 ORDER BY created_date DESC OFFSET :offset LIMIT :limit
@@ -106,7 +107,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, og_image_url, created_date, updated_date
             FROM $tableName
             WHERE user_id = :user_id
             ORDER BY created_date DESC OFFSET :offset LIMIT :limit
@@ -128,7 +129,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         }
 
         val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, created_date, updated_date
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, og_image_url, created_date, updated_date
             FROM $tableName
             WHERE user_id = :user_id AND url ilike :url
         """.trimIndent()
@@ -161,8 +162,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun addPost(post: PostStoreData): Long {
         val sql = """
-            INSERT INTO post (title, url, user_id)
-            VALUES (:title, :url, :user_id)
+            INSERT INTO post (title, url, user_id, og_image_url)
+            VALUES (:title, :url, :user_id, :og_image_url)
             RETURNING id
         """.trimIndent()
 
@@ -170,6 +171,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("title", post.title)
             .addValue("url", post.url)
             .addValue("user_id", post.userId)
+            .addValue("og_image_url", post.ogImageUrl)
 
         return namedParameterJdbcTemplate.queryForObject(sql, params, Long::class.java)
             ?: error("addPost: INSERT did not return an id")
@@ -225,8 +227,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     // Returns the new archive-post id, or null if no matching unread post is owned by the user.
     fun addToArchivePost(postId: Long, userId: Long): Long? {
         val sql = """
-            INSERT INTO archive_post(title, url, tags, user_id, is_favorite)
-            SELECT title, url, tags, user_id, is_favorite
+            INSERT INTO archive_post(title, url, tags, user_id, is_favorite, og_image_url, created_date)
+            SELECT title, url, tags, user_id, is_favorite, og_image_url, created_date
             FROM post
             WHERE post.id = :post_id AND post.user_id = :user_id
             RETURNING id
@@ -244,8 +246,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     // Returns the new unread-post id, or null if no matching archive post is owned by the user.
     fun addToUnreadPost(postId: Long, userId: Long): Long? {
         val sql = """
-            INSERT INTO post(title, url, tags, user_id, is_favorite)
-            SELECT title, url, tags, user_id, is_favorite
+            INSERT INTO post(title, url, tags, user_id, is_favorite, og_image_url, created_date)
+            SELECT title, url, tags, user_id, is_favorite, og_image_url, created_date
             FROM archive_post
             WHERE archive_post.id = :post_id AND archive_post.user_id = :user_id
             RETURNING id
@@ -286,10 +288,26 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getRandomPost(userId: Long): PostData? {
         val sql = """
-            SELECT id, title, url, user_id, tags, is_favorite, false as is_archived, created_date, updated_date
+            SELECT id, title, url, user_id, tags, is_favorite, false as is_archived, og_image_url, created_date, updated_date
             FROM post
             WHERE user_id = :user_id
             ORDER BY RANDOM()
+            LIMIT 1
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("user_id", userId)
+
+        return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
+    }
+
+    // The oldest unread post — the web feed's "next to read" hero.
+    fun getOldestPost(userId: Long): PostData? {
+        val sql = """
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, og_image_url, created_date, updated_date
+            FROM post
+            WHERE user_id = :user_id
+            ORDER BY created_date ASC
             LIMIT 1
         """.trimIndent()
 

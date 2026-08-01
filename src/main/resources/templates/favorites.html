@@ -1,21 +1,18 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Избранное')}"></head>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head(#{web.page.favorites})}"></head>
 <body>
-<div style="display: flex; min-height: 100vh;">
-  <nav th:replace="~{layout :: nav('favorites')}"></nav>
-  <main style="flex: 1; padding: 2.5rem; min-width: 0;">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
-      <h1 class="font-display" style="font-size: 2rem; font-weight: 700;" th:text="#{web.page.favorites}">Избранное</h1>
-      <div style="display: flex; gap: 0.25rem;">
-        <button id="view-list-btn" class="view-btn" data-view-mode="list" title="Список">☰</button>
-        <button id="view-grid-btn" class="view-btn" data-view-mode="grid" title="Сетка">⊞</button>
-      </div>
-    </div>
-    <div id="post-list" th:classappend="${viewMode == 'grid' ? 'view-grid' : ''}">
-      <div th:replace="~{fragments/post-list :: posts(${posts}, ${pageType}, ${offset}, ${hasMore})}"></div>
-    </div>
-  </main>
-</div>
+<header th:replace="~{layout :: topbar('favorites')}"></header>
+<main class="page-main">
+  <div class="page-head">
+    <h1 class="eyebrow" th:text="#{web.head.favorites(${pageCount})}">Избранное · 0</h1>
+    <div th:replace="~{layout :: viewtoggle}"></div>
+  </div>
+  <!-- The favorites showcase: larger covers, four per row -->
+  <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf vitrine' : 'list-rows'">
+    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${offset}, ${hasMore}, ${viewMode})}"></div>
+  </div>
+</main>
+<nav th:replace="~{layout :: tabs('favorites')}"></nav>
 </body>
 </html>

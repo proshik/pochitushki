@@ -1,104 +1,83 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{layout :: head('Профиль')}"></head>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head(#{web.nav.profile})}"></head>
 <body>
-<div style="display: flex; min-height: 100vh;">
-  <nav th:replace="~{layout :: nav('profile')}"></nav>
-  <main style="flex: 1; padding: 2.5rem; min-width: 0; max-width: 680px;">
+<header th:replace="~{layout :: topbar('profile')}"></header>
+<main class="page-main" style="max-width: 760px;">
 
-    <!-- Account row -->
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 2rem;">
-      <div style="display:flex; align-items:center; gap: 1rem;">
-        <div th:text="${user.firstName != null ? #strings.substring(user.firstName, 0, 1) : '?'}"
-             style="width:52px; height:52px; border-radius:50%; background:#5288C1;
-                    display:flex; align-items:center; justify-content:center;
-                    font-size:1.3rem; font-weight:700; color:white; flex-shrink:0;"></div>
-        <div>
-          <div class="font-display" style="font-size:1.3rem; font-weight:700;"
-               th:text="${user.firstName != null ? user.firstName : user.username}">Name</div>
-          <div style="color:var(--muted); font-size:0.85rem;"
-               th:text="${user.username != null ? '@' + user.username + ' · Telegram' : 'Telegram'}">@username</div>
-        </div>
-      </div>
-      <a href="/logout"
-         th:text="#{web.profile.logout}"
-         style="font-size:.85rem; color:var(--muted); text-decoration:none;
-                border:1px solid var(--border); padding:.35rem .8rem;
-                border-radius:5px; white-space:nowrap;"
-         onmouseover="this.style.background='var(--border)'"
-         onmouseout="this.style.background='none'">Выйти</a>
+  <div class="profile-head">
+    <h1 class="profile-name"
+        th:text="${user.firstName != null ? user.firstName : user.username}">Name</h1>
+    <span class="profile-sub"
+          th:text="${user.username != null ? '@' + user.username + ' · Telegram' : 'Telegram'}">@username</span>
+    <a href="/logout" class="btn btn-ghost" th:text="#{web.profile.logout}">Выйти</a>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-n" th:text="${unreadCount}">0</div>
+      <div class="stat-l" th:text="#{web.profile.stats.unread}">непрочитанных</div>
     </div>
-
-    <!-- Stats + Settings grid -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
-
-      <!-- Stats -->
-      <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;">
-        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.08em;
-                    color:var(--muted); margin-bottom:1rem;" th:text="#{web.profile.stats}">Статистика</div>
-        <div style="display:flex; flex-direction:column; gap:.6rem;">
-          <div>
-            <span class="font-display" style="font-size:1.4rem; font-weight:700;"
-                  th:text="${unreadCount}">0</span>
-            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;"
-                  th:text="#{web.profile.stats.unread}">непрочитанных</span>
-          </div>
-          <div>
-            <span class="font-display" style="font-size:1.4rem; font-weight:700;"
-                  th:text="${archiveCount}">0</span>
-            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;"
-                  th:text="#{web.profile.stats.archive}">в архиве</span>
-          </div>
-          <div>
-            <span class="font-display" style="font-size:1.4rem; font-weight:700;"
-                  th:text="${favoritesCount}">0</span>
-            <span style="font-size:.85rem; color:var(--muted); margin-left:.35rem;"
-                  th:text="#{web.profile.stats.favorites}">избранных</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Settings -->
-      <div style="border:1px solid var(--border); border-radius:8px; padding:1.25rem;" hx-ext="json-enc">
-        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.08em;
-                    color:var(--muted); margin-bottom:1rem;" th:text="#{web.profile.settings}">Настройки</div>
-
-        <!-- Language -->
-        <div style="margin-bottom:1rem;">
-          <div style="font-size:.8rem; color:var(--muted); margin-bottom:.4rem;"
-               th:text="#{web.profile.language}">Язык бота</div>
-          <div id="lang-btns" style="display:flex; gap:.35rem;">
-            <button class="settings-btn"
-                    th:classappend="${user.settings.languageCode == 'ru'} ? ' settings-btn-active' : ''"
-                    hx-post="/api/v1/profile/settings"
-                    hx-vals='{"languageCode":"ru"}'
-                    hx-swap="none"
-                    data-reload-on-success>RU</button>
-            <button class="settings-btn"
-                    th:classappend="${user.settings.languageCode == 'en'} ? ' settings-btn-active' : ''"
-                    hx-post="/api/v1/profile/settings"
-                    hx-vals='{"languageCode":"en"}'
-                    hx-swap="none"
-                    data-reload-on-success>EN</button>
-          </div>
-        </div>
-
-      </div>
-
+    <div class="stat">
+      <div class="stat-n" th:text="${archiveCount}">0</div>
+      <div class="stat-l" th:text="#{web.profile.stats.archive}">в архиве</div>
     </div>
-  </main>
-</div>
+    <div class="stat">
+      <div class="stat-n" th:text="${favoritesCount}">0</div>
+      <div class="stat-l" th:text="#{web.profile.stats.favorites}">избранных</div>
+    </div>
+  </div>
 
-<style>
-  .settings-btn {
-    padding: .25rem .7rem; border-radius: 5px; font-size: .85rem;
-    border: 1px solid var(--border); background: none;
-    color: var(--muted); cursor: pointer; font-family: inherit;
-    transition: background .1s, color .1s;
-  }
-  .settings-btn:hover { background: var(--border); color: var(--text); }
-  .settings-btn-active { background: var(--accent) !important; color: white !important; border-color: var(--accent) !important; }
-</style>
+  <div class="settings-box" hx-ext="json-enc">
+    <div class="settings-row">
+      <span>
+        <span class="settings-label" th:text="#{web.profile.language}">Язык бота</span><br>
+        <span class="settings-hint" th:text="#{web.profile.language.hint}">Влияет только на ответы бота в Telegram</span>
+      </span>
+      <span class="pills" id="lang-btns">
+        <button type="button" class="pill"
+                th:classappend="${user.settings.languageCode == 'ru'} ? 'on'"
+                hx-post="/api/v1/profile/settings"
+                hx-vals='{"languageCode":"ru"}'
+                hx-swap="none"
+                data-reload-on-success>RU</button>
+        <button type="button" class="pill"
+                th:classappend="${user.settings.languageCode == 'en'} ? 'on'"
+                hx-post="/api/v1/profile/settings"
+                hx-vals='{"languageCode":"en"}'
+                hx-swap="none"
+                data-reload-on-success>EN</button>
+      </span>
+    </div>
+    <div class="settings-row">
+      <span>
+        <span class="settings-label" th:text="#{web.profile.feed.size}">Ссылок в ленте бота</span><br>
+        <span class="settings-hint" th:text="#{web.profile.feed.size.hint}">Сколько карточек присылает /feed</span>
+      </span>
+      <span class="pills" id="feed-size-btns">
+        <button type="button" class="pill"
+                th:classappend="${user.settings.tgFeedEntriesNumber == 1} ? 'on'"
+                hx-post="/api/v1/profile/settings"
+                hx-vals='{"tgFeedEntriesNumber":1}'
+                hx-swap="none"
+                data-reload-on-success>1</button>
+        <button type="button" class="pill"
+                th:classappend="${user.settings.tgFeedEntriesNumber == 3} ? 'on'"
+                hx-post="/api/v1/profile/settings"
+                hx-vals='{"tgFeedEntriesNumber":3}'
+                hx-swap="none"
+                data-reload-on-success>3</button>
+        <button type="button" class="pill"
+                th:classappend="${user.settings.tgFeedEntriesNumber == 5} ? 'on'"
+                hx-post="/api/v1/profile/settings"
+                hx-vals='{"tgFeedEntriesNumber":5}'
+                hx-swap="none"
+                data-reload-on-success>5</button>
+      </span>
+    </div>
+  </div>
 
+</main>
+<nav th:replace="~{layout :: tabs('profile')}"></nav>
 </body>
 </html>

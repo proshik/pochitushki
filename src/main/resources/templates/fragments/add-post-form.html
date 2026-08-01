@@ -1,23 +1,17 @@
 <!DOCTYPE html>
-<!-- src/main/resources/templates/fragments/add-post-form.html -->
+<!-- src/main/resources/templates/fragments/add-post-form.html
+     Lives in the top bar on every list page. Optimistic submit handled by
+     initAddPostForm() in /js/app.js (CSP: no inline handlers). -->
 <html xmlns:th="http://www.thymeleaf.org">
 
-<form th:fragment="form" id="add-post-form"
-      style="display: flex; gap: 0.75rem; margin-bottom: 2rem;">
+<form th:fragment="form" id="add-post-form" class="add-form"
+      th:attr="data-error-text=#{web.add.error},data-adding-text=#{web.add.progress}">
   <input type="url"
          id="add-post-url"
          name="url"
-         placeholder="https://..."
          required
-         style="flex: 1; padding: 0.6rem 1rem; border: 1px solid var(--border);
-                border-radius: 6px; background: var(--bg); color: var(--text);
-                font-family: inherit; font-size: 0.95rem;">
-  <button type="submit"
-          th:text="#{web.form.add.button}"
-          style="padding: 0.6rem 1.25rem; background: var(--accent); color: white;
-                 border: none; border-radius: 6px; cursor: pointer;
-                 font-family: inherit; font-size: 0.95rem;">
-    Добавить
-  </button>
+         th:placeholder="#{web.add.placeholder}"
+         th:attr="aria-label=#{web.add.placeholder}">
+  <button type="submit" th:text="#{web.add.submit}">На полку</button>
 </form>
 </html>

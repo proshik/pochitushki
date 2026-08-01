@@ -10,6 +10,7 @@ data class PostData(
     val tags: List<String>?,
     val isFavorite: Boolean = false,
     val isArchived: Boolean = false,
+    val ogImageUrl: String? = null,
     val createdDate: LocalDateTime,
     val updatedDate: LocalDateTime
 )
@@ -21,7 +22,8 @@ data class PostStoreData(
     val tags: List<String>? = null,
     val isFavorite: Boolean = false,
     val createdDate: LocalDateTime? = null,
-    val updatedDate: LocalDateTime? = null
+    val updatedDate: LocalDateTime? = null,
+    val ogImageUrl: String? = null
 )
 
 data class PostStoreDataWithId(

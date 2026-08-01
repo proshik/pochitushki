@@ -11,7 +11,9 @@
 | 3.7 | Export & Import доработки | ✅ Готово |
 | 4 | Web UI Foundation (без auth) | ✅ Готово |
 | 5 | Auth + защита Web | ✅ Готово |
-| 4.5 | Mobile UI | ⏳ В очереди |
+| 5.5 | Security hardening (вне плана) | ✅ Готово |
+| 4.5 | Mobile UI | ✅ Закрыта фазой 4.7 |
+| 4.7 | Web Redesign «Обложки» | ✅ Реализовано (2026-08-01) |
 | 4.6 | Random | ⏳ В очереди |
 | 6 | Labels | ⏳ В очереди |
 | 7 | Chrome Extension | 🔮 Будущее |
@@ -164,8 +166,9 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 
 ### Задача 4 — Тесты
 
-- [x] `ExportServiceTest` — 5 тестов: null, ZIP, заголовки, поля, round-trip
-- [x] `ImportServiceTest` — расширен до 7 тестов, включая `is_favorite` на unread и archive
+- [x] `ExportServiceTest` — 6 тестов: null, ZIP, заголовки, поля, round-trip, CSV formula injection
+- [x] `ImportServiceTest` — расширен до 9 тестов, включая `is_favorite` на unread и archive,
+      лимит записей CSV и пропуск строк с пустым url
 
 ---
 
@@ -203,7 +206,8 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 
 ### Страницы
 
-- [x] `/feed` — непрочитанные посты (пагинация)
+- [x] `/` — лента непрочитанных (шаблон `feed.html`, пагинация)
+- [x] `/all` — все ссылки (`all.html`)
 - [x] `/archive` — архивные посты
 - [x] `/favorites` — избранное
 - [x] `/profile` — статистика пользователя
@@ -218,6 +222,9 @@ POST   /api/v1/posts/{id}/unread
 POST   /api/v1/posts/{id}/favorite
 DELETE /api/v1/posts/{id}
 ```
+
+> Блок выше — снапшот фазы 4. Позже добавлены `GET /api/v1/posts/{id}/og-image`
+> и `POST /api/v1/profile/settings`; актуальный список ведётся в `.claude/CLAUDE.md`.
 
 ### Новые файлы
 
@@ -234,15 +241,25 @@ DELETE /api/v1/posts/{id}
 
 ## Фаза 4.5 — Mobile UI
 
-**Цель**: адаптировать веб-интерфейс для мобильных телефонов. Текущий UI — desktop-only: фиксированный сайдбар 248px занимает 66% экрана телефона (375px), нет media queries.
+> ✅ Закрыта фазой 4.7: мобильная адаптация сделана внутри редизайна «Обложки»
+> (нижние вкладки, полка 2 колонки, компактный hero). План ниже оставлен для истории
+> и описывает СТАРУЮ вёрстку с сайдбаром.
+
+**Цель**: адаптировать веб-интерфейс для мобильных телефонов. Текущий UI — desktop-only:
+sticky-сайдбар 248px (иконочный rail 48px + текстовый nav 200px внутри flex `<nav>`-фрагмента)
+занимает 66% экрана телефона (375px), нет ни одного media query.
 
 **Breakpoint**: `768px` — ниже этого значения включается мобильный layout.
+
+> ⚠️ Если стартует фаза 4.7 (Web Redesign), мобильную адаптацию делать внутри неё,
+> а не отдельным слоем поверх текущей вёрстки — иначе работа выбросится.
 
 ### Подход: скрыть сайдбар → нижний tab bar
 
 На мобильном:
-- Скрыть десктопный сайдбар (`display: none`)
-- Убрать `padding-left: 248px` с `body`, добавить `padding-bottom: 56px`
+- Скрыть оба столбца `<nav>` (rail + текстовый sidebar) — `display: none`
+- Добавить `padding-bottom: 56px` для нижнего таббара (`padding-left` у `body` нет —
+  сайдбар лежит в общем flex-контейнере, а не позиционируется отступом)
 - Показать **фиксированный нижний nav bar** (56px): Все / Непрочитанные / Архив / Избранное / Профиль
 - Добавить **тонкий top bar** (48px) с названием приложения и кнопкой смены темы
 
@@ -250,8 +267,8 @@ DELETE /api/v1/posts/{id}
 
 #### `templates/layout.html`
 - [ ] CSS: добавить `@media (max-width: 767px)` блок:
-  - `body { padding-left: 0; padding-bottom: 56px; }`
-  - `.desktop-nav { display: none; }` — скрыть сайдбар
+  - `body { padding-bottom: 56px; }`
+  - `nav { display: none; }` (или класс `desktop-nav` на `<nav>`) — скрыть сайдбар
   - `.mobile-nav { display: flex; }` — показать нижний таббар
   - `.mobile-top-bar { display: flex; }` — показать верхний бар
   - `main` padding: `1rem 0.75rem` вместо `2.5rem`
@@ -372,6 +389,55 @@ runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
 
 ### Тесты
 - [x] `AuthControllerTest`, `JwtServiceTest` — WireMock подменяет `oauth.telegram.org`
+
+---
+
+## Фаза 5.5 — Security hardening (сделано вне плана)
+
+Работы после фазы 5, не имевшие своей фазы (для истории):
+
+- [x] `UrlSecurityValidator` — SSRF-проверки внешних загрузок + закрытие redirect-bypass
+      в PDF-загрузке картинок, расширение блокируемых диапазонов (`b0a22b9`)
+- [x] CSP `script-src 'self'` без `unsafe-inline`/`unsafe-eval`, самохостинг ассетов,
+      удаление Tailwind Play CDN (`80e4a21`, `b7696ee`)
+- [x] Валидация claim'ов `id_token` (exp/aud/iss), JWT TTL → 1 день, cookie hardening
+- [x] Webhook secret (`X-Telegram-Bot-Api-Secret-Token`), CSV formula injection,
+      zip-bomb защита импорта, лимит размера картинок в PDF
+- [x] Тесты: `UrlSecurityValidatorTest`, `TelegramWebhookSecretTest`,
+      `WebControllerTest`, `PostApiControllerTest`, `ProfileApiControllerTest`
+
+---
+
+## Фаза 4.7 — Web Redesign «Обложки»
+
+**Статус**: реализовано 2026-08-01. Выбрано направление «Обложки» (генеративные
+обложки: цвет = hash(домена), композиция = hash(заголовка), OG-фото в
+«суперобложке»). Детальный план выполнения —
+`docs/superpowers/plans/2026-08-01-covers-redesign.md`; правила поддержки —
+раздел «Обложки» в `.claude/CLAUDE.md`.
+
+Сделано: `CoverService` + юнит-тесты, миграция 4 (`og_image_url` + фикс потери
+`created_date` при переносе), захват og:image при добавлении, единый
+`static/css/app.css` (светлая/тёмная темы), шрифты Onest + JetBrains Mono
+(кириллица, self-host), все шаблоны переписаны (полка/список/витрина
+избранного/hero «следующая к чтению»/профиль-формуляр/логин-афиша/empty state),
+SVG-иконки вместо эмодзи, мобильные нижние вкладки, focus/aria/reduced-motion.
+
+Отложено (кандидаты в следующие фазы): тумблер «фото-обложки» в профиле,
+кэш-прокси OG-картинок, toast с «Вернуть» после архивирования.
+
+Исходные долги фазы (все закрыты, кроме отмеченных выше):
+
+- Единый CSS-файл вместо трёх `<style>`-блоков + ~100 инлайновых стилей;
+  один набор токенов (сейчас у login.html и layout.html разные тёмные палитры)
+- Мобильная адаптация (объединяет фазу 4.5)
+- Доступность: focus-стили, aria-атрибуты, контраст `--muted`, touch-таргеты ≥44px,
+  `prefers-reduced-motion`, `lang` на `<html>`
+- Убрать дубли: post-card рендерится в двух DOM-вариантах (list+grid),
+  optimistic-карточка дублируется строками в app.js
+- Заменить emoji-иконки (⭐🗑☰⊞☀️⚙️) на единый SVG-набор
+- Форма добавления ссылки на всех списковых страницах, внятные empty states,
+  видимые ошибки добавления
 
 ---
 

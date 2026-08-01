@@ -207,7 +207,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
                 .with(withAuth(userId))
         )
             .andExpect(status().isOk)
-            .andExpect(content().string(containsString("⭐")))
+            .andExpect(content().string(containsString("aria-pressed=\"true\"")))
 
         // Toggle off
         mockMvc.perform(
@@ -216,7 +216,7 @@ class PostApiControllerTest : BaseIntegrationTest() {
                 .with(withAuth(userId))
         )
             .andExpect(status().isOk)
-            .andExpect(content().string(containsString("☆")))
+            .andExpect(content().string(containsString("aria-pressed=\"false\"")))
     }
 
     @Test

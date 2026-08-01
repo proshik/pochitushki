@@ -35,6 +35,9 @@ server:
     include-message: never
     include-stacktrace: never
     include-binding-errors: never
+  # Behind a reverse proxy / tunnel the app must trust X-Forwarded-Proto,
+  # otherwise sendRedirect() absolutizes Location as http:// on an https site.
+  forward-headers-strategy: framework
 
 pdf:
   playwright:
