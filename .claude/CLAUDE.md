@@ -31,7 +31,7 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 | `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` | Telegram OAuth-приложение |
 | `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка |
 | `JWT_SECRET` | Подпись JWT (≥32 байт base64). Дефолта нет — без переменной приложение падает на старте (осознанный fail-fast) |
-| `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`: `TelegramController` объявляет `@PostMapping("/\${telegram.token}")`, и плейсхолдер должен разрешиться на старте |
+| `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`: `TelegramController` объявляет `@PostMapping("/\${telegram.token}")`, и плейсхолдер должен разрешиться на старте. Ключа `telegram.token` в `application.yml` нет — значение приходит relaxed binding'ом прямо в `TelegramProperties` |
 | `TELEGRAM_ENABLED` | Опц. Запуск бота (polling/webhook). `false` — стартовать без бота, bot-токен не нужен (логин через Telegram работает независимо). По умолчанию `true` |
 | `TELEGRAM_WEBHOOK_SECRET` | Опц. Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token`. Пусто => проверка выключена; в проде задавать |
 | `app.security.ssrf.allowed-hosts` | Опц. Список хостов, исключённых из SSRF-проверок `UrlSecurityValidator` (в тестах — `localhost`) |
@@ -43,7 +43,8 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 **Telegram**: поддержка polling и webhook, через kotlin-telegram-bot;
 бот включается флагом `telegram.enabled` (см. `TelegramBotConfiguration`) — независим от входа через Telegram
 **Web**: Thymeleaf-страницы (`feed/all/archive/favorites/profile/login`) + HTML-фрагменты;
-htmx и шрифты лежат в `static/`, внешних CDN нет
+дизайн «Обложки»: генеративные обложки постов (`CoverService`), все стили в
+`static/css/app.css`, htmx и шрифты в `static/`, внешних CDN нет
 **Auth**: Telegram OIDC/OAuth + JWT в cookie `auth_token`; `JwtAuthInterceptor`
 кладёт `userId` в request-атрибут и защищает `/`, `/all`, `/archive`,
 `/favorites`, `/profile`, `/api/v1/**` (см. `WebConfig`)
@@ -77,7 +78,9 @@ ru.proshik.pochitushki/
 - Таблица `post` — непрочитанные ссылки, `archive_post` — архив (та же структура)
 - Флаг `is_favorite` в обеих таблицах (миграция `3_add_favorites`)
 - JSONB-колонка `settings` в таблице `users` (`languageCode`, `tgFeedEntriesNumber`)
-- `PostType`: `UNREAD` / `ARCHIVE` / `FAVORITES` / `ALL`
+- `PostType`: `UNREAD` / `ARCHIVE` / `FAVORITES` / `ALL`. Маппинг из строки
+  двоякий: контроллеры ищут по `value` (`"unread"`), а `PostType.from`/`stringToType`
+  — по имени enum (`"UNREAD"`); не перепутать при добавлении новых lookup'ов
 - Перенос поста между unread/archive — через `@Transactional` (insert + delete)
 
 ### REST API (`/api/v1`, cookie-JWT)
@@ -102,23 +105,44 @@ Webhook висит на `POST /${telegram.token}`, то есть путь энд
 1. Никаких инлайновых `<script>` и атрибутов `on*=""`. Вешать `data-*`-хук и
    обрабатывать его в делегированных слушателях в `static/js/app.js`
    (там уже есть `data-action`, `data-view-mode`, `data-fav-btn`,
-   `data-reload-on-success`, `data-remove-on-success`).
+   `data-unfav-remove`, `data-reload-on-success`, `data-remove-on-success`).
 2. Никаких htmx `hx-on--*`, `hx-vals='js:…'` и фильтров событий в `hx-trigger`
    — htmx исполняет их через `new Function()`. Вместо них — слушатель
    `htmx:afterRequest` в `app.js`. `htmx.config.allowEval = false` выставлен
    там же, чтобы такое падало заметно.
 3. Ассеты только свои: `static/js/` (htmx 2.0.4, json-enc, app.js, theme-init.js),
-   `static/css/fonts.css` + `static/fonts/*.woff2`.
+   `static/css/app.css` (вся дизайн-система, инлайновых стилей в шаблонах
+   почти нет) + `fonts.css` + `static/fonts/*.woff2`.
+   `img-src https:` нужен для OG-обложек (`post.og_image_url` рендерится как
+   `<img>` внутри «суперобложки»).
 
-Инлайновые `style=""` разрешены (`style-src` держит `'unsafe-inline'`) — их в
-шаблонах около сотни, а инъекция стилей несопоставимо менее опасна.
-`img-src` открыт для любого https: фавиконки берутся с google.com, OG-картинки —
-напрямую с сайтов статей.
+Шрифты — Onest (400/600/800) и JetBrains Mono (400/600), самохостятся
+подмножествами (latin, latin-ext, cyrillic, cyrillic-ext — кириллица
+обязательна). Обновлять: скачать CSS с fonts.googleapis.com с браузерным
+User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` и переписать
+`fonts.css`.
 
-Шрифты самохостятся подмножествами (latin, latin-ext, cyrillic, cyrillic-ext —
-кириллица обязательна). Обновлять: скачать CSS с fonts.googleapis.com с
-браузерным User-Agent, вытащить URL'ы woff2, положить в `static/fonts/`
-(вес и подмножество — в имени файла) и переписать `src:` в `fonts.css`.
+### Обложки (дизайн «Обложки», фаза 4.7)
+
+- `CoverService.decorate(post)` → `CoverView(palette, comp, abbrev, domain)`.
+  Всё детерминировано: `palette` = `cv-0..cv-11` по hash(домена) — один сайт
+  всегда одного цвета; `comp` = `co-mono|co-band|co-frame` по hash(заголовка),
+  либо `co-og`, если у поста есть `og_image_url` (фото внутри «суперобложки»
+  цвета домена). Цветовые пары `cv-*` заданы только в `app.css` — менять там
+- og:image добывается в `PostService.loadPageMeta` тем же Jsoup-запросом, что
+  и title (только абсолютные https, ≤2000 символов), хранится в колонке
+  `og_image_url` (миграция 4); импорт og не заполняет
+- Фрагменты: `post-card :: card(cv, type, viewMode, pageType)`,
+  `post-card :: cover(cv)` (переиспользуется hero'м), `post-list :: posts(covers,
+  pageType, offset, hasMore, viewMode)` — контроллеры кладут в модель ровно эти
+  имена (`cv`/`covers`, `type`, `viewMode`, `pageType`)
+- Режимы: `viewMode` = `shelf`|`list`; cookie `pochitushki-view` хранит
+  legacy-значения `list`|`grid` (`grid` == shelf). Дефолты без cookie:
+  feed/favorites → shelf, all/archive → list (`WebController.resolveViewMode`).
+  Переключение = установка cookie + `location.reload()` — сервер рендерит
+  только одну разметку на режим
+- Hero «следующая к чтению» на `/` — `PostDao.getOldestPost` (самый старый
+  unread); перенос unread↔archive сохраняет `created_date`, иначе hero врёт
 
 ### PDF generation
 
@@ -139,7 +163,8 @@ Webhook висит на `POST /${telegram.token}`, то есть путь энд
 - Kotlin 2.4, Spring Boot 3.5.16, Java 25
 - Стиль: официальный Kotlin style guide
 - Нет ORM — только `NamedParameterJdbcTemplate` с ручным SQL
-- Интернационализация через `I18nService` (EN/RU)
+- Интернационализация через `I18nService` (EN/RU); бандлы лежат в
+  `src/main/resources/messages/` (подкаталог, не корень resources)
 - Для новых HTTP-клиентов использовать Spring Cloud OpenFeign
 
 ## Testing
@@ -154,10 +179,12 @@ Webhook висит на `POST /${telegram.token}`, то есть путь энд
   использовать `./gradlew cleanTest test` — иначе Gradle отдаёт `Task :test UP-TO-DATE`
   и `BUILD SUCCESSFUL`, ничего не выполнив
 - TestContainers ищет docker-сокет по дефолтному пути и **не читает контексты Docker CLI**.
-  На Colima/Podman/нестандартном сокете тесты падают сразу (~144 из 157) с
+  На Colima/Podman/нестандартном сокете тесты падают сразу (~146 из 164; без
+  Docker проходят только юнит-тесты `JwtServiceTest` и `UrlSecurityValidatorTest`) с
   `ExceptionInInitializerError at Unsafe.java` — это маскирует настоящую причину
   (`Could not find a valid Docker environment`), на JDK тут пенять не нужно. Лечится
-  явным сокетом, напр.: `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock ./gradlew test`
+  явным сокетом **плюс** override для ryuk (иначе он не сможет смонтировать сокет):
+  `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./gradlew test`
 
 ## Key Files
 
