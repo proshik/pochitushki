@@ -5,3 +5,5 @@ databaseChangeLog:
       file: liquibase/scripts/2_add_user_settings.sql
   - include:
       file: liquibase/scripts/3_add_favorites.sql
+  - include:
+      file: liquibase/scripts/4_add_og_image.sql

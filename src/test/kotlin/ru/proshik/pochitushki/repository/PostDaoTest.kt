@@ -267,4 +267,53 @@ class PostDaoTest : BaseIntegrationTest() {
         assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
         assertEquals(1, postDao.getPostCount(userId, PostType.UNREAD))
     }
+
+    @Test
+    fun `addPost stores og image url`() {
+        val postId = postDao.addPost(
+            PostStoreData("T", "https://example.com", userId, ogImageUrl = "https://example.com/og.png")
+        )
+
+        val post = postDao.getPost(postId, userId, PostType.UNREAD)
+
+        assertEquals("https://example.com/og.png", post!!.ogImageUrl)
+    }
+
+    @Test
+    fun `moving a post preserves created date and og image`() {
+        val postId = postDao.addPost(
+            PostStoreData("T", "https://example.com", userId, ogImageUrl = "https://example.com/og.png")
+        )
+        jdbcTemplate.update("UPDATE post SET created_date = NOW() - INTERVAL '5 days' WHERE id = ?", postId)
+        val original = postDao.getPost(postId, userId, PostType.UNREAD)!!
+
+        val archivedId = postDao.addToArchivePost(postId, userId)!!
+        postDao.deletePost(postId, userId, PostType.UNREAD)
+        val archived = postDao.getPost(archivedId, userId, PostType.ARCHIVE)!!
+        assertEquals(original.createdDate, archived.createdDate)
+        assertEquals("https://example.com/og.png", archived.ogImageUrl)
+
+        val unreadId = postDao.addToUnreadPost(archivedId, userId)!!
+        postDao.deletePost(archivedId, userId, PostType.ARCHIVE)
+        val restored = postDao.getPost(unreadId, userId, PostType.UNREAD)!!
+        assertEquals(original.createdDate, restored.createdDate)
+        assertEquals("https://example.com/og.png", restored.ogImageUrl)
+    }
+
+    @Test
+    fun `getOldestPost returns the oldest unread post`() {
+        val newer = postDao.addPost(PostStoreData("Newer", "https://a.com", userId))
+        val older = postDao.addPost(PostStoreData("Older", "https://b.com", userId))
+        jdbcTemplate.update("UPDATE post SET created_date = NOW() - INTERVAL '10 days' WHERE id = ?", older)
+        jdbcTemplate.update("UPDATE post SET created_date = NOW() - INTERVAL '1 day' WHERE id = ?", newer)
+
+        val oldest = postDao.getOldestPost(userId)
+
+        assertEquals(older, oldest!!.id)
+    }
+
+    @Test
+    fun `getOldestPost returns null when no posts`() {
+        assertNull(postDao.getOldestPost(userId))
+    }
 }

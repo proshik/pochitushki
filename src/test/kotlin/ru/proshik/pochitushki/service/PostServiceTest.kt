@@ -279,4 +279,46 @@ class PostServiceTest : BaseIntegrationTest() {
         val found = postService.findPost(userId, PostType.UNREAD, url)
         assertTrue(found.isEmpty())
     }
+
+    @Test
+    fun `addPost captures og image when page provides it`() {
+        wireMockExternalUrl.stubFor(
+            get(urlEqualTo("/with-og")).willReturn(
+                aResponse()
+                    .withHeader("Content-Type", "text/html")
+                    .withBody(
+                        """<html><head><title>T</title>
+                           <meta property="og:image" content="https://cdn.example.com/img.png">
+                           </head><body></body></html>"""
+                    )
+            )
+        )
+
+        val url = java.net.URI.create("http://localhost:${wireMockExternalUrl.port()}/with-og").toURL()
+        val (postId, _) = postService.addPost(url, userId)
+
+        val post = postDao.getPost(postId, userId, PostType.UNREAD)
+        assertEquals("https://cdn.example.com/img.png", post!!.ogImageUrl)
+    }
+
+    @Test
+    fun `addPost drops insecure og image`() {
+        wireMockExternalUrl.stubFor(
+            get(urlEqualTo("/insecure-og")).willReturn(
+                aResponse()
+                    .withHeader("Content-Type", "text/html")
+                    .withBody(
+                        """<html><head><title>T</title>
+                           <meta property="og:image" content="http://cdn.example.com/img.png">
+                           </head><body></body></html>"""
+                    )
+            )
+        )
+
+        val url = java.net.URI.create("http://localhost:${wireMockExternalUrl.port()}/insecure-og").toURL()
+        val (postId, _) = postService.addPost(url, userId)
+
+        val post = postDao.getPost(postId, userId, PostType.UNREAD)
+        assertEquals(null, post!!.ogImageUrl)
+    }
 }
