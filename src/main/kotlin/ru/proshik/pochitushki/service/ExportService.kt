@@ -17,7 +17,8 @@ import ru.proshik.pochitushki.repository.PostDao
 
 @Service
 class ExportService(
-    private val postDao: PostDao
+    private val postDao: PostDao,
+    private val labelService: LabelService,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -32,8 +33,11 @@ class ExportService(
         val unreadPosts = postDao.getPosts(userId = userId, postType = PostType.UNREAD, limit = Int.MAX_VALUE, offset = 0)
         val archivePosts = postDao.getPosts(userId = userId, postType = PostType.ARCHIVE, limit = Int.MAX_VALUE, offset = 0)
 
+        // Labels are what the CSV's tag column carries now; the legacy tags column is
+        // no longer written and is not exported.
         val allPosts: List<Pair<PostData, String>> =
-            unreadPosts.map { it to "unread" } + archivePosts.map { it to "archive" }
+            labelService.withLabels(unreadPosts).map { it to "unread" } +
+                labelService.withLabels(archivePosts).map { it to "archive" }
 
         if (allPosts.isEmpty()) {
             logger.info("export: no posts found for userId={}", userId)
@@ -75,7 +79,7 @@ class ExportService(
                 val timeAdded = post.createdDate
                     .atZone(TimeZone.getDefault().toZoneId())
                     .toEpochSecond()
-                val tags = post.tags?.joinToString(",") ?: ""
+                val tags = post.labels.joinToString(",") { it.name }
                 printer.printRecord(
                     sanitizeForCsv(post.title), sanitizeForCsv(post.url), timeAdded,
                     sanitizeForCsv(tags), status, post.isFavorite

@@ -10,8 +10,10 @@ import java.util.zip.ZipInputStream
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
+import ru.proshik.pochitushki.model.LabelTarget
 import ru.proshik.pochitushki.model.PostStoreData
 import ru.proshik.pochitushki.model.PostType
+import ru.proshik.pochitushki.model.PostStoreDataWithId
 import ru.proshik.pochitushki.model.toPostStoreDataWithId
 import ru.proshik.pochitushki.repository.PostDao
 
@@ -21,6 +23,7 @@ class ImportLimitException(message: String) : RuntimeException(message)
 @Service
 class ImportService(
     private val postDao: PostDao,
+    private val labelService: LabelService,
     private val transactionTemplate: TransactionTemplate
 ) {
 
@@ -96,11 +99,48 @@ class ImportService(
             .map { it.toPostStoreDataWithId(archiveIdsIterator.next()) }
 
         transactionTemplate.executeWithoutResult {
-            postDao.addPosts(toStoreUnreadPosts, PostType.UNREAD)
-            postDao.addPosts(toStoreArchivePosts, PostType.ARCHIVE)
+            // tags are dropped on the floor here on purpose: the CSV's tag column now
+            // becomes real labels (see migration 6). The legacy tags column still exists
+            // and still holds whatever earlier imports put there, but nothing writes it.
+            postDao.addPosts(toStoreUnreadPosts.map { it.copy(tags = null) }, PostType.UNREAD)
+            postDao.addPosts(toStoreArchivePosts.map { it.copy(tags = null) }, PostType.ARCHIVE)
+
+            attachLabels(userId, toStoreUnreadPosts, LabelTarget.UNREAD)
+            attachLabels(userId, toStoreArchivePosts, LabelTarget.ARCHIVE)
         }
 
         logger.info("success store posts in DB: userId={}, unread posts={}, archive posts={}", userId, unreadPosts.size, archivePosts.size)
+    }
+
+    /**
+     * Turns the CSV tag column into labels. createLabel is an upsert, so a tag repeated
+     * across a thousand rows still resolves to one row - but resolve each distinct name
+     * once rather than once per post.
+     */
+    private fun attachLabels(userId: Long, posts: List<PostStoreDataWithId>, target: LabelTarget) {
+        val withTags = posts.filter { !it.tags.isNullOrEmpty() }
+        if (withTags.isEmpty()) return
+
+        val labelIdByName = withTags
+            .flatMap { it.tags.orEmpty() }
+            .mapNotNull { name -> name.trim().takeIf { it.isNotEmpty() } }
+            .distinct()
+            .mapNotNull { name ->
+                try {
+                    name to labelService.createLabel(userId, name).id
+                } catch (e: InvalidLabelNameException) {
+                    logger.debug("skipping unusable imported tag '{}': {}", name, e.message)
+                    null
+                }
+            }
+            .toMap()
+
+        for (post in withTags) {
+            post.tags.orEmpty()
+                .mapNotNull { labelIdByName[it.trim()] }
+                .distinct()
+                .forEach { labelId -> labelService.attachLabel(post.id, labelId, userId, target) }
+        }
     }
 
     /**

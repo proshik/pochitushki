@@ -9,3 +9,5 @@ databaseChangeLog:
       file: liquibase/scripts/4_add_og_image.sql
   - include:
       file: liquibase/scripts/5_add_labels.sql
+  - include:
+      file: liquibase/scripts/6_backfill_labels_from_tags.sql

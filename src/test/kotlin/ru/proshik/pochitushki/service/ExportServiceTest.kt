@@ -28,6 +28,18 @@ class ExportServiceTest : BaseIntegrationTest() {
     private lateinit var postDao: PostDao
 
     @Autowired
+    private lateinit var labelService: LabelService
+
+    private fun attachLabels(postId: Long, vararg names: String) {
+        names.forEach { name ->
+            labelService.attachLabel(
+                postId, labelService.createLabel(userId, name).id, userId,
+                ru.proshik.pochitushki.model.LabelTarget.UNREAD
+            )
+        }
+    }
+
+    @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
     private val tempFiles = mutableListOf<File>()
@@ -82,10 +94,8 @@ class ExportServiceTest : BaseIntegrationTest() {
 
     @Test
     fun `export encodes time_added as epoch seconds and joins tags with comma`() {
-        // addPost() does not persist tags; insert directly via JDBC to test tag export
-        jdbcTemplate.update(
-            "INSERT INTO post (title, url, user_id, tags) VALUES ('Article', 'https://test.com', $userId, ARRAY['kotlin','spring'])"
-        )
+        val postId = postDao.addPost(PostStoreData("Article", "https://test.com", userId))
+        attachLabels(postId, "kotlin", "spring")
 
         val file = exportService.export(userId)!!.also { tempFiles.add(it) }
         val csvContent = readFirstCsvFromZip(file)
@@ -106,11 +116,8 @@ class ExportServiceTest : BaseIntegrationTest() {
 
     @Test
     fun `export round-trips through import preserving all fields`() {
-        // addPost() does not persist tags; insert directly via JDBC
-        val postId = jdbcTemplate.queryForObject(
-            "INSERT INTO post (title, url, user_id, tags) VALUES ('Round Trip', 'https://rt.com', $userId, ARRAY['a','b']) RETURNING id",
-            Long::class.java
-        )!!
+        val postId = postDao.addPost(PostStoreData("Round Trip", "https://rt.com", userId))
+        attachLabels(postId, "a", "b")
         postDao.toggleFavorite(postId, userId, PostType.UNREAD)
 
         val zipFile = exportService.export(userId)!!.also { tempFiles.add(it) }
@@ -127,7 +134,7 @@ class ExportServiceTest : BaseIntegrationTest() {
         val post = posts[0]
         assertEquals("Round Trip", post.title)
         assertEquals("https://rt.com", post.url)
-        assertEquals(listOf("a", "b"), post.tags)
+        assertEquals(listOf("a", "b"), labelService.withLabels(post).labels.map { it.name })
         assertTrue(post.isFavorite)
     }
 

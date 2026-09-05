@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -23,6 +24,9 @@ class ImportServiceTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var postDao: PostDao
+
+    @Autowired
+    private lateinit var labelService: LabelService
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -104,7 +108,7 @@ class ImportServiceTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `importZipArchive saves tags from comma-separated field`() {
+    fun `importZipArchive turns the csv tag field into labels`() {
         val zip = createZip(
             "export.csv", pocketCsv(
                 row("Tagged Article", "https://tagged.com", 1712000000L, "kotlin,spring,jvm", "unread"),
@@ -113,11 +117,43 @@ class ImportServiceTest : BaseIntegrationTest() {
 
         importService.importZipArchive(userId, zip)
 
-        val posts = postDao.getPosts(userId, PostType.UNREAD, 10, 0)
+        val posts = labelService.withLabels(postDao.getPosts(userId, PostType.UNREAD, 10, 0))
         assertEquals(1, posts.size)
-        val tags = posts[0].tags
-        assertNotNull(tags)
-        assertEquals(listOf("kotlin", "spring", "jvm"), tags)
+        assertEquals(listOf("jvm", "kotlin", "spring"), posts[0].labels.map { it.name })
+        // The legacy column is no longer written.
+        assertNull(posts[0].tags)
+    }
+
+    @Test
+    fun `a tag shared by two rows becomes one label, not two`() {
+        val zip = createZip(
+            "export.csv", pocketCsv(
+                row("First", "https://first.com", 1712000000L, "kotlin", "unread"),
+                row("Second", "https://second.com", 1712001000L, "kotlin", "unread"),
+            )
+        )
+
+        importService.importZipArchive(userId, zip)
+
+        assertEquals(1, labelService.getLabels(userId).size)
+        assertEquals(
+            2,
+            jdbcTemplate.queryForObject("SELECT count(*) FROM post_label", Int::class.java)
+        )
+    }
+
+    @Test
+    fun `archived rows get their labels in the archive join table`() {
+        val zip = createZip(
+            "export.csv", pocketCsv(
+                row("Archived", "https://arch.com", 1712000000L, "security", "archive"),
+            )
+        )
+
+        importService.importZipArchive(userId, zip)
+
+        val posts = labelService.withLabels(postDao.getPosts(userId, PostType.ARCHIVE, 10, 0))
+        assertEquals(listOf("security"), posts.single().labels.map { it.name })
     }
 
     @Test

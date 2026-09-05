@@ -121,9 +121,7 @@
     <a class="cell-title" th:href="${cv.post.url}" target="_blank" rel="noopener noreferrer"
        th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</a>
     <div class="cell-meta">
-      <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><th:block
-        th:if="${cv.post.tags != null and !cv.post.tags.isEmpty()}"
-        th:text="' · #' + ${cv.post.tags[0]}"></th:block><span
+      <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><span
         th:each="label : ${cv.post.labels}" class="label-tag"
         th:text="'#' + ${label.name}">#label</span>
     </div>
@@ -141,9 +139,7 @@
          th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</a>
       <span class="row-sub">
         <span th:text="${cv.domain}">site.com</span> ·
-        <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><th:block
-          th:if="${cv.post.tags != null and !cv.post.tags.isEmpty()}"
-          th:each="tag : ${cv.post.tags}" th:text="' #' + ${tag}"></th:block><span
+        <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><span
           th:each="label : ${cv.post.labels}" class="label-tag"
           th:text="'#' + ${label.name}">#label</span>
       </span>

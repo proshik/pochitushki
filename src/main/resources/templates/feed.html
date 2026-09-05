@@ -20,9 +20,7 @@
          th:text="${hero.post.title != null ? hero.post.title : hero.post.url}">Title</a>
       <div class="hero-meta">
         <span th:text="${hero.domain}">site.com</span> ·
-        <span th:text="${#temporals.format(hero.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><th:block
-          th:if="${hero.post.tags != null and !hero.post.tags.isEmpty()}"
-          th:each="tag : ${hero.post.tags}" th:text="' #' + ${tag}"></th:block><span
+        <span th:text="${#temporals.format(hero.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><span
           th:each="label : ${hero.post.labels}" class="label-tag"
           th:text="'#' + ${label.name}">#label</span>
       </div>
