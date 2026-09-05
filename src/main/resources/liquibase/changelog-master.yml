@@ -7,3 +7,5 @@ databaseChangeLog:
       file: liquibase/scripts/3_add_favorites.sql
   - include:
       file: liquibase/scripts/4_add_og_image.sql
+  - include:
+      file: liquibase/scripts/5_add_labels.sql

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
 import ru.proshik.pochitushki.BaseIntegrationTest
+import ru.proshik.pochitushki.model.LabelTarget
 import ru.proshik.pochitushki.model.PostStoreData
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.repository.PostDao
@@ -28,6 +29,9 @@ class PostServiceTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var postDao: PostDao
+
+    @Autowired
+    private lateinit var labelService: LabelService
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -52,6 +56,9 @@ class PostServiceTest : BaseIntegrationTest() {
     @AfterEach
     fun tearDown() {
         wireMockExternalUrl.stop()
+        jdbcTemplate.execute("DELETE FROM archive_post_label")
+        jdbcTemplate.execute("DELETE FROM post_label")
+        jdbcTemplate.execute("DELETE FROM label")
         jdbcTemplate.execute("DELETE FROM archive_post")
         jdbcTemplate.execute("DELETE FROM post")
         jdbcTemplate.execute("DELETE FROM users")
@@ -324,5 +331,84 @@ class PostServiceTest : BaseIntegrationTest() {
 
         val post = postDao.getPost(postId, userId, PostType.UNREAD)
         assertEquals(null, post!!.ogImageUrl)
+    }
+
+    @Test
+    fun `posts come back carrying their labels`() {
+        val postId = postDao.addPost(PostStoreData("Labelled", "https://labelled.com", userId))
+        val label = labelService.createLabel(userId, "kotlin")
+        labelService.attachLabel(postId, label.id, userId, LabelTarget.UNREAD)
+
+        val posts = postService.getPosts(userId, PostType.UNREAD, 10, 0)
+
+        assertEquals(listOf("kotlin"), posts.single().labels.map { it.name })
+    }
+
+    @Test
+    fun `a post with no labels comes back with an empty list, not null`() {
+        postDao.addPost(PostStoreData("Bare", "https://bare.com", userId))
+
+        assertTrue(postService.getPosts(userId, PostType.UNREAD, 10, 0).single().labels.isEmpty())
+    }
+
+    @Test
+    fun `archiving carries the labels over to the new row`() {
+        val postId = postDao.addPost(PostStoreData("Labelled", "https://labelled.com", userId))
+        val label = labelService.createLabel(userId, "kotlin")
+        labelService.attachLabel(postId, label.id, userId, LabelTarget.UNREAD)
+
+        val archivedId = postService.archivePost(postId, userId)!!
+
+        val archived = postService.getPost(archivedId, userId, PostType.ARCHIVE)!!
+        assertEquals(listOf("kotlin"), archived.labels.map { it.name })
+    }
+
+    @Test
+    fun `moving back to the shelf carries the labels too`() {
+        val postId = postDao.addPost(PostStoreData("Labelled", "https://labelled.com", userId))
+        val label = labelService.createLabel(userId, "kotlin")
+        labelService.attachLabel(postId, label.id, userId, LabelTarget.UNREAD)
+        val archivedId = postService.archivePost(postId, userId)!!
+
+        val unreadId = postService.unreadPost(archivedId, userId)!!
+
+        val back = postService.getPost(unreadId, userId, PostType.UNREAD)!!
+        assertEquals(listOf("kotlin"), back.labels.map { it.name })
+    }
+
+    @Test
+    fun `a round trip through the archive does not duplicate labels`() {
+        val postId = postDao.addPost(PostStoreData("Labelled", "https://labelled.com", userId))
+        val label = labelService.createLabel(userId, "kotlin")
+        labelService.attachLabel(postId, label.id, userId, LabelTarget.UNREAD)
+
+        val archivedId = postService.archivePost(postId, userId)!!
+        val unreadId = postService.unreadPost(archivedId, userId)!!
+
+        assertEquals(1, postService.getPost(unreadId, userId, PostType.UNREAD)!!.labels.size)
+        // The rows the moves left behind are gone, so their links went with them.
+        assertEquals(
+            1,
+            jdbcTemplate.queryForObject("SELECT count(*) FROM post_label", Int::class.java)
+        )
+        assertEquals(
+            0,
+            jdbcTemplate.queryForObject("SELECT count(*) FROM archive_post_label", Int::class.java)
+        )
+    }
+
+    @Test
+    fun `getPostsByLabel spans both shelves`() {
+        val label = labelService.createLabel(userId, "kotlin")
+        val unreadId = postDao.addPost(PostStoreData("Unread", "https://unread.com", userId))
+        val other = postDao.addPost(PostStoreData("Other", "https://other.com", userId))
+        labelService.attachLabel(unreadId, label.id, userId, LabelTarget.UNREAD)
+        val archivedId = postService.archivePost(other, userId)!!
+        labelService.attachLabel(archivedId, label.id, userId, LabelTarget.ARCHIVE)
+
+        val found = postService.getPostsByLabel(userId, label.id, 10, 0)
+
+        assertEquals(2, found.size)
+        assertEquals(2, postService.getPostCountByLabel(userId, label.id))
     }
 }

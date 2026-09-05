@@ -51,6 +51,9 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     fun tearDown() {
         wireMockExternalUrl.stop()
         wireMockTelegramApi.resetAll()
+        jdbcTemplate.execute("DELETE FROM archive_post_label")
+        jdbcTemplate.execute("DELETE FROM post_label")
+        jdbcTemplate.execute("DELETE FROM label")
         jdbcTemplate.execute("DELETE FROM archive_post")
         jdbcTemplate.execute("DELETE FROM post")
         jdbcTemplate.execute("DELETE FROM users")
@@ -156,6 +159,28 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
             call.bodyAsString.contains(Regex("""_\d{2}%5C\.\d{2}%5C\.\d{4}_"""))
         }
         assertTrue(hasDate, "Expected post card to contain an italic date in MarkdownV2 format")
+    }
+
+    @Test
+    fun `feed command should render labels under the post`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Labelled Post", "https://labelled-post.com")
+        val labelId = jdbcTemplate.queryForObject(
+            "INSERT INTO label(user_id, name) VALUES (?, 'kotlin') RETURNING id",
+            Long::class.java, userId
+        )!!
+        jdbcTemplate.update("INSERT INTO post_label(post_id, label_id) VALUES (?, ?)", postId, labelId)
+
+        postUpdate(buildCommandMessage(nextUpdateId(), "/feed", "feed"))
+
+        awaitTelegramApiCalls("/bottest_token/sendMessage", 2)
+
+        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
+        // Form-encoded body: '#' is a MarkdownV2 special, so the bot sends "\#kotlin",
+        // which url-encodes to %5C%23kotlin.
+        val hasLabel = calls.any { it.bodyAsString.contains("%5C%23kotlin") }
+        assertTrue(hasLabel, "Expected the post card to carry an escaped #kotlin label")
     }
 
     @Test

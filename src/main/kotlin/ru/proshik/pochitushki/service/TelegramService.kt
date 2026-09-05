@@ -17,6 +17,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.configuration.BotProvider
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
+import ru.proshik.pochitushki.model.LabelData
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserStoreData
@@ -207,7 +208,8 @@ class TelegramService(
                 val message = buildPostMessage(
                     url.toString(),
                     post.title,
-                    i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode)
+                    i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode),
+                    labels = post.labels,
                 )
                 val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.UNREAD, post.isFavorite, user.settings.languageCode)
 
@@ -298,7 +300,7 @@ class TelegramService(
             logger.warn("favoritesToArchive: post not owned/found postId={}", postId)
             return
         }
-        val messageText = buildPostMessage(post.url, post.title)
+        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newArchiveId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = true)
         editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
         logger.info("favoritesToArchive success: chatId={}, postId={}, newArchiveId={}", chatId, postId, newArchiveId)
@@ -315,7 +317,7 @@ class TelegramService(
             logger.warn("favoritesToUnread: post not owned/found postId={}", postId)
             return
         }
-        val messageText = buildPostMessage(post.url, post.title)
+        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newUnreadId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = false)
         editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
         logger.info("favoritesToUnread success: chatId={}, postId={}, newUnreadId={}", chatId, postId, newUnreadId)
@@ -376,7 +378,7 @@ class TelegramService(
         val message = posts
             .map { post ->
                 val date = if (postType == PostType.UNREAD || postType == PostType.ARCHIVE) post.createdDate else null
-                val message = buildPostMessage(post.url, post.title, createdDate = date)
+                val message = buildPostMessage(post.url, post.title, createdDate = date, labels = post.labels)
                 val keyboard = if (postType == PostType.FAVORITES) {
                     telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.FAVORITES, post.isFavorite, languageCode, isArchived = post.isArchived)
                 } else {
@@ -448,7 +450,7 @@ class TelegramService(
         }
 
         val postItem = PostFeedItem(
-            message = buildPostMessage(randomPost.url, randomPost.title),
+            message = buildPostMessage(randomPost.url, randomPost.title, labels = randomPost.labels),
             keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(randomPost.id, randomPost.isFavorite, user.settings.languageCode)
         )
 
@@ -483,7 +485,7 @@ class TelegramService(
             return
         }
 
-        val messageText = buildPostMessage(post.url, post.title)
+        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(postId, postType, newIsFavorite, user.settings.languageCode)
 
         editMessage(
@@ -518,7 +520,7 @@ class TelegramService(
             }
             val isArchived = postType == PostType.ARCHIVE
             val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(postId, PostType.FAVORITES, newIsFavorite, user.settings.languageCode, isArchived = isArchived)
-            editMessage(chatId, messageId, buildPostMessage(post.url, post.title), keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
+            editMessage(chatId, messageId, buildPostMessage(post.url, post.title, labels = post.labels), keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
         }
 
         logger.info("toggleFavoriteFromFavorites success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
@@ -539,7 +541,7 @@ class TelegramService(
             return
         }
 
-        val messageText = buildPostMessage(post.url, post.title)
+        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
         val keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(postId, newIsFavorite, user.settings.languageCode)
 
         editMessage(
@@ -795,14 +797,25 @@ class TelegramService(
         logger.info("updateUserSettingsFeedCount success: chatId={}, tgFeedEntriesNumber={}", chatId, tgFeedEntriesNumber)
     }
 
-    private fun buildPostMessage(postUrl: String, postTitle: String?, prefixMessage: String? = "", createdDate: LocalDateTime? = null): String {
+    private fun buildPostMessage(
+        postUrl: String,
+        postTitle: String?,
+        prefixMessage: String? = "",
+        createdDate: LocalDateTime? = null,
+        labels: List<LabelData> = emptyList(),
+    ): String {
         val escapedUrl = escapeTextMarkdown2(postUrl)
         val escapedTitle = postTitle?.let { title -> escapeTextMarkdown2(title) } ?: escapedUrl
         val dateLine = createdDate?.let { date ->
             "\n_" + escapeTextMarkdown2(date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))) + "_"
         } ?: ""
+        // '#' is itself a MarkdownV2 special, so the hash is escaped too, not just the name.
+        val labelLine = labels
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(" ", prefix = "\n") { "\\#" + escapeTextMarkdown2(it.name) }
+            ?: ""
 
-        val message = "$prefixMessage[${escapedTitle}]($escapedUrl)$dateLine"
+        val message = "$prefixMessage[${escapedTitle}]($escapedUrl)$dateLine$labelLine"
 
         return message
     }

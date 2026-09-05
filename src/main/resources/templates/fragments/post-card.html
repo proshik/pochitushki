@@ -123,7 +123,9 @@
     <div class="cell-meta">
       <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><th:block
         th:if="${cv.post.tags != null and !cv.post.tags.isEmpty()}"
-        th:text="' · #' + ${cv.post.tags[0]}"></th:block>
+        th:text="' · #' + ${cv.post.tags[0]}"></th:block><span
+        th:each="label : ${cv.post.labels}" class="label-tag"
+        th:text="'#' + ${label.name}">#label</span>
     </div>
     <div class="cell-actions">
       <div th:replace="~{fragments/post-card :: actions(${cv}, ${type}, ${pageType})}"></div>
@@ -141,7 +143,9 @@
         <span th:text="${cv.domain}">site.com</span> ·
         <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><th:block
           th:if="${cv.post.tags != null and !cv.post.tags.isEmpty()}"
-          th:each="tag : ${cv.post.tags}" th:text="' #' + ${tag}"></th:block>
+          th:each="tag : ${cv.post.tags}" th:text="' #' + ${tag}"></th:block><span
+          th:each="label : ${cv.post.labels}" class="label-tag"
+          th:text="'#' + ${label.name}">#label</span>
       </span>
     </span>
     <span class="row-side">

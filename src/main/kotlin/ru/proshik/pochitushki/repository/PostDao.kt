@@ -121,6 +121,53 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
     }
 
+    /**
+     * Every post carrying the label, unread and archived alike — a label is a
+     * property of the link, not of which shelf it currently sits on.
+     */
+    fun getPostsByLabel(userId: Long, labelId: Long, limit: Int, offset: Int): List<PostData> {
+        val sql = """
+            SELECT p.id, p.title, p.url, p.user_id, p.tags::TEXT[], p.is_favorite, false as is_archived, p.og_image_url, p.created_date, p.updated_date
+            FROM post p
+            JOIN post_label pl ON pl.post_id = p.id
+            WHERE p.user_id = :user_id AND pl.label_id = :label_id
+            UNION ALL
+            SELECT p.id, p.title, p.url, p.user_id, p.tags::TEXT[], p.is_favorite, true as is_archived, p.og_image_url, p.created_date, p.updated_date
+            FROM archive_post p
+            JOIN archive_post_label pl ON pl.post_id = p.id
+            WHERE p.user_id = :user_id AND pl.label_id = :label_id
+            ORDER BY created_date DESC OFFSET :offset LIMIT :limit
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("user_id", userId)
+            .addValue("label_id", labelId)
+            .addValue("offset", offset)
+            .addValue("limit", limit)
+
+        return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
+    }
+
+    fun getPostCountByLabel(userId: Long, labelId: Long): Int {
+        val sql = """
+            SELECT count(*) FROM (
+                SELECT p.id FROM post p
+                JOIN post_label pl ON pl.post_id = p.id
+                WHERE p.user_id = :user_id AND pl.label_id = :label_id
+                UNION ALL
+                SELECT p.id FROM archive_post p
+                JOIN archive_post_label pl ON pl.post_id = p.id
+                WHERE p.user_id = :user_id AND pl.label_id = :label_id
+            ) sub
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("user_id", userId)
+            .addValue("label_id", labelId)
+
+        return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java) ?: 0
+    }
+
     fun findPost(userId: Long, postType: PostType, url: String): List<PostData> {
         val (tableName, isArchived) = when (postType) {
             PostType.UNREAD, PostType.FAVORITES -> Pair("post", false)

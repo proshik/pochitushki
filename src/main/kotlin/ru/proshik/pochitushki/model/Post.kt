@@ -11,6 +11,11 @@ data class PostData(
     val isFavorite: Boolean = false,
     val isArchived: Boolean = false,
     val ogImageUrl: String? = null,
+    /**
+     * Filled in by PostService, not by the row mapper: labels live in their own
+     * join table and are fetched once per page rather than once per row.
+     */
+    val labels: List<LabelData> = emptyList(),
     val createdDate: LocalDateTime,
     val updatedDate: LocalDateTime
 )

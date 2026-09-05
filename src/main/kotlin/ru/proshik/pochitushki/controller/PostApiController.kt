@@ -60,6 +60,35 @@ class PostApiController(
     }
 
     /**
+     * Everything carrying one label, unread and archived together.
+     *
+     * Rendered as the usual card list, but without a scroll sentinel: the sentinel
+     * in post-list always points back at /fragment?type=…, which would silently page
+     * in unlabelled posts. Callers page explicitly with `offset` until a short page
+     * comes back. Wire the sentinel up properly when a labels page exists.
+     */
+    @GetMapping
+    fun byLabel(
+        @RequestAttribute("userId") userId: Long,
+        @RequestParam labelId: Long,
+        @RequestParam(defaultValue = "0") offset: Int,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        model: Model
+    ): String {
+        if (offset < 0) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "offset must be >= 0")
+        }
+        val posts = postService.getPostsByLabel(userId, labelId, PAGE_SIZE, offset)
+        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        model.addAttribute("pageType", PostType.ALL.value)
+        model.addAttribute("offset", offset + posts.size)
+        model.addAttribute("hasMore", false)
+        model.addAttribute("viewMode", WebController.resolveViewMode(viewCookie, PostType.ALL))
+        return "fragments/post-list :: posts"
+    }
+
+    /**
      * A fresh shuffle of unread posts. Unlike /fragment this replaces the list
      * instead of appending to it, so there is no offset and never a sentinel.
      */

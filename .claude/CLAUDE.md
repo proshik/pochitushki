@@ -54,10 +54,12 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 ```
 ru.proshik.pochitushki/
 ├── controller/          # WebController, AuthController, PostApiController,
-│                        #   ProfileApiController, TelegramController (webhook)
-├── service/             # Бизнес-логика (Post/User/Jwt/TelegramOidc/Export/Import/I18n),
+│                        #   ProfileApiController, LabelApiController,
+│                        #   TelegramController (webhook)
+├── service/             # Бизнес-логика (Post/User/Label/Jwt/TelegramOidc/Export/Import/I18n),
 │                        #   TelegramService — оркестратор бота (самый крупный класс),
-│                        #   UrlSecurityValidator (SSRF), PocketCsv, Pdf-генераторы
+│                        #   UrlSecurityValidator (SSRF), OgImageProxyService,
+│                        #   PocketCsv, Pdf-генераторы
 ├── service/telegram/    # CommandHandler, CallbackQueryHandler, TelegramKeyboard,
 │                        #   TelegramUpdateHandler (интерфейс обработчика)
 ├── configuration/       # TelegramBotConfiguration, BotProvider, JwtAuthInterceptor,
@@ -66,7 +68,7 @@ ru.proshik.pochitushki/
 ├── configuration/properties/  # Типизированные @ConfigurationProperties
 │                        #   (TelegramProperties, TelegramOAuthProperties, JwtProperties)
 ├── model/               # Data-классы (PostData, UserData, PostType, ...)
-└── repository/          # DAO (UserDao, PostDao, UserToPostDao)
+└── repository/          # DAO (UserDao, PostDao, LabelDao, UserToPostDao)
 ```
 
 Помимо этого файла в `.claude/rules/` лежат path-scoped правила, подключаемые по
@@ -86,6 +88,26 @@ ru.proshik.pochitushki/
   — по имени enum (`"UNREAD"`); не перепутать при добавлении новых lookup'ов
 - Перенос поста между unread/archive — через `@Transactional` (insert + delete)
 
+### Labels (фаза 6)
+
+- Три таблицы (миграция 5): `label(user_id, name, UNIQUE(user_id,name))` и две
+  связки — `post_label` и `archive_post_label`. Связок именно две, потому что
+  таблиц с постами две: одна связка не смогла бы держать FK на обе, а id у них
+  из разных сиквенсов и **routinely совпадают**
+- Отсюда же главное правило: ключ в `LabelDao.findLabelsForPosts` — пара
+  (таблица, id), а не голый id. Иначе архивный пост получит метки непрочитанного
+- `PostData.labels` заполняет **`PostService`**, а не row mapper: один запрос на
+  страницу вместо запроса на карточку. Все read-методы `PostService` уже прогоняют
+  результат через `LabelService.withLabels` — новый read-метод обязан делать так же
+- Перенос unread↔archive копирует связки (`copyLabels`) **до** удаления исходной
+  строки: `ON DELETE CASCADE` уносит их вместе с ней
+- `LabelService` нормализует имя (trim, срез ведущего `#`, схлопывание пробелов,
+  лимит `MAX_NAME_LENGTH`), поэтому «Kotlin», «kotlin » и «#kotlin» — одна метка.
+  Повторное создание возвращает существующую (`ON CONFLICT DO UPDATE ... RETURNING`)
+- Не путать с `PostData.tags`: это плоская колонка `TEXT[]`, приходящая из
+  Pocket-импорта, доступная только на чтение. Две системы сосуществуют намеренно —
+  объединять их отдельная задача
+
 ### REST API (`/api/v1`, cookie-JWT)
 
 - `POST /posts`, `GET /posts/fragment`, `GET /posts/random-fragment`,
@@ -94,6 +116,11 @@ ru.proshik.pochitushki/
 - `POST /posts/{id}/archive` отдаёт `{"archivedId": N}` — id новой строки в
   `archive_post`. htmx его игнорирует (`hx-swap="delete"`), читает только `app.js`
   ради тоста «Вернуть»; не менять на пустой ответ
+- `GET/POST /labels`, `DELETE /labels/{id}`
+- `POST/DELETE /posts/{id}/labels/{labelId}` (`?type=unread|archive`)
+- `GET /posts?labelId=N&offset=M` — карточки по метке; отдаёт HTML-фрагмент, но
+  **без сентинела** (`hasMore=false`): сентинел в `post-list` всегда ведёт на
+  `/fragment?type=…` и дотянул бы посты без метки. Листать — явным `offset`
 - `POST /profile/settings`
 
 Экспорт/импорт (Pocket CSV) по HTTP **не выставлен** — доступен только через бота

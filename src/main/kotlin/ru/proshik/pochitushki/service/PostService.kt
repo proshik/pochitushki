@@ -7,6 +7,7 @@ import org.jsoup.nodes.Document
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import ru.proshik.pochitushki.model.LabelTarget
 import ru.proshik.pochitushki.model.PostData
 import ru.proshik.pochitushki.model.PostStoreData
 import ru.proshik.pochitushki.model.PostType
@@ -17,6 +18,7 @@ import ru.proshik.pochitushki.repository.PostDao
 class PostService(
     private val postDao: PostDao,
     private val urlSecurityValidator: UrlSecurityValidator,
+    private val labelService: LabelService,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -37,11 +39,20 @@ class PostService(
     }
 
     fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
-        return postDao.getPosts(userId, postType, limit, offset)
+        return labelService.withLabels(postDao.getPosts(userId, postType, limit, offset))
+    }
+
+    /** Every post carrying the label, on either shelf. */
+    fun getPostsByLabel(userId: Long, labelId: Long, limit: Int, offset: Int): List<PostData> {
+        return labelService.withLabels(postDao.getPostsByLabel(userId, labelId, limit, offset))
+    }
+
+    fun getPostCountByLabel(userId: Long, labelId: Long): Int {
+        return postDao.getPostCountByLabel(userId, labelId)
     }
 
     fun findPost(userId: Long, postType: PostType, url: URL): List<PostData> {
-        return postDao.findPost(userId, postType, url.toString())
+        return labelService.withLabels(postDao.findPost(userId, postType, url.toString()))
     }
 
     private data class PageMeta(val title: String?, val ogImage: String?)
@@ -79,6 +90,8 @@ class PostService(
     fun archivePost(postId: Long, userId: Long): Long? {
         logger.debug("Archiving post {} for user {}", postId, userId)
         val newId = postDao.addToArchivePost(postId, userId) ?: return null
+        // Before the delete: the source links go with the row on ON DELETE CASCADE.
+        labelService.copyLabelsOnMove(postId, newId, LabelTarget.UNREAD, LabelTarget.ARCHIVE)
         postDao.deletePost(postId, userId, PostType.UNREAD)
         return newId
     }
@@ -88,22 +101,23 @@ class PostService(
     fun unreadPost(postId: Long, userId: Long): Long? {
         logger.debug("Moving post {} to unread for user {}", postId, userId)
         val newId = postDao.addToUnreadPost(postId, userId) ?: return null
+        labelService.copyLabelsOnMove(postId, newId, LabelTarget.ARCHIVE, LabelTarget.UNREAD)
         postDao.deletePost(postId, userId, PostType.ARCHIVE)
         return newId
     }
 
     fun getRandomPost(userId: Long): PostData? {
-        return postDao.getRandomPost(userId)
+        return postDao.getRandomPost(userId)?.let { labelService.withLabels(it) }
     }
 
     /** The oldest unread post — the web feed's "next to read" hero. */
     fun getOldestUnreadPost(userId: Long): PostData? {
-        return postDao.getOldestPost(userId)
+        return postDao.getOldestPost(userId)?.let { labelService.withLabels(it) }
     }
 
     /** A reshuffled handful of unread posts — the /random shelf. */
     fun getRandomPosts(userId: Long, count: Int): List<PostData> {
-        return postDao.getRandomPosts(userId, count)
+        return labelService.withLabels(postDao.getRandomPosts(userId, count))
     }
 
     fun getPostCount(userId: Long, postType: PostType): Int {
@@ -118,6 +132,6 @@ class PostService(
     }
 
     fun getPost(postId: Long, userId: Long, postType: PostType): PostData? {
-        return postDao.getPost(postId, userId, postType)
+        return postDao.getPost(postId, userId, postType)?.let { labelService.withLabels(it) }
     }
 }

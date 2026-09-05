@@ -168,6 +168,10 @@ html:not(.dark) .icon-moon { display: none; }
 .view-btn:hover { background: var(--surface); color: var(--ink); }
 .view-btn.active { border-color: var(--hair); background: var(--surface); color: var(--ink); }
 
+/* Labels read a shade stronger than the surrounding meta so they are not mistaken
+   for the imported Pocket tags rendered beside them. */
+.label-tag { color: var(--ink); font-weight: 600; margin-left: 7px; }
+
 /* Page-head cluster for pages that carry an action next to the view toggle (/random). */
 .page-head-tools { display: flex; align-items: center; gap: 10px; }
 .reshuffle-btn { padding: 7px 14px; font-size: 12.5px; border-color: var(--hair); }
