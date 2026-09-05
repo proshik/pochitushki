@@ -74,7 +74,9 @@ ALTER TABLE archive_post ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
 - [x] `service/OpenhtmlPdfGenerator.kt` — дефолтная реализация (Jsoup → Cleaner → XHTML → openhtmltopdf)
 - [x] `service/PlaywrightPdfGenerator.kt` — включается флагом `pdf.playwright.enabled=true`;
   движок выбирает пользователь inline-кнопкой, если доступен больше одного
-- [ ] Опционально: кеш `post_pdf(post_id, content BYTEA, created_at)`
+- [x] Кеш PDF — сделано как `pdf_cache(user_id, url_hash, engine, url, content, created_date)`,
+      TTL 30 дней (миграция 7). Ключ по URL+движку, а не по `post_id`: id у двух таблиц
+      постов из разных сиквенсов, и перенос в архив менял бы id, выбрасывая кэш
 
 ### Telegram
 - [x] Кнопка "📄 PDF" на карточке поста (в одном ряду с ⭐ Favorite) → `sendDocument(chatId, TelegramFile.ByByteArray, filename)`

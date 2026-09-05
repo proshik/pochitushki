@@ -37,6 +37,7 @@ class TelegramService(
     private val telegramKeyboard: TelegramKeyboard,
     private val labelService: LabelService,
     private val pendingLabelInput: PendingLabelInput,
+    private val pdfCacheService: PdfCacheService,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -603,7 +604,10 @@ class TelegramService(
         }
 
         try {
-            val pdfBytes = generator.generatePdf(post.url)
+            // Same article, same engine, within the month → no refetch, no re-render.
+            val pdfBytes = pdfCacheService.getOrGenerate(user.id, post.url, engine) {
+                generator.generatePdf(post.url)
+            }
             val filename = generatePdfFilename(post.title, post.url)
 
             botProvider.getBot().sendDocument(
