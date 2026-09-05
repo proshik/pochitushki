@@ -175,7 +175,11 @@ class PostServiceTest : BaseIntegrationTest() {
         val (postId, title) = postService.addPost(url, userId)
 
         assertTrue(postId > 0)
-        assertNotNull(title)
+        // A blank <title> is stored as null, not "": the covers UI falls back to the
+        // url (card) and the domain (abbrev) on null, but would render an empty
+        // heading for an empty string.
+        assertNull(title)
+        assertNull(postService.getPost(postId, userId, PostType.UNREAD)!!.title)
     }
 
     @Test
