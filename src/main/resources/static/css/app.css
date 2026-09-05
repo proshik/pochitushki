@@ -178,10 +178,16 @@ html:not(.dark) .icon-moon { display: none; }
    hung off it would open in a place that has nothing to do with the card. Nothing
    in the card clips (overflow:hidden lives on .cover), so it floats freely. */
 .post-card { position: relative; }
+/* The fade-in animation leaves a transform on every card, which makes each card its
+   own stacking context — so a z-index inside one card cannot rise above the next card.
+   Lift the whole card while its picker is open instead. */
+.post-card.labelling { z-index: 30; }
 .label-panel { display: none; }
 .post-card.labelling .label-panel {
   display: block;
-  position: absolute; right: 8px; bottom: 8px; z-index: 25;
+  /* Opens downward. Hanging it off the card's bottom edge made it grow upward,
+     which put it behind the sticky top bar for the first row of any list. */
+  position: absolute; right: 8px; top: calc(100% - 4px); z-index: 25;
   width: 210px; max-height: 260px; overflow-y: auto;
   background: var(--bg); border: 1px solid var(--hair); border-radius: 10px;
   box-shadow: var(--shadow-s); padding: 6px;
@@ -219,7 +225,7 @@ html:not(.dark) .icon-moon { display: none; }
   padding: 6px 18px 14px;
 }
 .labels-row {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 0; border-bottom: 1px solid var(--hair);
 }
 .labels-row:last-of-type { border-bottom: none; }
@@ -234,6 +240,9 @@ html:not(.dark) .icon-moon { display: none; }
   width: 100%; background: var(--bg); color: var(--ink);
   border: 1px solid var(--hair); border-radius: 7px; padding: 5px 10px; font-size: 13.5px;
 }
+/* Its own line: the row is a flex strip and the input eats every spare pixel,
+   so an inline message would be squeezed to nothing. */
+.labels-error { flex-basis: 100%; color: var(--danger); font-size: 12px; }
 .labels-confirm { display: none; align-items: center; gap: 8px; font-size: 12.5px; }
 .labels-row.confirming .labels-confirm { display: flex; }
 .labels-row.confirming .icon-btn,

@@ -356,6 +356,20 @@ function initLabelsPage() {
     }
   });
 
+  function showRowError(row, message) {
+    clearRowError(row);
+    var note = document.createElement('span');
+    note.className = 'labels-error';
+    note.setAttribute('role', 'alert');
+    note.textContent = message;
+    row.appendChild(note);
+  }
+
+  function clearRowError(row) {
+    var note = row.querySelector('.labels-error');
+    if (note) note.remove();
+  }
+
   function startRename(row, currentName) {
     if (row.querySelector('.labels-rename')) return;
     var nameEl = row.querySelector('.labels-name');
@@ -371,6 +385,7 @@ function initLabelsPage() {
 
     function cancel() {
       form.remove();
+      clearRowError(row);
       nameEl.hidden = false;
     }
 
@@ -394,12 +409,13 @@ function initLabelsPage() {
           labelCache = null;
           cancel();
         } else {
-          /* 409: the user already has that name. Say so instead of failing silently. */
-          input.setCustomValidity(r.status === 409 ? (box.dataset.taken || 'Name taken') : ' ');
-          input.reportValidity();
+          /* 409: the user already has that name. A native validation bubble vanishes on
+             its own, so the message stays in the row until the text changes. */
+          showRowError(row, r.status === 409 ? (box.dataset.taken || 'Name taken') : ' ');
           input.disabled = false;
+          input.focus();
           input.addEventListener('input', function clear() {
-            input.setCustomValidity('');
+            clearRowError(row);
             input.removeEventListener('input', clear);
           });
         }
