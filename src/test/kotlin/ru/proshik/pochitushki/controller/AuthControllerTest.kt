@@ -63,6 +63,12 @@ class AuthControllerTest : BaseIntegrationTest() {
         val scriptSrc = csp.split(";").first { it.trim().startsWith("script-src") }
         assertFalse(scriptSrc.contains("unsafe-inline"), "script-src must not allow inline: $csp")
         assertFalse(csp.contains("unsafe-eval"), "CSP must not allow eval anywhere: $csp")
+
+        // Cover photos are proxied by OgImageProxyService, so no third-party image
+        // origin is needed. Reopening img-src to https: would put the reader's IP
+        // back on every site they saved — guard it the same way as script-src.
+        val imgSrc = csp.split(";").first { it.trim().startsWith("img-src") }
+        assertEquals("img-src 'self'", imgSrc.trim(), "img-src must stay on this origin: $csp")
     }
 
     @Test
