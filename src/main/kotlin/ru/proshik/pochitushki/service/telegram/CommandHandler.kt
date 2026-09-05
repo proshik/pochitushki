@@ -163,6 +163,11 @@ class CommandHandler(
         }
 
         if (message.text != null) {
+            // A pending "type the label name" prompt wins over the default reading of a
+            // message as a URL to save.
+            if (telegramService.consumeLabelName(message.chat.id, message.text!!)) {
+                return
+            }
             try {
                 telegramService.addPost(message.chat.id, message.messageId, message.text!!)
             } catch (ex: Exception) {

@@ -216,6 +216,28 @@ class CallbackQueryHandler(
                 telegramService.export(chatId, messageId)
             }
 
+            /**
+             * Labels
+             */
+            TelegramKeyboard.CALLBACK_POST_LABELS -> {
+                telegramService.showPostLabels(chatId, messageId, TelegramKeyboard.LabelCallbackContext.decode(data))
+            }
+
+            TelegramKeyboard.CALLBACK_POST_LABEL_TOGGLE -> {
+                // data is "<postId>:<table>:<context>:<labelId>" — the label id is the tail.
+                val labelId = data.substringAfterLast(':').toLong()
+                val ctx = TelegramKeyboard.LabelCallbackContext.decode(data.substringBeforeLast(':'))
+                telegramService.togglePostLabel(chatId, messageId, ctx, labelId)
+            }
+
+            TelegramKeyboard.CALLBACK_POST_LABEL_NEW -> {
+                telegramService.promptNewLabel(chatId, TelegramKeyboard.LabelCallbackContext.decode(data))
+            }
+
+            TelegramKeyboard.CALLBACK_POST_LABELS_BACK -> {
+                telegramService.hidePostLabels(chatId, messageId, TelegramKeyboard.LabelCallbackContext.decode(data))
+            }
+
             else -> throw RuntimeException("Unknown callback action $action")
         }
 

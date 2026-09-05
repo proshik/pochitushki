@@ -21,6 +21,7 @@ import ru.proshik.pochitushki.model.LabelData
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserStoreData
+import ru.proshik.pochitushki.service.telegram.PendingLabelInput
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
 
 @Service
@@ -34,6 +35,8 @@ class TelegramService(
     private val pdfGenerators: Map<String, PdfGenerator>,
     private val i18nService: I18nService,
     private val telegramKeyboard: TelegramKeyboard,
+    private val labelService: LabelService,
+    private val pendingLabelInput: PendingLabelInput,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -795,6 +798,101 @@ class TelegramService(
         )
 
         logger.info("updateUserSettingsFeedCount success: chatId={}, tgFeedEntriesNumber={}", chatId, tgFeedEntriesNumber)
+    }
+
+    // ══ Labels ══
+
+    /** Swaps the card's buttons for the label picker. */
+    fun showPostLabels(chatId: Long, messageId: Long, ctx: TelegramKeyboard.LabelCallbackContext) {
+        val user = userService.getUserByChatId(chatId)
+        val post = postService.getPost(ctx.postId, user.id, ctx.postType) ?: run {
+            logger.warn("showPostLabels: post not found postId={}", ctx.postId)
+            return
+        }
+
+        val labels = labelService.getLabels(user.id)
+        if (labels.isEmpty()) {
+            // Nothing to tick yet — ask for the first name instead of showing an empty list.
+            promptNewLabel(chatId, ctx)
+            return
+        }
+
+        editReplyMarkup(
+            chatId, messageId,
+            telegramKeyboard.buildPostLabelsKeyboard(
+                ctx, labels, post.labels.map { it.id }.toSet(), user.settings.languageCode
+            )
+        )
+    }
+
+    fun togglePostLabel(chatId: Long, messageId: Long, ctx: TelegramKeyboard.LabelCallbackContext, labelId: Long) {
+        val user = userService.getUserByChatId(chatId)
+        val post = postService.getPost(ctx.postId, user.id, ctx.postType) ?: return
+
+        if (post.labels.any { it.id == labelId }) {
+            labelService.detachLabel(ctx.postId, labelId, user.id, ctx.target)
+        } else {
+            labelService.attachLabel(ctx.postId, labelId, user.id, ctx.target)
+        }
+
+        showPostLabels(chatId, messageId, ctx)
+        logger.info("togglePostLabel success: chatId={}, postId={}, labelId={}", chatId, ctx.postId, labelId)
+    }
+
+    fun promptNewLabel(chatId: Long, ctx: TelegramKeyboard.LabelCallbackContext) {
+        val user = userService.getUserByChatId(chatId)
+        pendingLabelInput.await(chatId, ctx.postId, ctx.target, ctx.context)
+        sendMessage(chatId, i18nService.getMessage("command.labels.prompt", user.settings.languageCode))
+    }
+
+    /**
+     * Consumes a plain message as the label name the bot just asked for.
+     * Returns false when nothing was pending, so the caller can treat the text as a URL.
+     */
+    fun consumeLabelName(chatId: Long, text: String): Boolean {
+        val pending = pendingLabelInput.take(chatId) ?: return false
+        val user = userService.getUserByChatId(chatId)
+
+        val label = try {
+            labelService.createLabel(user.id, text)
+        } catch (e: InvalidLabelNameException) {
+            sendMessage(chatId, i18nService.getMessage("command.labels.invalid", user.settings.languageCode))
+            return true
+        }
+        labelService.attachLabel(pending.postId, label.id, user.id, pending.target)
+
+        sendMessage(
+            chatId,
+            i18nService.getMessage("command.labels.attached", user.settings.languageCode, arrayOf(label.name))
+        )
+        logger.info("consumeLabelName success: chatId={}, postId={}, label={}", chatId, pending.postId, label.name)
+        return true
+    }
+
+    /** Puts the card's own buttons back after the picker. */
+    fun hidePostLabels(chatId: Long, messageId: Long, ctx: TelegramKeyboard.LabelCallbackContext) {
+        val user = userService.getUserByChatId(chatId)
+        val post = postService.getPost(ctx.postId, user.id, ctx.postType) ?: return
+
+        val postType = if (ctx.context == TelegramKeyboard.CONTEXT_FAVORITES) PostType.FAVORITES else ctx.postType
+        editMessage(
+            chatId, messageId,
+            buildPostMessage(post.url, post.title, labels = post.labels),
+            telegramKeyboard.buildFeedPostInlineKeyboard(
+                ctx.postId, postType, post.isFavorite, user.settings.languageCode,
+                isArchived = ctx.target == ru.proshik.pochitushki.model.LabelTarget.ARCHIVE,
+            ),
+            disableWebPagePreview = false,
+            parseMode = ParseMode.MARKDOWN_V2,
+        )
+    }
+
+    private fun editReplyMarkup(chatId: Long, messageId: Long, keyboard: InlineKeyboardMarkup) {
+        botProvider.getBot().editMessageReplyMarkup(
+            chatId = ChatId.Id(chatId),
+            messageId = messageId,
+            replyMarkup = keyboard,
+        )
     }
 
     private fun buildPostMessage(

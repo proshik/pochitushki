@@ -184,6 +184,73 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `post_labels callback should offer the label picker`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Labelling", "https://labelling.com")
+        createLabel(userId, "kotlin")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 61L, "post_labels|$postId:u:n"))
+
+        awaitTelegramApiCalls("/bottest_token/editMessageReplyMarkup", 1)
+        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/editMessageReplyMarkup")))
+        assertTrue(
+            calls.any { it.bodyAsString.contains("post_label_toggle") },
+            "Expected the picker keyboard to carry a toggle callback"
+        )
+    }
+
+    @Test
+    fun `post_label_toggle callback should attach then detach the label`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Toggling", "https://toggling.com")
+        val labelId = createLabel(userId, "kotlin")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 62L, "post_label_toggle|$postId:u:n:$labelId"))
+        await().atMost(Duration.ofSeconds(10)).until { countLinks() == 1 }
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 62L, "post_label_toggle|$postId:u:n:$labelId"))
+        await().atMost(Duration.ofSeconds(10)).until { countLinks() == 0 }
+    }
+
+    @Test
+    fun `after the new-label prompt a plain message becomes a label, not a post`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Prompting", "https://prompting.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 63L, "post_label_new|$postId:u:n"))
+        awaitTelegramApiCalls("/bottest_token/sendMessage", 1)
+
+        postUpdate(buildCommandMessage(nextUpdateId(), "вечером", "text"))
+
+        await().atMost(Duration.ofSeconds(10)).until { countLinks() == 1 }
+        assertTrue(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM label WHERE user_id = ? AND name = 'вечером'", Int::class.java, userId
+            ) == 1
+        )
+        // and the text did not turn into a saved link
+        assertTrue(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM post WHERE user_id = ?", Int::class.java, userId
+            ) == 1
+        )
+    }
+
+    @Test
+    fun `an empty label list asks for the first name instead of showing nothing`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "No labels yet", "https://nolabels.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 64L, "post_labels|$postId:u:n"))
+
+        awaitTelegramApiCalls("/bottest_token/sendMessage", 1)
+    }
+
+    @Test
     fun `archive command should send archive feed or not-found`() {
         registerTestUser()
 
@@ -572,6 +639,15 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
             Long::class.java, title, url, userId
         )!!
     }
+
+    private fun createLabel(userId: Long, name: String): Long =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO label(user_id, name) VALUES (?, ?) RETURNING id",
+            Long::class.java, userId, name
+        )!!
+
+    private fun countLinks(): Int =
+        jdbcTemplate.queryForObject("SELECT count(*) FROM post_label", Int::class.java)!!
 
     private fun markAsFavorite(postId: Long) {
         jdbcTemplate.update("UPDATE post SET is_favorite = true WHERE id = ?", postId)

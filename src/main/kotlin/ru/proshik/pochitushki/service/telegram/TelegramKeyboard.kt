@@ -4,6 +4,8 @@ import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.ReplyMarkup
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import org.springframework.stereotype.Service
+import ru.proshik.pochitushki.model.LabelData
+import ru.proshik.pochitushki.model.LabelTarget
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_EN_CODE
@@ -55,6 +57,75 @@ class TelegramKeyboard(private val i18nService: I18nService) {
 
         const val CALLBACK_PROFILE_IMPORT = "profile_import"
         const val CALLBACK_PROFILE_EXPORT = "profile_export"
+
+        const val CALLBACK_POST_LABELS = "post_labels"
+        const val CALLBACK_POST_LABEL_TOGGLE = "post_label_toggle"
+        const val CALLBACK_POST_LABEL_NEW = "post_label_new"
+        const val CALLBACK_POST_LABELS_BACK = "post_labels_back"
+
+        /** Rebuilding the card's own keyboard after "back" needs the context it was drawn in. */
+        const val CONTEXT_FEED = "n"
+        const val CONTEXT_FAVORITES = "f"
+    }
+
+    /**
+     * Which post a label callback is about, packed small: Telegram caps callback_data at
+     * 64 bytes, so the table is one character and the context another.
+     */
+    data class LabelCallbackContext(
+        val postId: Long,
+        val target: LabelTarget,
+        val context: String,
+    ) {
+        fun encode(): String = "$postId:${if (target == LabelTarget.ARCHIVE) "a" else "u"}:$context"
+
+        val postType: PostType
+            get() = if (target == LabelTarget.ARCHIVE) PostType.ARCHIVE else PostType.UNREAD
+
+        companion object {
+            fun decode(data: String): LabelCallbackContext {
+                val parts = data.split(":")
+                return LabelCallbackContext(
+                    postId = parts[0].toLong(),
+                    target = if (parts.getOrNull(1) == "a") LabelTarget.ARCHIVE else LabelTarget.UNREAD,
+                    context = parts.getOrElse(2) { CONTEXT_FEED },
+                )
+            }
+        }
+    }
+
+    /**
+     * The label picker that replaces a post card's buttons:
+     * [ ✅ kotlin ] [ ⬜ вечером ] … [ ➕ Новая метка ] [ ◀️ Назад ]
+     */
+    fun buildPostLabelsKeyboard(
+        ctx: LabelCallbackContext,
+        labels: List<LabelData>,
+        attachedIds: Set<Long>,
+        languageCode: String,
+    ): InlineKeyboardMarkup {
+        val rows = labels.map { label ->
+            val mark = if (label.id in attachedIds) "✅" else "⬜"
+            listOf(
+                InlineKeyboardButton.CallbackData(
+                    text = "$mark ${label.name}",
+                    callbackData = "$CALLBACK_POST_LABEL_TOGGLE|${ctx.encode()}:${label.id}"
+                )
+            )
+        }
+
+        val footer = listOf(
+            InlineKeyboardButton.CallbackData(
+                text = i18nService.getMessage("command.labels.button.new", languageCode),
+                callbackData = "$CALLBACK_POST_LABEL_NEW|${ctx.encode()}"
+            ),
+            InlineKeyboardButton.CallbackData(
+                text = i18nService.getMessage("command.profile.language.back", languageCode),
+                callbackData = "$CALLBACK_POST_LABELS_BACK|${ctx.encode()}"
+            ),
+        )
+
+        return InlineKeyboardMarkup.create(rows + listOf(footer))
     }
 
     /**
@@ -300,6 +371,20 @@ class TelegramKeyboard(private val i18nService: I18nService) {
                     InlineKeyboardButton.CallbackData(
                         text = i18nService.getMessage("command.feed.button.pdf", languageCode),
                         callbackData = "$pdfCallback|$postId"
+                    ),
+                ),
+                listOf(
+                    InlineKeyboardButton.CallbackData(
+                        text = i18nService.getMessage("command.feed.button.labels", languageCode),
+                        callbackData = "$CALLBACK_POST_LABELS|" + LabelCallbackContext(
+                            postId = postId,
+                            target = if (postType == PostType.ARCHIVE || isArchived) {
+                                LabelTarget.ARCHIVE
+                            } else {
+                                LabelTarget.UNREAD
+                            },
+                            context = if (postType == PostType.FAVORITES) CONTEXT_FAVORITES else CONTEXT_FEED,
+                        ).encode()
                     ),
                 ),
             )
