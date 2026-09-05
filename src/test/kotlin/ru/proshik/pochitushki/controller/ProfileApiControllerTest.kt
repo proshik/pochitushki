@@ -72,6 +72,62 @@ class ProfileApiControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `POST settings turns photo covers off`() {
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"showOgCovers":false}""")
+        ).andExpect(status().isOk)
+
+        val show = jdbcTemplate.queryForObject(
+            "SELECT (settings->>'showOgCovers')::boolean FROM users WHERE id = ?",
+            Boolean::class.java, userId
+        )
+        assertEquals(false, show)
+    }
+
+    @Test
+    fun `a settings row written before showOgCovers existed reads as on`() {
+        // The seed row in setUp has no showOgCovers key at all.
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"languageCode":"en"}""")
+        ).andExpect(status().isOk)
+
+        val show = jdbcTemplate.queryForObject(
+            "SELECT (settings->>'showOgCovers')::boolean FROM users WHERE id = ?",
+            Boolean::class.java, userId
+        )
+        assertEquals(true, show)
+    }
+
+    @Test
+    fun `patching one setting does not reset the photo cover choice`() {
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"showOgCovers":false}""")
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"tgFeedEntriesNumber":3}""")
+        ).andExpect(status().isOk)
+
+        val show = jdbcTemplate.queryForObject(
+            "SELECT (settings->>'showOgCovers')::boolean FROM users WHERE id = ?",
+            Boolean::class.java, userId
+        )
+        assertEquals(false, show)
+    }
+
+    @Test
     fun `POST settings without auth returns 401`() {
         mockMvc.perform(
             post("/api/v1/profile/settings")

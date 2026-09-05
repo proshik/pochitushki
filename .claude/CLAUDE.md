@@ -77,7 +77,10 @@ ru.proshik.pochitushki/
 
 - Таблица `post` — непрочитанные ссылки, `archive_post` — архив (та же структура)
 - Флаг `is_favorite` в обеих таблицах (миграция `3_add_favorites`)
-- JSONB-колонка `settings` в таблице `users` (`languageCode`, `tgFeedEntriesNumber`)
+- JSONB-колонка `settings` в таблице `users` (`languageCode`, `tgFeedEntriesNumber`,
+  `showOgCovers`). Миграции под новые ключи нет и не нужно: Jackson KotlinModule
+  подставляет дефолт из конструктора, поэтому старые строки без ключа читаются как
+  `showOgCovers = true`. Новый ключ обязан иметь дефолт, иначе чтение старых строк упадёт
 - `PostType`: `UNREAD` / `ARCHIVE` / `FAVORITES` / `ALL`. Маппинг из строки
   двоякий: контроллеры ищут по `value` (`"unread"`), а `PostType.from`/`stringToType`
   — по имени enum (`"UNREAD"`); не перепутать при добавлении новых lookup'ов
@@ -87,7 +90,10 @@ ru.proshik.pochitushki/
 
 - `POST /posts`, `GET /posts/fragment`, `GET /posts/random-fragment`,
   `POST /posts/{id}/archive|unread|favorite`, `DELETE /posts/{id}`,
-  `GET /posts/{id}/og-image`
+  `GET /posts/{id}/cover-image`, `GET /posts/{id}/og-image`
+- `POST /posts/{id}/archive` отдаёт `{"archivedId": N}` — id новой строки в
+  `archive_post`. htmx его игнорирует (`hx-swap="delete"`), читает только `app.js`
+  ради тоста «Вернуть»; не менять на пустой ответ
 - `POST /profile/settings`
 
 Экспорт/импорт (Pocket CSV) по HTTP **не выставлен** — доступен только через бота
@@ -114,8 +120,9 @@ Webhook висит на `POST /${telegram.token}`, то есть путь энд
 3. Ассеты только свои: `static/js/` (htmx 2.0.4, json-enc, app.js, theme-init.js),
    `static/css/app.css` (вся дизайн-система, инлайновых стилей в шаблонах
    почти нет) + `fonts.css` + `static/fonts/*.woff2`.
-   `img-src https:` нужен для OG-обложек (`post.og_image_url` рендерится как
-   `<img>` внутри «суперобложки»).
+   `img-src 'self'` — единственный источник картинок теперь сам сервис:
+   OG-обложки идут через `OgImageProxyService` (`GET /api/v1/posts/{id}/cover-image`),
+   а не хотлинком. Не возвращать `https:` в `img-src`, не сняв прокси.
 
 Шрифты — Onest (400/600/800) и JetBrains Mono (400/600), самохостятся
 подмножествами (latin, latin-ext, cyrillic, cyrillic-ext — кириллица
@@ -133,6 +140,15 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
 - og:image добывается в `PostService.loadPageMeta` тем же Jsoup-запросом, что
   и title (только абсолютные https, ≤2000 символов), хранится в колонке
   `og_image_url` (миграция 4); импорт og не заполняет
+- Отдаётся og-картинка только через `OgImageProxyService`: Caffeine-кэш, ограниченный
+  суммой байт (48 МБ), TTL 7 дней, аллоулист content-type'ов **без `image/svg+xml`**
+  (SVG с нашего origin — это документ со скриптами, а не картинка). Владение постом
+  проверяется через `getPost(userId)`, поэтому эндпоинт не превращается в открытый
+  SSRF-фетчер; сам URL картинки всё равно прогоняется через `UrlSecurityValidator`
+- Тумблер «фото-обложки» в профиле = `settings.showOgCovers`. Флаг доезжает до
+  контроллеров request-атрибутом `JwtAuthInterceptor.SHOW_OG_COVERS` — интерцептор
+  и так читает пользователя ради локали, второй запрос на карточку не нужен.
+  `CoverService.decorate(post, showOgCovers)` при `false` не выбирает `co-og`
 - Фрагменты: `post-card :: card(cv, type, viewMode, pageType)`,
   `post-card :: cover(cv)` (переиспользуется hero'м), `post-list :: posts(covers,
   pageType, offset, hasMore, viewMode)` — контроллеры кладут в модель ровно эти

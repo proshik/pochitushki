@@ -27,10 +27,14 @@ data class CoverView(
 @Service
 class CoverService {
 
-    fun decorate(post: PostData): CoverView {
+    /**
+     * @param showOgCovers when false, a post with an og:image still gets a
+     * typographic composition — the reader has asked for no scraped photos.
+     */
+    fun decorate(post: PostData, showOgCovers: Boolean = true): CoverView {
         val domain = extractDomain(post.url)
         val palette = "cv-" + Math.floorMod(domain.hashCode(), PALETTE_COUNT)
-        val comp = if (!post.ogImageUrl.isNullOrBlank()) {
+        val comp = if (showOgCovers && !post.ogImageUrl.isNullOrBlank()) {
             "co-og"
         } else {
             "co-" + COMPOSITIONS[Math.floorMod((post.title ?: domain).hashCode(), COMPOSITIONS.size)]
@@ -45,7 +49,8 @@ class CoverService {
         )
     }
 
-    fun decorate(posts: List<PostData>): List<CoverView> = posts.map { decorate(it) }
+    fun decorate(posts: List<PostData>, showOgCovers: Boolean = true): List<CoverView> =
+        posts.map { decorate(it, showOgCovers) }
 
     private fun extractDomain(url: String): String = try {
         URI(url).host?.removePrefix("www.") ?: DOMAIN_FALLBACK

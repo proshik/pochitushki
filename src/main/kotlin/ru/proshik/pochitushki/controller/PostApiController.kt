@@ -18,8 +18,11 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.server.ResponseStatusException
+import ru.proshik.pochitushki.configuration.JwtAuthInterceptor
 import ru.proshik.pochitushki.model.PostType
+import org.springframework.http.HttpHeaders
 import ru.proshik.pochitushki.service.CoverService
+import ru.proshik.pochitushki.service.OgImageProxyService
 import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.SsrfValidationException
 import ru.proshik.pochitushki.service.UrlSecurityValidator
@@ -30,6 +33,7 @@ class PostApiController(
     private val postService: PostService,
     private val urlSecurityValidator: UrlSecurityValidator,
     private val coverService: CoverService,
+    private val ogImageProxyService: OgImageProxyService,
 ) {
 
     @GetMapping("/fragment")
@@ -38,6 +42,7 @@ class PostApiController(
         @RequestParam type: String,
         @RequestParam offset: Int,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
         val postType = PostType.entries.firstOrNull { it.value == type }
@@ -46,7 +51,7 @@ class PostApiController(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "offset must be >= 0")
         }
         val posts = postService.getPosts(userId, postType, PAGE_SIZE, offset)
-        model.addAttribute("covers", coverService.decorate(posts))
+        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", type)
         model.addAttribute("offset", offset + posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
@@ -62,10 +67,11 @@ class PostApiController(
     fun randomFragment(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
         val posts = postService.getRandomPosts(userId, RANDOM_SIZE)
-        model.addAttribute("covers", coverService.decorate(posts))
+        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", PostType.UNREAD.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", false)
@@ -79,6 +85,7 @@ class PostApiController(
         @RequestParam url: String,
         @RequestParam(required = false) view: String?,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
         val parsedUrl = try {
@@ -97,7 +104,7 @@ class PostApiController(
         }
         val post = postService.getPost(postId, userId, PostType.UNREAD)
             ?: throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Post not found after insert")
-        model.addAttribute("cv", coverService.decorate(post))
+        model.addAttribute("cv", coverService.decorate(post, showOgCovers))
         model.addAttribute("type", PostType.UNREAD.value)
         // The submitting page reports its current mode so the returned card matches it.
         model.addAttribute(
@@ -111,14 +118,20 @@ class PostApiController(
         return "fragments/post-card :: card"
     }
 
+    /**
+     * Archiving moves the row to another table under a new id, so the response
+     * carries it: without it the undo toast has nothing to send back. htmx ignores
+     * the body (hx-swap="delete"); only app.js reads it.
+     */
     @PostMapping("/{id}/archive")
+    @ResponseBody
     fun archive(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
-    ): ResponseEntity<Void> {
-        postService.archivePost(id, userId)
+    ): ResponseEntity<Map<String, Long>> {
+        val archivedId = postService.archivePost(id, userId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
-        return ResponseEntity.ok().build()
+        return ResponseEntity.ok(mapOf("archivedId" to archivedId))
     }
 
     @PostMapping("/{id}/unread")
@@ -136,6 +149,7 @@ class PostApiController(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long,
         @RequestParam type: String,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
         val postType = PostType.entries.firstOrNull { it.value == type }
@@ -145,7 +159,7 @@ class PostApiController(
         val post = postService.getPost(id, userId, postType)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         // Rendered for API symmetry; the web client calls this with hx-swap="none".
-        model.addAttribute("cv", coverService.decorate(post))
+        model.addAttribute("cv", coverService.decorate(post, showOgCovers))
         model.addAttribute("type", type)
         model.addAttribute("viewMode", "list")
         model.addAttribute("pageType", type)
@@ -165,6 +179,35 @@ class PostApiController(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         }
         return ResponseEntity.ok().build()
+    }
+
+    /**
+     * The cover photo, fetched and cached by us rather than by the reader's browser.
+     * Ownership is enforced by getPost(userId), so this cannot be used to make the
+     * server fetch an arbitrary url — only one already saved by the caller.
+     */
+    @GetMapping("/{id}/cover-image")
+    @ResponseBody
+    fun coverImage(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable id: Long,
+        @RequestParam(defaultValue = "unread") type: String,
+    ): ResponseEntity<ByteArray> {
+        // Only the two real tables; "all"/"favorites" would blow up getPost or alias
+        // to the same rows anyway.
+        val postType = if (type == PostType.ARCHIVE.value) PostType.ARCHIVE else PostType.UNREAD
+
+        val post = postService.getPost(id, userId, postType)
+            ?: return ResponseEntity.notFound().build()
+        val imageUrl = post.ogImageUrl?.takeIf { it.isNotBlank() }
+            ?: return ResponseEntity.notFound().build()
+        val image = ogImageProxyService.fetch(imageUrl)
+            ?: return ResponseEntity.notFound().build()
+
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_TYPE, image.contentType)
+            .header(HttpHeaders.CACHE_CONTROL, OgImageProxyService.CACHE_CONTROL)
+            .body(image.bytes)
     }
 
     @GetMapping("/{id}/og-image")

@@ -51,6 +51,28 @@
     </div>
     <div class="settings-row">
       <span>
+        <span class="settings-label" th:text="#{web.profile.og.covers}">Фото-обложки</span><br>
+        <span class="settings-hint" th:text="#{web.profile.og.covers.hint}">Показывать og:image с сайтов</span>
+      </span>
+      <span class="pills" id="og-covers-btns">
+        <button type="button" class="pill"
+                th:classappend="${user.settings.showOgCovers} ? 'on'"
+                hx-post="/api/v1/profile/settings"
+                hx-vals='{"showOgCovers":true}'
+                hx-swap="none"
+                data-reload-on-success
+                th:text="#{web.profile.toggle.on}">Вкл</button>
+        <button type="button" class="pill"
+                th:classappend="${!user.settings.showOgCovers} ? 'on'"
+                hx-post="/api/v1/profile/settings"
+                hx-vals='{"showOgCovers":false}'
+                hx-swap="none"
+                data-reload-on-success
+                th:text="#{web.profile.toggle.off}">Выкл</button>
+      </span>
+    </div>
+    <div class="settings-row">
+      <span>
         <span class="settings-label" th:text="#{web.profile.feed.size}">Ссылок в ленте бота</span><br>
         <span class="settings-hint" th:text="#{web.profile.feed.size.hint}">Сколько карточек присылает /feed</span>
       </span>

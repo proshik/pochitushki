@@ -60,6 +60,10 @@ dependencies {
 
     implementation("org.jsoup:jsoup:1.21.1")
 
+    // Bounded in-memory cache for the OG image proxy (weight = bytes, not entries).
+    // Version comes from the Spring Boot BOM.
+    implementation("com.github.ben-manes.caffeine:caffeine")
+
     implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
     implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
 

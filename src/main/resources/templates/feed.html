@@ -30,6 +30,7 @@
         <button type="button" class="btn btn-ghost"
                 th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${hero.post.id})}"
                 hx-swap="none"
+                data-archive-undo
                 data-reload-on-success
                 th:text="#{web.action.toArchive}">В архив</button>
       </div>

@@ -23,5 +23,11 @@ data class UserStoreData(
 
 data class UserSettingsData(
     val languageCode: String,
-    val tgFeedEntriesNumber: Int
+    val tgFeedEntriesNumber: Int,
+    /**
+     * Show scraped og:image photos on covers. Defaults to true so rows written
+     * before this key existed keep the look they had (Jackson's KotlinModule
+     * fills the default in for a missing property).
+     */
+    val showOgCovers: Boolean = true,
 )

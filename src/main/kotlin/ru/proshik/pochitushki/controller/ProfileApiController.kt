@@ -15,6 +15,7 @@ import ru.proshik.pochitushki.service.UserService
 data class SettingsPatchRequest(
     val languageCode: String? = null,
     val tgFeedEntriesNumber: Int? = null,
+    val showOgCovers: Boolean? = null,
 )
 
 @RestController
@@ -34,6 +35,7 @@ class ProfileApiController(private val userService: UserService) {
         val updated = UserSettingsData(
             languageCode = patch.languageCode ?: current.languageCode,
             tgFeedEntriesNumber = patch.tgFeedEntriesNumber ?: current.tgFeedEntriesNumber,
+            showOgCovers = patch.showOgCovers ?: current.showOgCovers,
         )
 
         userService.updateUserSettings(userId, updated)

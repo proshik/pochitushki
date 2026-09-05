@@ -107,6 +107,23 @@ a { color: inherit; }
   padding: 10px 16px; font-size: 13px; box-shadow: var(--shadow-s); z-index: 40;
 }
 
+/* Undo toast — inverted ink so it reads as chrome, not as another card. */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px;
+  display: flex; align-items: center; gap: 14px;
+  background: var(--btn); color: var(--btn-ink); border-radius: 9px;
+  padding: 10px 12px 10px 16px; font-size: 13px;
+  box-shadow: var(--shadow-s); z-index: 40;
+  animation: fadeIn 0.18s ease;
+}
+.toast-action {
+  color: inherit; font-size: 13px; font-weight: 700;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+}
+.toast-action:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+.toast-action:disabled { opacity: 0.5; cursor: default; }
+
 .icon-btn {
   width: 36px; height: 36px; border-radius: 999px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -515,6 +532,9 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   /* The dice alone carries the meaning once the head runs out of room. */
   .reshuffle-btn { padding: 7px 10px; }
   .reshuffle-btn span { display: none; }
+  /* Clear the bottom tab bar. */
+  .toast, .add-error { bottom: 72px; left: 14px; right: 14px; transform: none; }
+  .toast { justify-content: space-between; }
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   #post-list.shelf { grid-template-columns: repeat(4, 1fr); }

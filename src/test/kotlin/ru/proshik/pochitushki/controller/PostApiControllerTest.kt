@@ -2,6 +2,7 @@ package ru.proshik.pochitushki.controller
 
 import com.github.tomakehurst.wiremock.client.WireMock.aResponse
 import com.github.tomakehurst.wiremock.client.WireMock.get as wmGet
+import com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor
 import com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delet
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import ru.proshik.pochitushki.BaseIntegrationTest
 import ru.proshik.pochitushki.model.PostType
@@ -68,6 +70,28 @@ class PostApiControllerTest : BaseIntegrationTest() {
             "INSERT INTO post(title, url, user_id) VALUES (?, ?, ?) RETURNING id",
             Long::class.java, title, url, userId
         )!!
+
+    private fun insertPostWithOgImage(ogImageUrl: String, owner: Long = userId): Long =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO post(title, url, user_id, og_image_url) VALUES (?, ?, ?, ?) RETURNING id",
+            Long::class.java, "With Cover", "https://example.com/cover-post", owner, ogImageUrl
+        )!!
+
+    /** A one-pixel PNG is enough: the proxy never decodes, it only gates and forwards. */
+    private val pngBytes = byteArrayOf(
+        0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06,
+    )
+
+    private fun stubImage(path: String, contentType: String = "image/png", body: ByteArray = pngBytes) {
+        BaseIntegrationTest.wireMockTelegramApi.stubFor(
+            wmGet(urlEqualTo(path)).willReturn(
+                aResponse().withStatus(200).withHeader("Content-Type", contentType).withBody(body)
+            )
+        )
+    }
+
+    private fun imageUrl(path: String) = "http://localhost:${BaseIntegrationTest.wireMockTelegramApi.port()}$path"
 
     private fun insertArchivePost(title: String = "Archive Post", url: String = "https://archive.com"): Long =
         jdbcTemplate.queryForObject(
@@ -290,6 +314,94 @@ class PostApiControllerTest : BaseIntegrationTest() {
         ).andExpect(status().isOk)
 
         assertEquals(0, postDao.getPostCount(userId, PostType.ARCHIVE))
+    }
+
+    @Test
+    fun `GET cover-image proxies the bytes with the upstream content type`() {
+        stubImage("/pic-basic.png")
+        val postId = insertPostWithOgImage(imageUrl("/pic-basic.png"))
+
+        mockMvc.perform(get("/api/v1/posts/$postId/cover-image").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(header().string("Content-Type", "image/png"))
+            .andExpect(content().bytes(pngBytes))
+    }
+
+    @Test
+    fun `GET cover-image hits the origin once and serves the rest from cache`() {
+        stubImage("/pic-cached.png")
+        val postId = insertPostWithOgImage(imageUrl("/pic-cached.png"))
+
+        repeat(3) {
+            mockMvc.perform(get("/api/v1/posts/$postId/cover-image").with(withAuth(userId)))
+                .andExpect(status().isOk)
+        }
+
+        BaseIntegrationTest.wireMockTelegramApi.verify(1, getRequestedFor(urlEqualTo("/pic-cached.png")))
+    }
+
+    @Test
+    fun `GET cover-image refuses svg, which would be a script document on our origin`() {
+        stubImage("/pic.svg", contentType = "image/svg+xml", body = "<svg/>".toByteArray())
+        val postId = insertPostWithOgImage(imageUrl("/pic.svg"))
+
+        mockMvc.perform(get("/api/v1/posts/$postId/cover-image").with(withAuth(userId)))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `GET cover-image refuses a non-image content type`() {
+        stubImage("/not-a-pic", contentType = "text/html", body = "<html></html>".toByteArray())
+        val postId = insertPostWithOgImage(imageUrl("/not-a-pic"))
+
+        mockMvc.perform(get("/api/v1/posts/$postId/cover-image").with(withAuth(userId)))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `GET cover-image returns 404 when the post carries no og image`() {
+        val postId = insertPost()
+
+        mockMvc.perform(get("/api/v1/posts/$postId/cover-image").with(withAuth(userId)))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `GET cover-image on another user's post returns 404`() {
+        stubImage("/pic-victim.png")
+        val victimPostId = insertPostWithOgImage(imageUrl("/pic-victim.png"), owner = otherUserId)
+
+        mockMvc.perform(get("/api/v1/posts/$victimPostId/cover-image").with(withAuth(userId)))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `GET cover-image without auth returns 401`() {
+        mockMvc.perform(get("/api/v1/posts/1/cover-image"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `POST archive returns the new archive id so the undo toast can send it back`() {
+        val postId = insertPost(title = "To Archive", url = "https://toarchive.com")
+
+        val body = mockMvc.perform(post("/api/v1/posts/$postId/archive").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+
+        val archivedId = Regex("\"archivedId\"\\s*:\\s*(\\d+)").find(body)!!.groupValues[1].toLong()
+
+        // The returned id is the one undo posts to, so it must really move the post back.
+        mockMvc.perform(post("/api/v1/posts/$archivedId/unread").with(withAuth(userId)))
+            .andExpect(status().isOk)
+
+        assertEquals(
+            1,
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM post WHERE user_id = ? AND url = ?",
+                Int::class.java, userId, "https://toarchive.com"
+            )
+        )
     }
 
     @Test

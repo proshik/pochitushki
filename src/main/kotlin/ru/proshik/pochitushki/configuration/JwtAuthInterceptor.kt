@@ -38,14 +38,23 @@ class JwtAuthInterceptor(
 
         request.setAttribute("userId", userId)
 
-        val languageCode = try {
-            userService.getUserByUserId(userId).settings.languageCode
+        // One user lookup per request already happens here for the locale; the
+        // cover preference rides along rather than costing every controller
+        // that renders a card its own query.
+        val settings = try {
+            userService.getUserByUserId(userId).settings
         } catch (e: DataAccessException) {
-            logger.warn("Failed to load locale for userId={}, defaulting to 'ru'", userId, e)
-            "ru"
+            logger.warn("Failed to load settings for userId={}, falling back to defaults", userId, e)
+            null
         }
-        request.setAttribute("_userLocale", Locale(languageCode))
+        request.setAttribute("_userLocale", Locale(settings?.languageCode ?: "ru"))
+        request.setAttribute(SHOW_OG_COVERS, settings?.showOgCovers ?: true)
 
         return true
+    }
+
+    companion object {
+        /** Request attribute carrying UserSettingsData.showOgCovers to the controllers. */
+        const val SHOW_OG_COVERS = "showOgCovers"
     }
 }

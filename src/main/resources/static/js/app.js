@@ -106,6 +106,82 @@ function initAddPostForm() {
   });
 }
 
+/* ── Undo toast after archiving ──
+   Archiving re-inserts the row under a new id, so the id to undo comes back in
+   the response body. The hero button reloads the page (the "next to read" card
+   has to change), which would throw the toast away — so that path parks the id
+   in sessionStorage and the toast is raised again after the reload. */
+var UNDO_KEY = 'pochitushki-undo';
+
+function i18n(name, fallback) {
+  var el = document.getElementById('app-i18n');
+  return (el && el.dataset[name]) || fallback;
+}
+
+function archivedIdFrom(xhr) {
+  try {
+    var id = JSON.parse(xhr.responseText).archivedId;
+    return typeof id === 'number' ? id : null;
+  } catch (ex) {
+    return null;
+  }
+}
+
+function showUndoToast(archivedId) {
+  document.querySelectorAll('.toast').forEach(function (t) { t.remove(); });
+
+  var toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.setAttribute('role', 'status');
+
+  var label = document.createElement('span');
+  label.textContent = i18n('archived', 'Archived');
+
+  var undo = document.createElement('button');
+  undo.type = 'button';
+  undo.className = 'toast-action';
+  undo.textContent = i18n('undo', 'Undo');
+  undo.addEventListener('click', function () {
+    undo.disabled = true;
+    fetch('/api/v1/posts/' + archivedId + '/unread', { method: 'POST' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('undo failed');
+        location.reload();
+      })
+      .catch(function () {
+        undo.disabled = false;
+      });
+  });
+
+  toast.appendChild(label);
+  toast.appendChild(undo);
+  document.body.appendChild(toast);
+
+  setTimeout(function () { toast.remove(); }, 7000);
+}
+
+function stashUndo(archivedId) {
+  try {
+    sessionStorage.setItem(UNDO_KEY, JSON.stringify({ id: archivedId, at: Date.now() }));
+  } catch (ex) { /* private mode — the toast is a nicety, not a requirement */ }
+}
+
+function popStashedUndo() {
+  var raw;
+  try {
+    raw = sessionStorage.getItem(UNDO_KEY);
+    sessionStorage.removeItem(UNDO_KEY);
+  } catch (ex) {
+    return;
+  }
+  if (!raw) return;
+  try {
+    var stash = JSON.parse(raw);
+    /* Only for the reload it was parked across, not for a page opened later. */
+    if (stash && stash.id && Date.now() - stash.at < 5000) showUndoToast(stash.id);
+  } catch (ex) { /* ignore malformed stash */ }
+}
+
 /* ── Theme — icon swap is pure CSS (html.dark .icon-sun / .icon-moon) ── */
 function toggleTheme() {
   var isDark = document.documentElement.classList.toggle('dark');
@@ -204,6 +280,16 @@ document.addEventListener('htmx:afterRequest', function (e) {
   var el = e.detail.elt;
   if (!el || !el.matches) return;
 
+  /* Deliberately not part of the chain below: the hero button is both an
+     archive trigger and a reload trigger, and needs both to run. */
+  if (el.matches('[data-archive-undo]')) {
+    var archivedId = archivedIdFrom(e.detail.xhr);
+    if (archivedId) {
+      if (el.matches('[data-reload-on-success]')) stashUndo(archivedId);
+      else showUndoToast(archivedId);
+    }
+  }
+
   if (el.matches('[data-unfav-remove]')) {
     /* Favorites showcase: removing the star removes the card right away. */
     el.closest('.post-card')?.remove();
@@ -229,6 +315,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
+  popStashedUndo();
   initAddPostForm();
   /* The mode class is applied server-side from the cookie — only sync button states. */
   var postList = document.getElementById('post-list');

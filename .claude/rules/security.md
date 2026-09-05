@@ -47,19 +47,24 @@ Code + PKCE**, не Login Widget: HMAC-подписи `WebAppData` и прове
 ## Interceptor (`JwtAuthInterceptor` + `WebConfig`)
 
 - Валидация токена — только здесь, в одном месте
-- Защищённые пути (`WebConfig`): `/`, `/all`, `/archive`, `/favorites`, `/profile`,
-  `/api/v1/**`. Открыты: `/login`, `/auth/**`, webhook
+- Защищённые пути (`WebConfig`): `/`, `/all`, `/archive`, `/favorites`, `/random`,
+  `/profile`, `/api/v1/**`. Открыты: `/login`, `/auth/**`, webhook.
+  Новую страницу добавлять сюда сразу — иначе она открыта без входа
 - Невалидный токен: `401` для `/api/**`, редирект на `/login` для остального
 - Кладёт в request-атрибуты `userId` и `_userLocale`; контроллеры получают
   пользователя через `@RequestAttribute("userId")`, а не из SecurityContext
 
 ## Прочие защиты
 
-- `UrlSecurityValidator` — SSRF-проверки для всех внешних загрузок (PDF, OG-image).
-  Любой новый код, ходящий по пользовательскому URL, обязан прогонять его через
-  валидатор. Исключения — только через `app.security.ssrf.allowed-hosts`
+- `UrlSecurityValidator` — SSRF-проверки для всех внешних загрузок (PDF, OG-image,
+  прокси обложек). Любой новый код, ходящий по пользовательскому URL, обязан прогонять
+  его через валидатор. Исключения — только через `app.security.ssrf.allowed-hosts`
+- `OgImageProxyService` отдаёт байты картинок с нашего origin, поэтому content-type
+  проверяется по аллоулисту растровых форматов. `image/svg+xml` запрещён намеренно:
+  SVG на своём origin исполняет скрипты. Аллоулист не расширять «за компанию»
 - `SecurityHeadersFilter` — `X-Frame-Options: DENY`, `X-Content-Type-Options`,
-  `Referrer-Policy`, CSP `frame-ancestors 'none'`
+  `Referrer-Policy`, CSP `frame-ancestors 'none'`, `img-src 'self'` (картинки только
+  свои, обложки — через прокси)
 - Webhook: путь эндпоинта — сам токен бота, плюс сверка заголовка
   `X-Telegram-Bot-Api-Secret-Token` с `telegram.webhook-secret`. Секретного пути
   недостаточно, header-проверку не убирать

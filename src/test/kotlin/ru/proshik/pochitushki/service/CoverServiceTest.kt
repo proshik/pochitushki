@@ -113,4 +113,33 @@ class CoverServiceTest {
         val short = coverService.decorate(post(url = "https://habr.com/x"))
         assertEquals("habr.com", short.coverDomain)
     }
+
+    @Test
+    fun `og photo is used as the composition when photo covers are on`() {
+        val cv = coverService.decorate(post(ogImageUrl = "https://cdn.example.com/pic.png"), showOgCovers = true)
+
+        assertEquals("co-og", cv.comp)
+    }
+
+    @Test
+    fun `og photo is ignored when the reader turned photo covers off`() {
+        val cv = coverService.decorate(post(ogImageUrl = "https://cdn.example.com/pic.png"), showOgCovers = false)
+
+        assertTrue(cv.comp in setOf("co-mono", "co-band", "co-frame"), "got ${cv.comp}")
+    }
+
+    @Test
+    fun `turning photo covers off keeps the domain palette intact`() {
+        val withPhoto = coverService.decorate(post(ogImageUrl = "https://cdn.example.com/pic.png"), showOgCovers = true)
+        val without = coverService.decorate(post(ogImageUrl = "https://cdn.example.com/pic.png"), showOgCovers = false)
+
+        assertEquals(withPhoto.palette, without.palette)
+    }
+
+    @Test
+    fun `the list overload passes the flag to every cover`() {
+        val posts = listOf(post(ogImageUrl = "https://cdn.example.com/a.png"), post(ogImageUrl = "https://cdn.example.com/b.png"))
+
+        assertTrue(coverService.decorate(posts, showOgCovers = false).none { it.comp == "co-og" })
+    }
 }

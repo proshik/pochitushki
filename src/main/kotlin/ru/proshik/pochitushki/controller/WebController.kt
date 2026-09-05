@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.CookieValue
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestAttribute
 import org.springframework.dao.DataAccessException
+import ru.proshik.pochitushki.configuration.JwtAuthInterceptor
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserData
 import ru.proshik.pochitushki.service.CoverService
@@ -25,11 +26,12 @@ class WebController(
     fun feed(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.UNREAD, resolveViewMode(viewCookie, PostType.UNREAD))
+        addListModel(model, userId, PostType.UNREAD, resolveViewMode(viewCookie, PostType.UNREAD), showOgCovers)
 
-        val hero = postService.getOldestUnreadPost(userId)?.let { coverService.decorate(it) }
+        val hero = postService.getOldestUnreadPost(userId)?.let { coverService.decorate(it, showOgCovers) }
         model.addAttribute("hero", hero)
         model.addAttribute(
             "heroAgeDays",
@@ -44,9 +46,10 @@ class WebController(
     fun all(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.ALL, resolveViewMode(viewCookie, PostType.ALL))
+        addListModel(model, userId, PostType.ALL, resolveViewMode(viewCookie, PostType.ALL), showOgCovers)
         addUserInfo(userId, model)
         return "all"
     }
@@ -55,9 +58,10 @@ class WebController(
     fun archive(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.ARCHIVE, resolveViewMode(viewCookie, PostType.ARCHIVE))
+        addListModel(model, userId, PostType.ARCHIVE, resolveViewMode(viewCookie, PostType.ARCHIVE), showOgCovers)
         addUserInfo(userId, model)
         return "archive"
     }
@@ -66,9 +70,10 @@ class WebController(
     fun favorites(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.FAVORITES, resolveViewMode(viewCookie, PostType.FAVORITES))
+        addListModel(model, userId, PostType.FAVORITES, resolveViewMode(viewCookie, PostType.FAVORITES), showOgCovers)
         addUserInfo(userId, model)
         return "favorites"
     }
@@ -77,11 +82,12 @@ class WebController(
     fun random(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
         // Cards are unread posts, so they carry the unread page's actions and defaults.
         val posts = postService.getRandomPosts(userId, PostApiController.RANDOM_SIZE)
-        model.addAttribute("covers", coverService.decorate(posts))
+        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", PostType.UNREAD.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", false)
@@ -104,9 +110,15 @@ class WebController(
         return "profile"
     }
 
-    private fun addListModel(model: Model, userId: Long, postType: PostType, viewMode: String) {
+    private fun addListModel(
+        model: Model,
+        userId: Long,
+        postType: PostType,
+        viewMode: String,
+        showOgCovers: Boolean,
+    ) {
         val posts = postService.getPosts(userId, postType, PAGE_SIZE, 0)
-        model.addAttribute("covers", coverService.decorate(posts))
+        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", postType.value)
         model.addAttribute("offset", posts.size)
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)

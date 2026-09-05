@@ -22,7 +22,10 @@
   <span class="cover-dom" th:text="${cv.coverDomain}">site.com</span>
 
   <th:block th:if="${cv.comp == 'co-og'}">
-    <img class="cover-img" th:src="${cv.post.ogImageUrl}" alt="" loading="lazy">
+    <!-- Proxied, never hot-linked: keeps the reader's IP off the linked site and
+         lets the CSP stay on img-src 'self' (see OgImageProxyService). -->
+    <img class="cover-img" alt="" loading="lazy"
+         th:src="@{/api/v1/posts/{id}/cover-image(id=${cv.post.id},type=${cv.post.isArchived} ? 'archive' : 'unread')}">
     <span class="cover-strip">
       <span class="cover-t" th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</span>
     </span>
@@ -57,6 +60,7 @@
           type="button" class="card-action-btn"
           th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${cv.post.id})},aria-label=#{web.action.toArchive}"
           th:title="#{web.action.toArchive}"
+          data-archive-undo
           hx-target="closest .post-card"
           hx-swap="delete">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
