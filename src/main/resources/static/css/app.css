@@ -151,6 +151,12 @@ html:not(.dark) .icon-moon { display: none; }
 .view-btn:hover { background: var(--surface); color: var(--ink); }
 .view-btn.active { border-color: var(--hair); background: var(--surface); color: var(--ink); }
 
+/* Page-head cluster for pages that carry an action next to the view toggle (/random). */
+.page-head-tools { display: flex; align-items: center; gap: 10px; }
+.reshuffle-btn { padding: 7px 14px; font-size: 12.5px; border-color: var(--hair); }
+.reshuffle-btn svg { width: 15px; height: 15px; transition: transform 0.3s ease; }
+.reshuffle-btn:hover svg { transform: rotate(90deg); }
+
 /* ── Covers ──
    The book feel is two background-image layers over the palette colour:
    a spine groove along the left edge and a soft light from the top. */
@@ -506,6 +512,9 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   .stats { grid-template-columns: 1fr 1fr; }
   .row-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .status-chip { display: none; }
+  /* The dice alone carries the meaning once the head runs out of room. */
+  .reshuffle-btn { padding: 7px 10px; }
+  .reshuffle-btn span { display: none; }
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   #post-list.shelf { grid-template-columns: repeat(4, 1fr); }

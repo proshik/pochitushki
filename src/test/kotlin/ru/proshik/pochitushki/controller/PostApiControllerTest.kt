@@ -127,6 +127,53 @@ class PostApiControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `GET random-fragment returns cards for the user's unread posts`() {
+        insertPost(title = "Random Article", url = "https://randomarticle.com")
+
+        mockMvc.perform(get("/api/v1/posts/random-fragment").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("https://randomarticle.com")))
+    }
+
+    @Test
+    fun `GET random-fragment deals out at most eight cards`() {
+        repeat(12) { i -> insertPost(title = "Post $i", url = "https://rnd$i.com") }
+
+        val body = mockMvc.perform(get("/api/v1/posts/random-fragment").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+
+        assertEquals(8, Regex("class=\"post-card\"").findAll(body).count())
+    }
+
+    @Test
+    fun `GET random-fragment never carries a scroll sentinel`() {
+        repeat(12) { i -> insertPost(title = "Post $i", url = "https://snt$i.com") }
+
+        mockMvc.perform(get("/api/v1/posts/random-fragment").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(not(containsString("hx-trigger"))))
+    }
+
+    @Test
+    fun `GET random-fragment does not leak another user's posts`() {
+        jdbcTemplate.update(
+            "INSERT INTO post(title, url, user_id) VALUES (?, ?, ?)",
+            "Not Yours", "https://notyours.com", otherUserId
+        )
+
+        mockMvc.perform(get("/api/v1/posts/random-fragment").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(not(containsString("https://notyours.com"))))
+    }
+
+    @Test
+    fun `GET random-fragment without auth returns 401`() {
+        mockMvc.perform(get("/api/v1/posts/random-fragment"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
     fun `POST posts adds post and returns card fragment`() {
         // Stub the URL so Jsoup can fetch a title without real network call
         // wireMockTelegramApi is a companion object field — access via class name

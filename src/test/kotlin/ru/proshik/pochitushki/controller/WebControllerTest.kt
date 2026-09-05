@@ -70,6 +70,27 @@ class WebControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `GET random returns 200 with post-list element`() {
+        mockMvc.perform(get("/random").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("id=\"post-list\"")))
+    }
+
+    @Test
+    fun `GET random offers the reshuffle control`() {
+        mockMvc.perform(get("/random").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("/api/v1/posts/random-fragment")))
+    }
+
+    @Test
+    fun `GET random without auth cookie redirects to login`() {
+        mockMvc.perform(get("/random"))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(header().string("Location", "/login"))
+    }
+
+    @Test
     fun `GET feed without auth cookie redirects to login`() {
         mockMvc.perform(get("/"))
             .andExpect(status().is3xxRedirection)

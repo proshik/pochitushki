@@ -14,7 +14,7 @@
 | 5.5 | Security hardening (вне плана) | ✅ Готово |
 | 4.5 | Mobile UI | ✅ Закрыта фазой 4.7 |
 | 4.7 | Web Redesign «Обложки» | ✅ Реализовано (2026-08-01) |
-| 4.6 | Random | ⏳ В очереди |
+| 4.6 | Random | ✅ Готово |
 | 6 | Labels | ⏳ В очереди |
 | 7 | Chrome Extension | 🔮 Будущее |
 | 8 | iOS App | 🔮 Будущее |
@@ -301,41 +301,49 @@ sticky-сайдбар 248px (иконочный rail 48px + текстовый n
 
 ## Фаза 4.6 — Random
 
-**Цель**: страница `/random` — показывает 8 случайных непрочитанных постов с кнопкой «Ещё 8».
+**Статус**: реализовано. Страница `/random` показывает 8 случайных непрочитанных
+постов с кнопкой «Ещё 8».
 
 ### Backend
 
-- [ ] `PostDao` — метод `getRandomPosts(userId, count): List<PostData>` → `ORDER BY RANDOM() LIMIT :count`
-- [ ] `PostService` — делегирующий метод `getRandomPosts(userId, count)`
-- [ ] `PostApiController` — новый endpoint:
-  ```
-  GET /api/v1/posts/random-fragment → fragments/random-list :: posts
-  ```
-  Возвращает фрагмент с 8 случайными карточками.
-- [ ] `WebController` — маршрут `/random` → `random.html`, первая порция загружается сервером
+- [x] `PostDao.getRandomPosts(userId, count): List<PostData>` → `ORDER BY RANDOM() LIMIT :count`
+- [x] `PostService.getRandomPosts(userId, count)` — делегирующий метод
+- [x] `PostApiController` — `GET /api/v1/posts/random-fragment`
+- [x] `WebController` — маршрут `/random` → `random.html`, первая порция рендерится сервером
+- [x] `WebConfig` — `/random` под `JwtAuthInterceptor` (иначе страница открыта без входа)
 
 ### Frontend
 
-- [ ] `templates/random.html` — страница в том же layout, `nav('random')`
-- [ ] Список постов в `<div id="random-list">` — стандартные карточки `post-card :: card`
-- [ ] Кнопка «Ещё 8» (или иконка 🔀) рядом с заголовком:
+- [x] `templates/random.html` — страница в том же layout, `topbar('random')` + `tabs('random')`
+- [x] Кнопка «Ещё 8» с иконкой кубика рядом с заголовком:
   ```html
   hx-get="/api/v1/posts/random-fragment"
-  hx-target="#random-list"
+  hx-target="#post-list"
   hx-swap="innerHTML"
   ```
-  Полностью заменяет список новыми 8 постами (не дозагружает, а перетасовывает).
-- [ ] Пункт «Случайные» в сайдбаре (`layout.html`) — между «Избранное» и нижним блоком
+- [x] Пункт «Наугад» в верхней навигации и в нижних вкладках
+
+> Отклонения от исходного плана (он писался до редизайна «Обложки»):
+> сайдбара больше нет — пункт уехал в топбар и в мобильные вкладки (их стало 6);
+> контейнер списка называется `#post-list`, а не `#random-list`, и переиспользует
+> существующий `fragments/post-list :: posts` вместо нового `random-list`;
+> отдельный фрагмент не понадобился.
 
 ### Ключевые решения
 
-- Без инфинит-скролла — только ручной рефреш
+- Без инфинит-скролла — только ручной рефреш; фрагмент всегда отдаётся с `hasMore=false`,
+  чтобы сентинел не попал на страницу и не начал дозагружать поверх тасовки
 - `ORDER BY RANDOM() LIMIT 8` — достаточно для тысяч постов, доп. индексы не нужны
-- Карточки используют тот же `post-card :: card` фрагмент — все действия (архив, фаворит, удалить) работают без изменений
+- Карточки используют тот же `post-card :: card` с `pageType='unread'` — архив,
+  фаворит и удаление работают без изменений
 
 ### Тесты
 
-- [ ] `PostDaoTest` — `getRandomPosts` возвращает правильное количество, все посты принадлежат пользователю
+- [x] `PostDaoTest` — 6 тестов: лимит, шелф меньше запроса, пусто, чужие посты,
+      архив не попадает, тасовка (три выборки по 8 из 20 дают >8 разных id)
+- [x] `PostApiControllerTest` — 5 тестов: карточки, лимит 8, отсутствие сентинела,
+      изоляция по пользователю, 401 без куки
+- [x] `WebControllerTest` — 3 теста: страница, кнопка тасовки, redirect на /login
 
 ---
 

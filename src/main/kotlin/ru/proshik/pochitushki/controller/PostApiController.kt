@@ -54,6 +54,25 @@ class PostApiController(
         return "fragments/post-list :: posts"
     }
 
+    /**
+     * A fresh shuffle of unread posts. Unlike /fragment this replaces the list
+     * instead of appending to it, so there is no offset and never a sentinel.
+     */
+    @GetMapping("/random-fragment")
+    fun randomFragment(
+        @RequestAttribute("userId") userId: Long,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        model: Model
+    ): String {
+        val posts = postService.getRandomPosts(userId, RANDOM_SIZE)
+        model.addAttribute("covers", coverService.decorate(posts))
+        model.addAttribute("pageType", PostType.UNREAD.value)
+        model.addAttribute("offset", posts.size)
+        model.addAttribute("hasMore", false)
+        model.addAttribute("viewMode", WebController.resolveViewMode(viewCookie, PostType.UNREAD))
+        return "fragments/post-list :: posts"
+    }
+
     @PostMapping
     fun addPost(
         @RequestAttribute("userId") userId: Long,
@@ -177,5 +196,8 @@ class PostApiController(
 
     companion object {
         const val PAGE_SIZE = 20
+
+        /** How many covers one shuffle of /random deals out. */
+        const val RANDOM_SIZE = 8
     }
 }

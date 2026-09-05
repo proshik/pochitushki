@@ -301,6 +301,25 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
     }
 
+    // A shuffled handful of unread posts — the /random shelf. ORDER BY RANDOM()
+    // sorts the whole user partition, which is fine for a personal reading list;
+    // revisit only if a single user ever holds six figures of unread links.
+    fun getRandomPosts(userId: Long, count: Int): List<PostData> {
+        val sql = """
+            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, og_image_url, created_date, updated_date
+            FROM post
+            WHERE user_id = :user_id
+            ORDER BY RANDOM()
+            LIMIT :count
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("user_id", userId)
+            .addValue("count", count)
+
+        return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
+    }
+
     // The oldest unread post — the web feed's "next to read" hero.
     fun getOldestPost(userId: Long): PostData? {
         val sql = """

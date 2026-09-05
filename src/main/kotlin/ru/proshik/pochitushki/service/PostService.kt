@@ -101,6 +101,11 @@ class PostService(
         return postDao.getOldestPost(userId)
     }
 
+    /** A reshuffled handful of unread posts — the /random shelf. */
+    fun getRandomPosts(userId: Long, count: Int): List<PostData> {
+        return postDao.getRandomPosts(userId, count)
+    }
+
     fun getPostCount(userId: Long, postType: PostType): Int {
         return postDao.getPostCount(userId, postType)
     }

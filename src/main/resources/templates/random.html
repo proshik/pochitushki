@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head(#{web.page.random})}"></head>
+<body>
+<header th:replace="~{layout :: topbar('random')}"></header>
+<main class="page-main">
+  <div class="page-head">
+    <h1 class="eyebrow" th:text="#{web.head.random(${pageCount})}">Наугад · 0 на полке</h1>
+    <div class="page-head-tools">
+      <!-- Reshuffles the whole shelf: innerHTML, not beforeend, and no sentinel. -->
+      <button type="button" class="btn btn-ghost reshuffle-btn"
+              hx-get="/api/v1/posts/random-fragment"
+              hx-target="#post-list"
+              hx-swap="innerHTML">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/>
+          <circle cx="15.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/>
+          <circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/>
+          <circle cx="8.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/>
+        </svg>
+        <span th:text="#{web.random.more}">Ещё 8</span>
+      </button>
+      <div th:replace="~{layout :: viewtoggle}"></div>
+    </div>
+  </div>
+  <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf' : 'list-rows'">
+    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${offset}, ${hasMore}, ${viewMode})}"></div>
+  </div>
+</main>
+<nav th:replace="~{layout :: tabs('random')}"></nav>
+</body>
+</html>

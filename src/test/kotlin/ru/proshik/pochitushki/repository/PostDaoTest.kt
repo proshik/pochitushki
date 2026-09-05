@@ -316,4 +316,60 @@ class PostDaoTest : BaseIntegrationTest() {
     fun `getOldestPost returns null when no posts`() {
         assertNull(postDao.getOldestPost(userId))
     }
+
+    @Test
+    fun `getRandomPosts caps the result at the requested count`() {
+        repeat(5) { i -> postDao.addPost(PostStoreData("Post $i", "https://r$i.com", userId)) }
+
+        assertEquals(3, postDao.getRandomPosts(userId, 3).size)
+    }
+
+    @Test
+    fun `getRandomPosts returns the whole shelf when it is smaller than the count`() {
+        repeat(2) { i -> postDao.addPost(PostStoreData("Post $i", "https://s$i.com", userId)) }
+
+        assertEquals(2, postDao.getRandomPosts(userId, 8).size)
+    }
+
+    @Test
+    fun `getRandomPosts returns empty list when no posts`() {
+        assertTrue(postDao.getRandomPosts(userId, 8).isEmpty())
+    }
+
+    @Test
+    fun `getRandomPosts only returns posts owned by the user`() {
+        val otherUserId = jdbcTemplate.queryForObject(
+            """INSERT INTO users(telegram_id, username, first_name, last_name, settings)
+               VALUES (998, 'other', 'Other', 'User', '{"languageCode":"en","tgFeedEntriesNumber":3}'::jsonb)
+               RETURNING id""",
+            Long::class.java
+        )!!
+        postDao.addPost(PostStoreData("Mine", "https://mine.com", userId))
+        postDao.addPost(PostStoreData("Theirs", "https://theirs.com", otherUserId))
+
+        val posts = postDao.getRandomPosts(userId, 8)
+
+        assertEquals(1, posts.size)
+        assertEquals("Mine", posts[0].title)
+    }
+
+    @Test
+    fun `getRandomPosts does not return archived posts`() {
+        val postId = postDao.addPost(PostStoreData("Read already", "https://done.com", userId))
+        postDao.addToArchivePost(postId, userId)
+        postDao.deletePost(postId, userId, PostType.UNREAD)
+
+        assertTrue(postDao.getRandomPosts(userId, 8).isEmpty())
+    }
+
+    @Test
+    fun `getRandomPosts actually shuffles rather than paging`() {
+        repeat(20) { i -> postDao.addPost(PostStoreData("Post $i", "https://sh$i.com", userId)) }
+
+        // Three draws of 8 out of 20 landing on the very same set would be a
+        // 1-in-10^10 coincidence; an unshuffled LIMIT hits it every time.
+        val seen = (1..3).flatMap { postDao.getRandomPosts(userId, 8) }.map { it.id }.toSet()
+
+        assertTrue(seen.size > 8, "expected more than 8 distinct posts across three draws, got ${seen.size}")
+    }
 }

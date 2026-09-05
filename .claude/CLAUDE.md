@@ -42,12 +42,12 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 **БД**: PostgreSQL 16, Spring JDBC + NamedParameterJdbcTemplate (без ORM), миграции Liquibase
 **Telegram**: поддержка polling и webhook, через kotlin-telegram-bot;
 бот включается флагом `telegram.enabled` (см. `TelegramBotConfiguration`) — независим от входа через Telegram
-**Web**: Thymeleaf-страницы (`feed/all/archive/favorites/profile/login`) + HTML-фрагменты;
+**Web**: Thymeleaf-страницы (`feed/all/archive/favorites/random/profile/login`) + HTML-фрагменты;
 дизайн «Обложки»: генеративные обложки постов (`CoverService`), все стили в
 `static/css/app.css`, htmx и шрифты в `static/`, внешних CDN нет
 **Auth**: Telegram OIDC/OAuth + JWT в cookie `auth_token`; `JwtAuthInterceptor`
 кладёт `userId` в request-атрибут и защищает `/`, `/all`, `/archive`,
-`/favorites`, `/profile`, `/api/v1/**` (см. `WebConfig`)
+`/favorites`, `/random`, `/profile`, `/api/v1/**` (см. `WebConfig`)
 
 ### Key packages
 
@@ -85,8 +85,9 @@ ru.proshik.pochitushki/
 
 ### REST API (`/api/v1`, cookie-JWT)
 
-- `POST /posts`, `GET /posts/fragment`, `POST /posts/{id}/archive|unread|favorite`,
-  `DELETE /posts/{id}`, `GET /posts/{id}/og-image`
+- `POST /posts`, `GET /posts/fragment`, `GET /posts/random-fragment`,
+  `POST /posts/{id}/archive|unread|favorite`, `DELETE /posts/{id}`,
+  `GET /posts/{id}/og-image`
 - `POST /profile/settings`
 
 Экспорт/импорт (Pocket CSV) по HTTP **не выставлен** — доступен только через бота
@@ -143,6 +144,11 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   только одну разметку на режим
 - Hero «следующая к чтению» на `/` — `PostDao.getOldestPost` (самый старый
   unread); перенос unread↔archive сохраняет `created_date`, иначе hero врёт
+- `/random` — тасовка `PostApiController.RANDOM_SIZE` (8) непрочитанных
+  (`PostDao.getRandomPosts`, `ORDER BY RANDOM()`). Кнопка «Ещё 8» бьёт в
+  `GET /api/v1/posts/random-fragment` и **заменяет** список (`hx-swap="innerHTML"`),
+  поэтому фрагмент всегда отдаётся с `hasMore=false` — сентинел бесконечной
+  прокрутки на этой странице появиться не должен
 
 ### PDF generation
 

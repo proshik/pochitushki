@@ -73,6 +73,24 @@ class WebController(
         return "favorites"
     }
 
+    @GetMapping("/random")
+    fun random(
+        @RequestAttribute("userId") userId: Long,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        model: Model
+    ): String {
+        // Cards are unread posts, so they carry the unread page's actions and defaults.
+        val posts = postService.getRandomPosts(userId, PostApiController.RANDOM_SIZE)
+        model.addAttribute("covers", coverService.decorate(posts))
+        model.addAttribute("pageType", PostType.UNREAD.value)
+        model.addAttribute("offset", posts.size)
+        model.addAttribute("hasMore", false)
+        model.addAttribute("viewMode", resolveViewMode(viewCookie, PostType.UNREAD))
+        model.addAttribute("pageCount", postService.getPostCount(userId, PostType.UNREAD))
+        addUserInfo(userId, model)
+        return "random"
+    }
+
     @GetMapping("/profile")
     fun profile(@RequestAttribute("userId") userId: Long, model: Model): String {
         val user = userService.getUserByUserId(userId)
