@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
-<head th:replace="~{layout :: head(#{web.page.archive})}"></head>
+<head th:replace="~{layout :: head('#' + ${label.name})}"></head>
 <body>
-<header th:replace="~{layout :: topbar('archive')}"></header>
+<header th:replace="~{layout :: topbar('labels')}"></header>
 <main class="page-main">
   <div class="page-head">
-    <h1 class="eyebrow" th:text="#{web.head.archive(${pageCount})}">В архиве · 0</h1>
+    <h1 class="eyebrow">
+      <a class="crumb" href="/labels" th:text="#{web.nav.labels}">Метки</a>
+      <span th:text="'· #' + ${label.name} + ' · ' + ${pageCount}">· #label · 0</span>
+    </h1>
     <div th:replace="~{layout :: viewtoggle}"></div>
   </div>
   <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf' : 'list-rows'">
     <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${hasMore}, ${viewMode}, ${moreUrl})}"></div>
   </div>
 </main>
-<nav th:replace="~{layout :: tabs('archive')}"></nav>
+<nav th:replace="~{layout :: tabs('labels')}"></nav>
 </body>
 </html>

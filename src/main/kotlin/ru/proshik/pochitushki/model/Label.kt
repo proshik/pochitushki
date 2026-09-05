@@ -10,6 +10,13 @@ data class LabelData(
     val name: String,
 )
 
+/** A label plus how many posts carry it, across both shelves — the /labels page. */
+data class LabelWithCount(
+    val id: Long,
+    val name: String,
+    val postCount: Int,
+)
+
 /** Which join table a label link lives in — post_label or archive_post_label. */
 enum class LabelTarget(val table: String) {
     UNREAD("post_label"),

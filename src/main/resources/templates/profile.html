@@ -28,6 +28,12 @@
     </div>
   </div>
 
+  <!-- The bottom tabs stay at six, so this is the mobile route to label management. -->
+  <a class="settings-link" href="/labels">
+    <span class="settings-label" th:text="#{web.nav.labels}">Метки</span>
+    <span class="settings-hint" th:text="#{web.profile.labels.hint}">Переименовать, удалить, посмотреть посты</span>
+  </a>
+
   <div class="settings-box" hx-ext="json-enc">
     <div class="settings-row">
       <span>

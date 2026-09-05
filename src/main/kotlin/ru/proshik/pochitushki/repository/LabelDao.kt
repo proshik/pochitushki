@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import ru.proshik.pochitushki.model.LabelData
 import ru.proshik.pochitushki.model.LabelTarget
+import ru.proshik.pochitushki.model.LabelWithCount
 
 @Repository
 class LabelDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate) {
@@ -28,6 +29,49 @@ class LabelDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplat
             MapSqlParameterSource().addValue("user_id", userId),
             labelRowMapper
         )
+    }
+
+    /**
+     * Labels with their post counts. The counts are subqueries rather than joins so a
+     * label with no posts still comes back — the /labels page has to show it to let the
+     * reader delete it.
+     */
+    fun getLabelsWithCounts(userId: Long): List<LabelWithCount> {
+        val sql = """
+            SELECT l.id, l.name,
+                   (SELECT count(*) FROM post_label WHERE label_id = l.id)
+                 + (SELECT count(*) FROM archive_post_label WHERE label_id = l.id) AS post_count
+            FROM label l
+            WHERE l.user_id = :user_id
+            ORDER BY l.name
+        """.trimIndent()
+
+        return namedParameterJdbcTemplate.query(
+            sql,
+            MapSqlParameterSource().addValue("user_id", userId)
+        ) { rs, _ ->
+            LabelWithCount(
+                id = rs.getLong("id"),
+                name = rs.getString("name"),
+                postCount = rs.getInt("post_count"),
+            )
+        }
+    }
+
+    /** Returns false when the label is not the user's. A name clash surfaces as a DB constraint. */
+    fun renameLabel(labelId: Long, userId: Long, name: String): Boolean {
+        val sql = """
+            UPDATE label
+            SET name = :name
+            WHERE id = :label_id AND user_id = :user_id
+        """.trimIndent()
+
+        val params = MapSqlParameterSource()
+            .addValue("label_id", labelId)
+            .addValue("user_id", userId)
+            .addValue("name", name)
+
+        return namedParameterJdbcTemplate.update(sql, params) > 0
     }
 
     fun findLabel(labelId: Long, userId: Long): LabelData? {

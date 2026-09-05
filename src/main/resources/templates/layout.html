@@ -26,7 +26,7 @@
 
   <!-- Strings app.js needs but cannot inline (CSP: script-src 'self'). -->
   <span id="app-i18n" hidden
-        th:attr="data-archived=#{web.toast.archived},data-undo=#{web.toast.undo}"></span>
+        th:attr="data-archived=#{web.toast.archived},data-undo=#{web.toast.undo},data-new-label=#{web.labels.new.placeholder}"></span>
 
   <nav class="nav-links">
     <a href="/" th:classappend="${active == 'feed'} ? 'on'" th:text="#{web.nav.read}">Читать</a>
@@ -34,6 +34,7 @@
     <a href="/all" th:classappend="${active == 'all'} ? 'on'" th:text="#{web.nav.all}">Все</a>
     <a href="/archive" th:classappend="${active == 'archive'} ? 'on'" th:text="#{web.nav.archive}">Архив</a>
     <a href="/favorites" th:classappend="${active == 'favorites'} ? 'on'" th:text="#{web.nav.favorites}">Избранное</a>
+    <a href="/labels" th:classappend="${active == 'labels'} ? 'on'" th:text="#{web.nav.labels}">Метки</a>
   </nav>
 
   <form th:replace="~{fragments/add-post-form :: form}"></form>

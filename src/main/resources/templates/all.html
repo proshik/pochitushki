@@ -9,7 +9,7 @@
     <div th:replace="~{layout :: viewtoggle}"></div>
   </div>
   <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf' : 'list-rows'">
-    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${offset}, ${hasMore}, ${viewMode})}"></div>
+    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${hasMore}, ${viewMode}, ${moreUrl})}"></div>
   </div>
 </main>
 <nav th:replace="~{layout :: tabs('all')}"></nav>

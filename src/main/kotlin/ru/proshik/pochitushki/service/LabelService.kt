@@ -1,13 +1,18 @@
 package ru.proshik.pochitushki.service
 
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.model.LabelData
 import ru.proshik.pochitushki.model.LabelTarget
+import ru.proshik.pochitushki.model.LabelWithCount
 import ru.proshik.pochitushki.model.PostData
 import ru.proshik.pochitushki.repository.LabelDao
 
 class InvalidLabelNameException(message: String) : RuntimeException(message)
+
+/** Raised when a rename would collide with a label the user already has. */
+class DuplicateLabelNameException(message: String) : RuntimeException(message)
 
 @Service
 class LabelService(private val labelDao: LabelDao) {
@@ -26,6 +31,21 @@ class LabelService(private val labelDao: LabelDao) {
         val name = normalise(rawName)
         logger.debug("User {} creating label '{}'", userId, name)
         return labelDao.createLabel(userId, name)
+    }
+
+    fun getLabelsWithCounts(userId: Long): List<LabelWithCount> = labelDao.getLabelsWithCounts(userId)
+
+    /**
+     * Renaming onto a name the user already has is refused rather than silently merging
+     * the two labels — merging is not undoable and nobody asked for it.
+     */
+    fun renameLabel(labelId: Long, userId: Long, rawName: String): Boolean {
+        val name = normalise(rawName)
+        return try {
+            labelDao.renameLabel(labelId, userId, name)
+        } catch (e: DuplicateKeyException) {
+            throw DuplicateLabelNameException("Label '$name' already exists")
+        }
     }
 
     fun deleteLabel(labelId: Long, userId: Long): Boolean = labelDao.deleteLabel(labelId, userId) > 0

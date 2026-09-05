@@ -11,7 +11,11 @@ import org.springframework.dao.DataAccessException
 import ru.proshik.pochitushki.configuration.JwtAuthInterceptor
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserData
+import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.server.ResponseStatusException
 import ru.proshik.pochitushki.service.CoverService
+import ru.proshik.pochitushki.service.LabelService
 import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.UserService
 
@@ -20,6 +24,7 @@ class WebController(
     private val postService: PostService,
     private val userService: UserService,
     private val coverService: CoverService,
+    private val labelService: LabelService,
 ) {
 
     @GetMapping("/")
@@ -89,12 +94,43 @@ class WebController(
         val posts = postService.getRandomPosts(userId, PostApiController.RANDOM_SIZE)
         model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", PostType.UNREAD.value)
-        model.addAttribute("offset", posts.size)
+        model.addAttribute("moreUrl", null)
         model.addAttribute("hasMore", false)
         model.addAttribute("viewMode", resolveViewMode(viewCookie, PostType.UNREAD))
         model.addAttribute("pageCount", postService.getPostCount(userId, PostType.UNREAD))
         addUserInfo(userId, model)
         return "random"
+    }
+
+    @GetMapping("/labels")
+    fun labels(@RequestAttribute("userId") userId: Long, model: Model): String {
+        model.addAttribute("labels", labelService.getLabelsWithCounts(userId))
+        addUserInfo(userId, model)
+        return "labels"
+    }
+
+    @GetMapping("/labels/{labelId}")
+    fun labelPosts(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable labelId: Long,
+        @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
+        @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        model: Model
+    ): String {
+        val label = labelService.findLabel(labelId, userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Label not found")
+
+        val posts = postService.getPostsByLabel(userId, labelId, PAGE_SIZE, 0)
+        model.addAttribute("label", label)
+        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        // Both shelves are mixed here, so the cards carry the "all" page's status chips.
+        model.addAttribute("pageType", PostType.ALL.value)
+        model.addAttribute("moreUrl", labelFragmentUrl(labelId, posts.size))
+        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute("viewMode", resolveViewMode(viewCookie, PostType.ALL))
+        model.addAttribute("pageCount", postService.getPostCountByLabel(userId, labelId))
+        addUserInfo(userId, model)
+        return "label-posts"
     }
 
     @GetMapping("/profile")
@@ -120,7 +156,7 @@ class WebController(
         val posts = postService.getPosts(userId, postType, PAGE_SIZE, 0)
         model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", postType.value)
-        model.addAttribute("offset", posts.size)
+        model.addAttribute("moreUrl", fragmentUrl(postType, posts.size))
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
         model.addAttribute("viewMode", viewMode)
         model.addAttribute("pageCount", postService.getPostCount(userId, postType))
@@ -139,6 +175,13 @@ class WebController(
     companion object {
         // Delegate to PostApiController so both controllers use the same page size
         val PAGE_SIZE get() = PostApiController.PAGE_SIZE
+
+        /** Next-page URL for the infinite-scroll sentinel; values are enum/ints, never user text. */
+        fun fragmentUrl(postType: PostType, nextOffset: Int): String =
+            "/api/v1/posts/fragment?type=${postType.value}&offset=$nextOffset"
+
+        fun labelFragmentUrl(labelId: Long, nextOffset: Int): String =
+            "/api/v1/posts?labelId=$labelId&offset=$nextOffset"
 
         /**
          * Cookie keeps the legacy values list|grid (grid == shelf).

@@ -10,7 +10,7 @@
   </div>
   <!-- The favorites showcase: larger covers, four per row -->
   <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf vitrine' : 'list-rows'">
-    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${offset}, ${hasMore}, ${viewMode})}"></div>
+    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${hasMore}, ${viewMode}, ${moreUrl})}"></div>
   </div>
 </main>
 <nav th:replace="~{layout :: tabs('favorites')}"></nav>

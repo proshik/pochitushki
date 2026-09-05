@@ -15,10 +15,6 @@ function initAddPostForm() {
   if (!form || form._bound) return;
   form._bound = true;
 
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
   function showAddError() {
     var msg = form.dataset.errorText || 'Error';
     var toast = document.createElement('div');
@@ -182,6 +178,255 @@ function popStashedUndo() {
   } catch (ex) { /* ignore malformed stash */ }
 }
 
+/* ── Labels ──
+   The label list belongs to the user, not to a card, so it is fetched once and
+   shared by every picker on the page rather than rendered into twenty cards. */
+var labelCache = null;
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function loadLabels(force) {
+  if (labelCache && !force) return Promise.resolve(labelCache);
+  return fetch('/api/v1/labels', { headers: { 'Accept': 'application/json' } })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (list) { labelCache = list; return list; });
+}
+
+/* The chips under the card, kept in step with the picker without a re-render. */
+function cardChipRow(card) {
+  return card.querySelector('.cell-meta') || card.querySelector('.row-sub');
+}
+
+function addChip(card, label) {
+  var row = cardChipRow(card);
+  if (!row || row.querySelector('[data-label-id="' + label.id + '"]')) return;
+  var chip = document.createElement('a');
+  chip.className = 'label-tag';
+  chip.href = '/labels/' + label.id;
+  chip.textContent = '#' + label.name;
+  chip.setAttribute('data-label-id', label.id);
+  row.appendChild(chip);
+}
+
+function removeChip(card, labelId) {
+  var row = cardChipRow(card);
+  var chip = row && row.querySelector('[data-label-id="' + labelId + '"]');
+  if (chip) chip.remove();
+}
+
+function renderLabelPanel(panel, labels) {
+  var attached = {};
+  var card = panel.closest('.post-card');
+  var row = cardChipRow(card);
+  if (row) {
+    row.querySelectorAll('.label-tag').forEach(function (chip) {
+      var name = chip.textContent.replace(/^#/, '');
+      attached[name] = true;
+    });
+  }
+
+  var rows = labels.map(function (l) {
+    return '<button type="button" class="label-opt' + (attached[l.name] ? ' on' : '') +
+      '" data-label-id="' + l.id + '" data-label-name="' + esc(l.name) + '">' +
+      '<span class="label-opt-box" aria-hidden="true"></span>' + esc(l.name) + '</button>';
+  }).join('');
+
+  panel.innerHTML =
+    '<div class="label-opts">' + rows + '</div>' +
+    '<form class="label-panel-add">' +
+      '<input type="text" maxlength="40" required placeholder="' +
+        esc(i18n('newLabel', 'New label')) + '">' +
+    '</form>';
+}
+
+function labelRequest(method, postId, postType, labelId) {
+  return fetch('/api/v1/posts/' + postId + '/labels/' + labelId + '?type=' + postType, { method: method });
+}
+
+function initLabelPicker() {
+  document.addEventListener('click', function (e) {
+    /* Open / close */
+    var opener = e.target.closest('[data-action="labels-show"]');
+    if (opener) {
+      var card = opener.closest('.post-card');
+      var panel = card.querySelector('.label-panel');
+      var opening = !card.classList.contains('labelling');
+      document.querySelectorAll('.post-card.labelling').forEach(function (c) {
+        c.classList.remove('labelling');
+      });
+      if (!opening) return;
+      card.classList.add('labelling');
+      loadLabels(false).then(function (labels) { renderLabelPanel(panel, labels); });
+      return;
+    }
+
+    /* Toggle one label on this post */
+    var opt = e.target.closest('.label-opt');
+    if (opt) {
+      var panel2 = opt.closest('.label-panel');
+      var card2 = opt.closest('.post-card');
+      var on = opt.classList.contains('on');
+      var labelId = opt.dataset.labelId;
+      opt.disabled = true;
+      labelRequest(on ? 'DELETE' : 'POST', panel2.dataset.postId, panel2.dataset.postType, labelId)
+        .then(function (r) {
+          if (!r.ok) return;
+          opt.classList.toggle('on', !on);
+          if (on) removeChip(card2, labelId);
+          else addChip(card2, { id: labelId, name: opt.dataset.labelName });
+        })
+        .finally(function () { opt.disabled = false; });
+      return;
+    }
+
+    /* Clicking anywhere else closes an open picker */
+    if (!e.target.closest('.label-panel')) {
+      document.querySelectorAll('.post-card.labelling').forEach(function (c) {
+        c.classList.remove('labelling');
+      });
+    }
+  });
+
+  /* Create-and-attach from inside the picker */
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('.label-panel-add');
+    if (!form) return;
+    e.preventDefault();
+    var input = form.querySelector('input');
+    var name = input.value.trim();
+    if (!name) return;
+    var panel = form.closest('.label-panel');
+    var card = panel.closest('.post-card');
+    input.disabled = true;
+
+    fetch('/api/v1/labels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('create failed');
+        return r.json();
+      })
+      .then(function (label) {
+        return labelRequest('POST', panel.dataset.postId, panel.dataset.postType, label.id)
+          .then(function () {
+            addChip(card, label);
+            input.value = '';
+            return loadLabels(true);
+          })
+          .then(function (labels) { renderLabelPanel(panel, labels); });
+      })
+      .catch(function () { /* the input keeps the text so it can be retried */ })
+      .finally(function () { input.disabled = false; });
+  });
+}
+
+/* ── /labels page ── */
+function initLabelsPage() {
+  var box = document.getElementById('labels-box');
+  if (!box) return;
+
+  box.addEventListener('click', function (e) {
+    var row = e.target.closest('.labels-row');
+
+    var renameBtn = e.target.closest('[data-action="label-rename"]');
+    if (renameBtn) {
+      startRename(row, renameBtn.dataset.name);
+      return;
+    }
+
+    var deleteBtn = e.target.closest('[data-action="label-delete"]');
+    if (deleteBtn) {
+      row.classList.add('confirming');
+      return;
+    }
+
+    if (e.target.closest('[data-action="label-delete-no"]')) {
+      row.classList.remove('confirming');
+      return;
+    }
+
+    if (e.target.closest('[data-action="label-delete-yes"]')) {
+      fetch('/api/v1/labels/' + row.dataset.labelId, { method: 'DELETE' })
+        .then(function (r) { if (r.ok) row.remove(); });
+    }
+  });
+
+  function startRename(row, currentName) {
+    if (row.querySelector('.labels-rename')) return;
+    var nameEl = row.querySelector('.labels-name');
+    var form = document.createElement('form');
+    form.className = 'labels-rename';
+    form.innerHTML = '<input type="text" maxlength="40" required>';
+    var input = form.querySelector('input');
+    input.value = currentName;
+    nameEl.hidden = true;
+    row.insertBefore(form, nameEl.nextSibling);
+    input.focus();
+    input.select();
+
+    function cancel() {
+      form.remove();
+      nameEl.hidden = false;
+    }
+
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') cancel();
+    });
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var name = input.value.trim();
+      if (!name || name === currentName) { cancel(); return; }
+      input.disabled = true;
+      fetch('/api/v1/labels/' + row.dataset.labelId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+      }).then(function (r) {
+        if (r.ok) {
+          nameEl.textContent = '#' + name;
+          row.querySelectorAll('[data-name]').forEach(function (b) { b.dataset.name = name; });
+          labelCache = null;
+          cancel();
+        } else {
+          /* 409: the user already has that name. Say so instead of failing silently. */
+          input.setCustomValidity(r.status === 409 ? (box.dataset.taken || 'Name taken') : ' ');
+          input.reportValidity();
+          input.disabled = false;
+          input.addEventListener('input', function clear() {
+            input.setCustomValidity('');
+            input.removeEventListener('input', clear);
+          });
+        }
+      });
+    });
+  }
+
+  var createForm = document.getElementById('label-create-form');
+  if (createForm) {
+    createForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = document.getElementById('label-create-name');
+      var name = input.value.trim();
+      if (!name) return;
+      input.disabled = true;
+      fetch('/api/v1/labels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+      })
+        .then(function (r) { if (!r.ok) throw new Error('create failed'); return r.json(); })
+        .then(function () { location.reload(); })
+        .catch(function () { input.disabled = false; });
+    });
+  }
+}
+
 /* ── Theme — icon swap is pure CSS (html.dark .icon-sun / .icon-moon) ── */
 function toggleTheme() {
   var isDark = document.documentElement.classList.toggle('dark');
@@ -317,6 +562,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   popStashedUndo();
   initAddPostForm();
+  initLabelPicker();
+  initLabelsPage();
   /* The mode class is applied server-side from the cookie — only sync button states. */
   var postList = document.getElementById('post-list');
   var mode = postList && postList.classList.contains('shelf') ? 'grid' : 'list';

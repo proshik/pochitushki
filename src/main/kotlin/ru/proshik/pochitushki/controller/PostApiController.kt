@@ -53,7 +53,7 @@ class PostApiController(
         val posts = postService.getPosts(userId, postType, PAGE_SIZE, offset)
         model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", type)
-        model.addAttribute("offset", offset + posts.size)
+        model.addAttribute("moreUrl", WebController.fragmentUrl(postType, offset + posts.size))
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
         model.addAttribute("viewMode", WebController.resolveViewMode(viewCookie, postType))
         return "fragments/post-list :: posts"
@@ -62,10 +62,9 @@ class PostApiController(
     /**
      * Everything carrying one label, unread and archived together.
      *
-     * Rendered as the usual card list, but without a scroll sentinel: the sentinel
-     * in post-list always points back at /fragment?type=…, which would silently page
-     * in unlabelled posts. Callers page explicitly with `offset` until a short page
-     * comes back. Wire the sentinel up properly when a labels page exists.
+     * Pages through itself: the sentinel URL is built here, so scrolling a label view
+     * keeps asking this endpoint instead of falling back to /fragment?type=… and
+     * quietly appending unlabelled posts underneath the filtered ones.
      */
     @GetMapping
     fun byLabel(
@@ -82,8 +81,8 @@ class PostApiController(
         val posts = postService.getPostsByLabel(userId, labelId, PAGE_SIZE, offset)
         model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", PostType.ALL.value)
-        model.addAttribute("offset", offset + posts.size)
-        model.addAttribute("hasMore", false)
+        model.addAttribute("moreUrl", WebController.labelFragmentUrl(labelId, offset + posts.size))
+        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
         model.addAttribute("viewMode", WebController.resolveViewMode(viewCookie, PostType.ALL))
         return "fragments/post-list :: posts"
     }
@@ -102,7 +101,7 @@ class PostApiController(
         val posts = postService.getRandomPosts(userId, RANDOM_SIZE)
         model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
         model.addAttribute("pageType", PostType.UNREAD.value)
-        model.addAttribute("offset", posts.size)
+        model.addAttribute("moreUrl", null)
         model.addAttribute("hasMore", false)
         model.addAttribute("viewMode", WebController.resolveViewMode(viewCookie, PostType.UNREAD))
         return "fragments/post-list :: posts"

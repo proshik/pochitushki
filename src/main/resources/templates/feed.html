@@ -20,9 +20,10 @@
          th:text="${hero.post.title != null ? hero.post.title : hero.post.url}">Title</a>
       <div class="hero-meta">
         <span th:text="${hero.domain}">site.com</span> ·
-        <span th:text="${#temporals.format(hero.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><span
+        <span th:text="${#temporals.format(hero.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><a
           th:each="label : ${hero.post.labels}" class="label-tag"
-          th:text="'#' + ${label.name}">#label</span>
+          th:href="@{/labels/{id}(id=${label.id})}"
+          th:text="'#' + ${label.name}">#label</a>
       </div>
       <div class="hero-actions">
         <a class="btn btn-solid" th:href="${hero.post.url}" target="_blank" rel="noopener noreferrer"
@@ -42,7 +43,7 @@
     <div th:replace="~{layout :: viewtoggle}"></div>
   </div>
   <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf' : 'list-rows'">
-    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${offset}, ${hasMore}, ${viewMode})}"></div>
+    <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${hasMore}, ${viewMode}, ${moreUrl})}"></div>
   </div>
 </main>
 <nav th:replace="~{layout :: tabs('feed')}"></nav>

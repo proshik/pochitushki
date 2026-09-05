@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
+<head th:replace="~{layout :: head(#{web.page.labels})}"></head>
+<body>
+<header th:replace="~{layout :: topbar('labels')}"></header>
+<main class="page-main" style="max-width: 760px;">
+  <div class="page-head">
+    <h1 class="eyebrow" th:text="#{web.head.labels(${labels.size()})}">Метки · 0</h1>
+  </div>
+
+  <!-- Rows are managed by initLabelsPage() in /js/app.js — no inline handlers (CSP). -->
+  <div class="labels-box" id="labels-box"
+       th:attr="data-rename-prompt=#{web.labels.rename.prompt},data-delete-confirm=#{web.labels.delete.confirm},data-taken=#{web.labels.taken}">
+    <div class="labels-row" th:each="label : ${labels}" th:attr="data-label-id=${label.id}">
+      <a class="labels-name" th:href="@{/labels/{id}(id=${label.id})}" th:text="'#' + ${label.name}">#label</a>
+      <span class="labels-count" th:text="${label.postCount}">0</span>
+      <button type="button" class="icon-btn" data-action="label-rename"
+              th:attr="data-name=${label.name},aria-label=#{web.labels.rename}" th:title="#{web.labels.rename}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn danger" data-action="label-delete"
+              th:attr="data-name=${label.name},aria-label=#{web.action.delete}" th:title="#{web.action.delete}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 .8 12a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L17 7"/>
+        </svg>
+      </button>
+
+      <!-- Deleting a label unlinks it from every post, so it asks first. -->
+      <span class="labels-confirm">
+        <span th:text="#{web.labels.delete.confirm}">Удалить метку?</span>
+        <button type="button" class="confirm-yes" data-action="label-delete-yes"
+                th:text="#{web.post.delete.yes}">Да</button>
+        <button type="button" class="confirm-no" data-action="label-delete-no"
+                th:text="#{web.post.delete.no}">Нет</button>
+      </span>
+    </div>
+
+    <form class="labels-add" id="label-create-form">
+      <input type="text" id="label-create-name" required maxlength="40"
+             th:placeholder="#{web.labels.new.placeholder}"
+             th:attr="aria-label=#{web.labels.new.placeholder}">
+      <button type="submit" th:text="#{web.labels.new.submit}">Создать</button>
+    </form>
+  </div>
+
+  <div th:if="${labels.isEmpty()}" class="empty-state">
+    <div class="empty-cover" aria-hidden="true">#</div>
+    <h2 th:text="#{web.labels.empty.title}">Меток пока нет</h2>
+    <p th:text="#{web.labels.empty.text}">Создайте метку здесь или повесьте её на карточку — кнопка с ярлыком.</p>
+  </div>
+</main>
+<nav th:replace="~{layout :: tabs('labels')}"></nav>
+</body>
+</html>

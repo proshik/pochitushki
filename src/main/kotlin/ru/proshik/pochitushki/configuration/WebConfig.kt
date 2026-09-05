@@ -9,6 +9,9 @@ class WebConfig(private val jwtAuthInterceptor: JwtAuthInterceptor) : WebMvcConf
 
     override fun addInterceptors(registry: InterceptorRegistry) {
         registry.addInterceptor(jwtAuthInterceptor)
-            .addPathPatterns("/", "/all", "/archive", "/favorites", "/random", "/profile", "/api/v1/**")
+            .addPathPatterns(
+                "/", "/all", "/archive", "/favorites", "/random",
+                "/labels", "/labels/**", "/profile", "/api/v1/**",
+            )
     }
 }

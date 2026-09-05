@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestAttribute
@@ -15,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException
 import ru.proshik.pochitushki.model.LabelData
 import ru.proshik.pochitushki.model.LabelTarget
 import ru.proshik.pochitushki.model.PostType
+import ru.proshik.pochitushki.service.DuplicateLabelNameException
 import ru.proshik.pochitushki.service.InvalidLabelNameException
 import ru.proshik.pochitushki.service.LabelService
 
@@ -37,6 +39,25 @@ class LabelApiController(private val labelService: LabelService) {
         labelService.createLabel(userId, request.name)
     } catch (e: InvalidLabelNameException) {
         throw ResponseStatusException(HttpStatus.BAD_REQUEST, e.message)
+    }
+
+    @PatchMapping("/labels/{labelId}")
+    fun rename(
+        @RequestAttribute("userId") userId: Long,
+        @PathVariable labelId: Long,
+        @RequestBody request: CreateLabelRequest,
+    ): ResponseEntity<Void> {
+        val renamed = try {
+            labelService.renameLabel(labelId, userId, request.name)
+        } catch (e: InvalidLabelNameException) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, e.message)
+        } catch (e: DuplicateLabelNameException) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, e.message)
+        }
+        if (!renamed) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Label not found")
+        }
+        return ResponseEntity.ok().build()
     }
 
     @DeleteMapping("/labels/{labelId}")

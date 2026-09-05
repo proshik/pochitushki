@@ -13,6 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -243,6 +244,76 @@ class LabelApiControllerTest : BaseIntegrationTest() {
         mockMvc.perform(get("/api/v1/posts").param("labelId", theirLabel.id.toString()).with(withAuth(userId)))
             .andExpect(status().isOk)
             .andExpect(content().string(not(containsString("https://theirpost.com"))))
+    }
+
+    @Test
+    fun `PATCH labels renames`() {
+        val label = labelService.createLabel(userId, "kotln")
+
+        mockMvc.perform(
+            patch("/api/v1/labels/${label.id}")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"kotlin"}""")
+        ).andExpect(status().isOk)
+
+        assertEquals(listOf("kotlin"), labelService.getLabels(userId).map { it.name })
+    }
+
+    @Test
+    fun `PATCH labels refuses to merge onto a name you already have`() {
+        labelService.createLabel(userId, "kotlin")
+        val other = labelService.createLabel(userId, "spring")
+
+        mockMvc.perform(
+            patch("/api/v1/labels/${other.id}")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"kotlin"}""")
+        ).andExpect(status().isConflict)
+
+        // both survive, unchanged
+        assertEquals(listOf("kotlin", "spring"), labelService.getLabels(userId).map { it.name })
+    }
+
+    @Test
+    fun `PATCH labels rejects a blank name and another user's label`() {
+        val mine = labelService.createLabel(userId, "mine")
+        val theirs = labelService.createLabel(otherUserId, "theirs")
+
+        mockMvc.perform(
+            patch("/api/v1/labels/${mine.id}")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"  "}""")
+        ).andExpect(status().isBadRequest)
+
+        mockMvc.perform(
+            patch("/api/v1/labels/${theirs.id}")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"stolen"}""")
+        ).andExpect(status().isNotFound)
+
+        assertEquals(listOf("theirs"), labelService.getLabels(otherUserId).map { it.name })
+    }
+
+    @Test
+    fun `label counts span both shelves and survive a label with no posts`() {
+        val used = labelService.createLabel(userId, "used")
+        labelService.createLabel(userId, "unused")
+        val unreadId = insertPost("U", "https://u.com")
+        val archiveId = jdbcTemplate.queryForObject(
+            "INSERT INTO archive_post(title, url, user_id) VALUES ('A', 'https://a.com', ?) RETURNING id",
+            Long::class.java, userId
+        )!!
+        labelService.attachLabel(unreadId, used.id, userId, LabelTarget.UNREAD)
+        labelService.attachLabel(archiveId, used.id, userId, LabelTarget.ARCHIVE)
+
+        val counts = labelService.getLabelsWithCounts(userId).associate { it.name to it.postCount }
+
+        assertEquals(2, counts["used"])
+        assertEquals(0, counts["unused"])
     }
 
     @Test
