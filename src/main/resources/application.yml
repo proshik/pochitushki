@@ -1,6 +1,15 @@
 spring:
   application:
     name: pochitushki
+  cloud:
+    openfeign:
+      client:
+        config:
+          telegram-oidc:
+            # Feign идёт по редиректам по умолчанию, и тогда id_token читается
+            # оттуда, куда увёл последний хоп. У token-эндпоинта легитимных
+            # редиректов не бывает.
+            followRedirects: false
   datasource:
     url: jdbc:postgresql://localhost:5432/pochitushki
     username: postgres
@@ -51,7 +60,12 @@ telegram:
   # webhook. When blank the check is skipped (e.g. polling/dev). Set in production.
   webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
   oauth:
-    base-url: https://oauth.telegram.org
+    # base-url и expected-issuer меняются вместе и только осознанно: это и есть
+    # переключение на локальный брокер входа (telegram-login-broker), который
+    # избавляет от ngrok и походов в BotFather. iss сверяется побайтово, поэтому
+    # слэш в конце — уже другой issuer.
+    base-url: ${TELEGRAM_OAUTH_BASE_URL:https://oauth.telegram.org}
+    expected-issuer: ${TELEGRAM_EXPECTED_ISSUER:https://oauth.telegram.org}
     client-id: ${TELEGRAM_CLIENT_ID}
     client-secret: ${TELEGRAM_CLIENT_SECRET}
     redirect-uri: ${APP_BASE_URL}/auth/telegram/callback

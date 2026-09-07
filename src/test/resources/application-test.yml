@@ -22,7 +22,8 @@ telegram:
   base-url: some_base_url
   webhook-url: ${telegram.base-url}/${telegram.token}
   oauth:
-    base-url: http://localhost:0  # overridden by DynamicPropertySource in BaseIntegrationTest
+    base-url: http://localhost:0        # overridden by DynamicPropertySource in BaseIntegrationTest
+    expected-issuer: http://localhost:0 # likewise
     client-id: test-client-id
     client-secret: test-client-secret
     redirect-uri: http://localhost/auth/telegram/callback
