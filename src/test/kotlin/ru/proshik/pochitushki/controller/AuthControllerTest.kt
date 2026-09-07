@@ -88,12 +88,7 @@ class AuthControllerTest : BaseIntegrationTest() {
 
     @Test
     fun `GET callback with valid code creates new user and sets JWT cookie`() {
-        wireMockOidc.stubFor(
-            post(urlEqualTo("/token"))
-                .willReturn(aResponse().withStatus(200)
-                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .withBody("""{"access_token":"test-tok","token_type":"Bearer","id_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MjIyMCIsImlkIjoiOTk5OTkiLCJuYW1lIjoiVGVzdCIsInByZWZlcnJlZF91c2VybmFtZSI6InRlc3R1c2VyIiwicGljdHVyZSI6bnVsbH0.fakesig"}"""))
-        )
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "99999", name = "Test", username = "testuser")))
 
         val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
         val stateCookie = initResult.response.cookies.first { it.name == "oidc_state" }
@@ -122,12 +117,7 @@ class AuthControllerTest : BaseIntegrationTest() {
 
     @Test
     fun `GET callback sets auth_token cookie with SameSite Lax, HttpOnly and Secure`() {
-        wireMockOidc.stubFor(
-            post(urlEqualTo("/token"))
-                .willReturn(aResponse().withStatus(200)
-                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .withBody("""{"access_token":"test-tok","token_type":"Bearer","id_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MjIyMCIsImlkIjoiOTk5OTkiLCJuYW1lIjoiVGVzdCIsInByZWZlcnJlZF91c2VybmFtZSI6InRlc3R1c2VyIiwicGljdHVyZSI6bnVsbH0.fakesig"}"""))
-        )
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "99999", name = "Test", username = "testuser")))
 
         val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
         val stateCookie = initResult.response.cookies.first { it.name == "oidc_state" }
@@ -172,12 +162,7 @@ class AuthControllerTest : BaseIntegrationTest() {
                        '{"languageCode":"ru","tgFeedEntriesNumber":5}'::jsonb)"""
         )
 
-        wireMockOidc.stubFor(
-            post(urlEqualTo("/token"))
-                .willReturn(aResponse().withStatus(200)
-                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                    .withBody("""{"access_token":"tok2","token_type":"Bearer","id_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MjIyMCIsImlkIjoiODg4ODgiLCJuYW1lIjoiRXhpc3RpbmciLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJleGlzdGluZyIsInBpY3R1cmUiOm51bGx9.fakesig"}"""))
-        )
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "88888", name = "Existing", username = "existing")))
 
         val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
         val stateCookie = initResult.response.cookies.first { it.name == "oidc_state" }
@@ -202,7 +187,7 @@ class AuthControllerTest : BaseIntegrationTest() {
     @Test
     fun `GET callback rejects expired id_token`() {
         val past = Instant.now().epochSecond - 3600
-        stubTokenWithIdToken(fakeIdToken("""{"id":"55501","name":"T","preferred_username":"t","exp":$past}"""))
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55501", exp = past)))
 
         val (location, _) = runCallback()
 
@@ -212,8 +197,7 @@ class AuthControllerTest : BaseIntegrationTest() {
 
     @Test
     fun `GET callback rejects id_token with wrong aud`() {
-        val future = Instant.now().epochSecond + 3600
-        stubTokenWithIdToken(fakeIdToken("""{"id":"55502","name":"T","preferred_username":"t","exp":$future,"aud":"someone-else"}"""))
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55502", aud = "\"someone-else\"")))
 
         val (location, _) = runCallback()
 
@@ -223,14 +207,167 @@ class AuthControllerTest : BaseIntegrationTest() {
 
     @Test
     fun `GET callback accepts id_token with valid exp and aud`() {
-        val future = Instant.now().epochSecond + 3600
-        stubTokenWithIdToken(fakeIdToken("""{"id":"55503","name":"T","preferred_username":"t","exp":$future,"aud":"test-client-id"}"""))
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55503")))
 
         val (location, cookie) = runCallback()
 
         assertEquals("/", location)
         assertNotNull(cookie)
         assertEquals(1, userCount(55503))
+    }
+
+    // --- Phase 2: the claim checks become mandatory ---
+
+    @Test
+    fun `GET callback rejects id_token without iss`() {
+        // Enforcing a claim only when present hands the decision to whoever issued
+        // the token. The signature is not verified here, so these checks carry the
+        // whole weight.
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55510", iss = null)))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55510))
+    }
+
+    @Test
+    fun `GET callback rejects id_token without aud`() {
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55511", aud = null)))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55511))
+    }
+
+    @Test
+    fun `GET callback rejects id_token without exp`() {
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55512", exp = null)))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55512))
+    }
+
+    @Test
+    fun `GET callback rejects an issuer that merely contains telegram`() {
+        // The old rule was `iss contains "telegram"`, which any host carrying that
+        // substring satisfies. Exact equality is what makes swapping the provider a
+        // deliberate act rather than an accident.
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55513", iss = "https://telegram-auth.example.com")))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55513))
+    }
+
+    @Test
+    fun `GET callback rejects an issuer differing only by a trailing slash`() {
+        // OIDC Core 3.1.3.7 asks for exact equality; normalising a slash away turns
+        // the check into an approximation.
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55514", iss = "http://localhost:${wireMockOidc.port()}/")))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55514))
+    }
+
+    @Test
+    fun `GET callback rejects an audience array that does not list us`() {
+        // As `claims["aud"] as? String` an array yields null and the audience check
+        // switches itself off without a word.
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55515", aud = """["someone-else","another"]""")))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55515))
+    }
+
+    @Test
+    fun `GET callback accepts an audience array that lists us`() {
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55516", aud = """["someone-else","test-client-id"]""")))
+
+        val (location, cookie) = runCallback()
+
+        assertEquals("/", location)
+        assertNotNull(cookie)
+        assertEquals(1, userCount(55516))
+    }
+
+    @Test
+    fun `GET callback rejects an id_token issued in the future`() {
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55517", iat = Instant.now().epochSecond + 300)))
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(55517))
+    }
+
+    @Test
+    fun `GET callback tolerates small clock skew on iat`() {
+        stubTokenWithIdToken(fakeIdToken(validClaims(id = "55518", iat = Instant.now().epochSecond + 30)))
+
+        val (location, cookie) = runCallback()
+
+        assertEquals("/", location)
+        assertNotNull(cookie)
+        assertEquals(1, userCount(55518))
+    }
+
+    @Test
+    fun `token call does not follow redirects`() {
+        // Feign follows redirects by default, which would have the id_token read
+        // from wherever the last hop pointed. There is no legitimate redirect on a
+        // token endpoint.
+        wireMockOidc.stubFor(
+            post(urlEqualTo("/token")).willReturn(
+                aResponse().withStatus(302).withHeader("Location", "/token-elsewhere")
+            )
+        )
+        wireMockOidc.stubFor(
+            get(urlEqualTo("/token-elsewhere")).willReturn(
+                aResponse().withStatus(200)
+                    .withHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                    .withBody("""{"access_token":"t","token_type":"Bearer","id_token":"${fakeIdToken(validClaims(id = "66666"))}"}""")
+            )
+        )
+
+        val (location, _) = runCallback()
+
+        assertEquals("/login?error=server", location)
+        assertEquals(0, userCount(66666), "the identity from behind the redirect must never be used")
+    }
+
+    @Test
+    fun `GET callback clears the oidc cookies even when state does not match`() {
+        // A rejected attempt used to leave oidc_state and oidc_code_verifier valid
+        // for their full 300 seconds. code_verifier is half of the PKCE pair, and
+        // it has no business surviving an attempt already judged suspicious.
+        val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
+        val verifierCookie = initResult.response.cookies.first { it.name == "oidc_code_verifier" }
+
+        val result = mockMvc.perform(
+            get("/auth/telegram/callback")
+                .param("code", "test-code")
+                .param("state", "wrong-state")
+                .cookie(Cookie("oidc_state", "correct-state"))
+                .cookie(verifierCookie)
+        )
+            .andExpect(status().is3xxRedirection)
+            .andExpect(header().string("Location", "/login?error=state"))
+            .andReturn()
+
+        for (name in listOf("oidc_state", "oidc_code_verifier")) {
+            val cookie = result.response.cookies.firstOrNull { it.name == name }
+            assertNotNull(cookie, "$name должен быть очищен на неудачной попытке")
+            assertEquals(0, cookie!!.maxAge, "$name должен быть удалён, а не оставлен жить")
+        }
     }
 
     @Test
@@ -245,6 +382,32 @@ class AuthControllerTest : BaseIntegrationTest() {
     }
 
     // --- Helpers for id_token claim-validation tests ---
+
+    /**
+     * A complete, well-formed claim set. Every strictness test below starts from
+     * it and breaks exactly one thing, so a failure names its own cause.
+     */
+    private fun validClaims(
+        id: String = "55500",
+        name: String = "T",
+        username: String = "t",
+        iss: String? = "http://localhost:${wireMockOidc.port()}",
+        aud: String? = "\"test-client-id\"",
+        exp: Long? = Instant.now().epochSecond + 3600,
+        iat: Long? = Instant.now().epochSecond,
+    ): String {
+        val fields = mutableListOf(
+            """"sub":"42220"""",
+            """"id":"$id"""",
+            """"name":"$name"""",
+            """"preferred_username":"$username"""",
+        )
+        iss?.let { fields += """"iss":"$it"""" }
+        aud?.let { fields += """"aud":$it""" }
+        exp?.let { fields += """"exp":$it""" }
+        iat?.let { fields += """"iat":$it""" }
+        return "{${fields.joinToString(",")}}"
+    }
 
     private fun fakeIdToken(payloadJson: String): String {
         fun b64(s: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(s.toByteArray())

@@ -70,6 +70,9 @@
 | `TELEGRAM_TOKEN` | да, если бот включён | Токен бота. При `TELEGRAM_ENABLED=false` не нужен |
 | `TELEGRAM_ENABLED` | нет | Запускать ли бота (polling/webhook). По умолчанию `true`. Вход в веб через Telegram работает независимо от этого флага |
 | `TELEGRAM_WEBHOOK_SECRET` | нет | Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token`. В проде задавать |
+| `TELEGRAM_OAUTH_BASE_URL` | нет | База OIDC-провайдера, по умолчанию `https://oauth.telegram.org`. Меняется на брокер входа для локальной разработки |
+| `TELEGRAM_EXPECTED_ISSUER` | нет | Ожидаемый `iss` в `id_token`, сверяется побайтово. По умолчанию `https://oauth.telegram.org`. Меняется **вместе** с базой и никогда из неё не выводится |
+| `COOKIE_SECURE` | нет | Флаг `Secure` на куках, по умолчанию `true`. Локально по http нужен `false` |
 
 Параметры БД по умолчанию — `localhost:5432/pochitushki`, `postgres/postgres`.
 Переопределяются стандартными переменными Spring: `SPRING_DATASOURCE_URL`,
@@ -83,28 +86,56 @@ openssl rand -base64 32
 
 ## Локальный запуск
 
-Поднять PostgreSQL (настройки совпадают с дефолтными в `application.yml`):
+Зависимости — PostgreSQL и брокер входа — поднимаются одной командой:
 
 ```bash
-docker run -d --name pochitushki-db -p 5432:5432 \
-  -e POSTGRES_DB=pochitushki \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  postgres:16-alpine
+cp .env.dev.example .env.dev      # поправить BROKER_REGISTRY_KEY и свой Telegram ID
+docker build -t telegram-login-broker:dev ../telegram-login-broker
+docker compose -f compose.dev.yaml --env-file .env.dev up -d
 ```
 
-Схема применяется автоматически через Liquibase при старте. Запуск приложения:
+Схема БД применяется автоматически через Liquibase при старте. Приложение
+запускается **на хосте, не в compose** — и это не вкусовщина:
+`telegram.oauth.base-url` нужен и браузеру для редиректа, и Feign для
+server-to-server вызова, а внутри compose эти адреса разъезжаются
+(`http://broker:8080` недостижим из браузера, `http://localhost:8090` — из
+контейнера). Одного URL, работающего для обоих, там не существует.
 
 ```bash
+set -a; . ./.env.dev; set +a
 export JWT_SECRET="$(openssl rand -base64 32)"
-export TELEGRAM_CLIENT_ID=... TELEGRAM_CLIENT_SECRET=...
-export APP_BASE_URL=http://localhost:8080
 export TELEGRAM_ENABLED=false   # поднять только веб, без бота
 
 ./gradlew bootRun
 ```
 
-Приложение будет доступно на `http://localhost:8080`.
+Приложение будет доступно на `http://localhost:8080`, вход — через брокер в
+mock-режиме: он покажет список тестовых личностей вместо настоящего Telegram.
+
+### Зачем брокер
+
+Telegram принимает только публично-резолвимые HTTPS-адреса, поэтому вход через
+него локально не проверялся и приложение запускали без аутентификации.
+[telegram-login-broker](../telegram-login-broker) — постоянный публичный адрес,
+который регистрируется в BotFather один раз и дальше сам редиректит браузер на
+любой локальный порт. Про новые проекты и порты Telegram не узнаёт ничего.
+
+Подключение — две переменные, которые меняются вместе (см. `.env.dev.example`).
+`iss` сверяется побайтово, поэтому одной правки мало, и подсунуть брокер
+приложению, которое под него не настроено, нельзя.
+
+Что уже доказано и что осталось проверить против настоящего Telegram — в
+[docs/VERIFICATION.md](../telegram-login-broker/docs/VERIFICATION.md) брокера.
+
+### Без брокера, против настоящего Telegram
+
+```bash
+export TELEGRAM_CLIENT_ID=... TELEGRAM_CLIENT_SECRET=...   # BotFather → Login Widget
+export APP_BASE_URL=https://<публичный-адрес>
+```
+
+`redirect_uri` собирается как `$APP_BASE_URL/auth/telegram/callback` и должен
+быть в Allowed URLs бота. `COOKIE_SECURE` при этом остаётся `true`.
 
 ## Сборка и тесты
 
@@ -180,22 +211,36 @@ sequenceDiagram
 
 Telegram возвращает JWT со следующими claim'ами (при scope `openid profile`):
 
-| Claim | Тип | Описание |
-|---|---|---|
-| `id` | String | Telegram User ID |
-| `sub` | String | Внутренний OIDC subject (не Telegram ID) |
-| `name` | String | Полное имя пользователя |
-| `preferred_username` | String? | Telegram username (@handle) |
-| `picture` | String? | URL аватара |
-| `iss` | String | `https://oauth.telegram.org` |
-| `aud` | String | client_id бота |
+| Claim | Тип | Обязателен | Описание |
+|---|---|---|---|
+| `id` | Number \| String | да | Telegram User ID. Задокументирован на `core.telegram.org/widgets/login`, но в `claims_supported` дискавери-документа его нет |
+| `sub` | String | нет | Внутренний OIDC subject — **другое число**, не Telegram ID |
+| `name` | String | нет | Полное имя пользователя |
+| `preferred_username` | String? | нет | Telegram username (@handle) |
+| `picture` | String? | нет | URL аватара |
+| `iss` | String | да | Побайтово равен `telegram.oauth.expected-issuer` |
+| `aud` | String \| Array | да | Содержит `client_id` приложения |
+| `exp` | Number | да | Не истёк |
+| `iat` | Number | нет | Если есть — не из будущего, допуск 60 с |
 
 > **О верификации:** подпись `id_token` не проверяется осознанно — токен получен
-> напрямую от Telegram по TLS в server-to-server запросе, транспорт гарантирует
-> целостность. Дополнительно, как defense-in-depth, сервис валидирует claim'ы
-> `exp` (не истёк), `aud` (совпадает с `client_id`) и `iss` (содержит «telegram»)
-> — каждый проверяется, только если присутствует в токене: Telegram OIDC
-> нестандартен и может опускать часть claim'ов.
+> от token-эндпоинта по TLS в server-to-server запросе, транспорт гарантирует
+> целостность. JWKS у Telegram при этом **есть**
+> (`oauth.telegram.org/.well-known/jwks.json`), так что проверять подпись можно и
+> это был бы более сильный ответ; то, что мы этого не делаем, — решение, а не
+> отсутствие возможности.
+>
+> Именно поэтому проверки claim'ов — несущие, а не defense-in-depth, и каждая
+> **обязательна**. Проверять claim «только если он присутствует» значит отдать
+> решение тому, кто выпустил токен.
+>
+> `iss` сверяется побайтово с настраиваемым значением, а не проверяется на
+> вхождение подстроки «telegram»: под подстроку подходит любой хост, который её
+> содержит, и не подходит ни один честный не-телеграмный issuer. `aud`
+> разбирается и как строка, и как массив — как `as? String` массив давал `null`
+> и проверка молча отключалась. При отсутствии `id` вход падает, и `sub` **не**
+> подставляется: это другое число, и подстановка выдала бы стабильную,
+> правдоподобную и чужую личность.
 
 ### Флоу выхода
 

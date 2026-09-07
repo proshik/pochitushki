@@ -1,0 +1,61 @@
+# Зависимости для локальной разработки. Само приложение сюда НЕ кладётся —
+# и это не вкусовщина.
+#
+# telegram.oauth.base-url используется дважды: для редиректа браузера и для
+# server-to-server вызова из Feign. Внутри compose эти адреса разъезжаются —
+# http://broker:8080 недостижим из браузера, http://localhost:8090 недостижим из
+# контейнера, — и одного URL, работающего для обоих, не существует. Приложение на
+# хосте плюс зависимости здесь — единственная конфигурация, где он есть.
+#
+#   docker compose -f compose.dev.yaml up -d
+#   ./gradlew bootRun --args='--spring.profiles.active=dev'
+#
+# Образ брокера собирается из соседнего чекаута:
+#   docker build -t telegram-login-broker:dev ../telegram-login-broker
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pochitushki
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pochitushki"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  broker:
+    image: ${BROKER_IMAGE:-telegram-login-broker:dev}
+    # Только петля. Брокер в mock-режиме — это страница «выбери личность»: он
+    # сам откажется стартовать вне loopback и погасит процесс, увидев
+    # X-Forwarded-*, но публиковать порт наружу не надо и не пытаться.
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      BROKER_ISSUER: http://127.0.0.1:8090
+      BROKER_BIND: 127.0.0.1:8090
+      BROKER_MOCK: "true"
+      # id обязаны совпадать с настоящими Telegram ID, иначе локальные данные не
+      # сойдутся с боевыми.
+      BROKER_MOCK_USERS: ${BROKER_MOCK_USERS:?задайте в .env.dev, пример в .env.dev.example}
+      BROKER_REGISTRY_PATH: /data/registry.json
+      BROKER_REGISTRY_KEY: ${BROKER_REGISTRY_KEY:?задайте в .env.dev, пример в .env.dev.example}
+      BROKER_CLIENTS: ${BROKER_CLIENTS:?задайте в .env.dev, пример в .env.dev.example}
+    # network_mode: host нужен, потому что BROKER_BIND=127.0.0.1 внутри
+    # контейнера — это петля контейнера, а не хоста.
+    network_mode: host
+    volumes:
+      - brokerdata:/data
+    env_file:
+      - path: .env.dev
+        required: false
+
+volumes:
+  pgdata:
+  brokerdata:

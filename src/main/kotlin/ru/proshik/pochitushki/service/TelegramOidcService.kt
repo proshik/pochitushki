@@ -13,6 +13,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.time.Instant
 import java.util.Base64
 
 data class TelegramUserInfo(
@@ -78,25 +79,38 @@ class TelegramOidcService(
         val rawIdToken = tokenResponse.idToken
             ?: error("Telegram token response is missing id_token")
         val parts = rawIdToken.split(".")
-        require(parts.size >= 3) { "Unexpected id_token format: expected 3 segments, got ${parts.size}" }
+        require(parts.size == 3) { "Unexpected id_token format: expected 3 segments, got ${parts.size}" }
 
-        // Signature verification is intentionally skipped: the token is received directly from
-        // Telegram's token endpoint over TLS (server-to-server), so the transport guarantees integrity.
+        // The signature is intentionally not verified: the token comes straight
+        // from the token endpoint over TLS in a server-to-server call, so the
+        // transport already guarantees integrity. Telegram does publish a JWKS at
+        // /.well-known/jwks.json, so verifying is possible and would be the
+        // stronger answer; not doing it is a decision, not an absence of means.
+        //
+        // That makes the claim checks below load-bearing rather than defence in
+        // depth, and every one of them is mandatory: enforcing a claim "only when
+        // present" hands the decision to whoever issued the token.
         val payloadJson = String(Base64.getUrlDecoder().decode(parts[1]))
         @Suppress("UNCHECKED_CAST")
         val claims = objectMapper.readValue(payloadJson, Map::class.java) as Map<String, Any?>
 
-        // Defense-in-depth claim checks (signature is not verified — see note above). Each claim
-        // is enforced only when present, since this nonstandard Telegram OIDC may omit some.
-        val now = java.time.Instant.now().epochSecond
-        (claims["exp"] as? Number)?.let {
-            require(it.toLong() > now) { "id_token has expired" }
-        }
-        (claims["aud"] as? String)?.let {
-            require(it == props.clientId) { "id_token aud mismatch (expected ${props.clientId})" }
-        }
-        (claims["iss"] as? String)?.let {
-            require(it.contains("telegram", ignoreCase = true)) { "id_token iss mismatch: $it" }
+        val iss = claims["iss"] as? String
+        requireNotNull(iss) { "id_token has no iss claim" }
+        // Exact equality, as OIDC Core 3.1.3.7 requires: a trailing slash makes a
+        // different issuer identifier, and normalising it away turns the check
+        // into an approximation.
+        require(iss == props.expectedIssuer) { "id_token iss is $iss, expected ${props.expectedIssuer}" }
+
+        checkAudience(claims["aud"])
+
+        val now = Instant.now().epochSecond
+        val exp = claimAsEpochSecond(claims["exp"], "exp")
+        require(exp > now) { "id_token has expired" }
+        // iat is not sent by every provider, but a token minted in the future
+        // means something is wrong with one of the two clocks — or with the token.
+        claims["iat"]?.let {
+            val iat = claimAsEpochSecond(it, "iat")
+            require(iat <= now + CLOCK_SKEW_SECONDS) { "id_token iat is $iat, which is in the future" }
         }
 
         return TelegramUserInfo(
@@ -107,5 +121,35 @@ class TelegramOidcService(
             username = claims["preferred_username"] as? String,
             photoUrl = claims["picture"] as? String,
         )
+    }
+
+    /**
+     * Accepts `aud` both as a string and as an array, which OIDC allows. Read
+     * only as a string, an array matches nothing — and a check that matches
+     * nothing is a check that is switched off.
+     */
+    private fun checkAudience(aud: Any?) {
+        when (aud) {
+            is String -> require(aud == props.clientId) {
+                "id_token aud is $aud, expected ${props.clientId}"
+            }
+            is List<*> -> require(aud.any { it == props.clientId }) {
+                "id_token aud $aud does not contain ${props.clientId}"
+            }
+            null -> error("id_token has no aud claim")
+            else -> error("id_token aud is ${aud::class.simpleName}, expected a string or a list of strings")
+        }
+    }
+
+    private fun claimAsEpochSecond(value: Any?, name: String): Long =
+        when (value) {
+            is Number -> value.toLong()
+            null -> error("id_token has no $name claim")
+            else -> error("id_token $name is ${value::class.simpleName}, expected a number")
+        }
+
+    private companion object {
+        /** How far ahead of us the issuer's clock may be. */
+        const val CLOCK_SKEW_SECONDS = 60L
     }
 }

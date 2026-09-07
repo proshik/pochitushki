@@ -57,6 +57,7 @@ class BaseIntegrationTest {
             registry.add("telegram.api-url") { "http://localhost:${wireMockTelegramApi.port()}/" }
             registry.add("telegram.webhook-url") { "" }
             registry.add("telegram.oauth.base-url") { "http://localhost:${wireMockOidc.port()}" }
+            registry.add("telegram.oauth.expected-issuer") { "http://localhost:${wireMockOidc.port()}" }
         }
     }
 }
