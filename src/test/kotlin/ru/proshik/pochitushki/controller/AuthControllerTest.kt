@@ -345,6 +345,32 @@ class AuthControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `GET callback clears the oidc cookies even when state does not match`() {
+        // A rejected attempt used to leave oidc_state and oidc_code_verifier valid
+        // for their full 300 seconds. code_verifier is half of the PKCE pair, and
+        // it has no business surviving an attempt already judged suspicious.
+        val initResult = mockMvc.perform(get("/auth/telegram")).andReturn()
+        val verifierCookie = initResult.response.cookies.first { it.name == "oidc_code_verifier" }
+
+        val result = mockMvc.perform(
+            get("/auth/telegram/callback")
+                .param("code", "test-code")
+                .param("state", "wrong-state")
+                .cookie(Cookie("oidc_state", "correct-state"))
+                .cookie(verifierCookie)
+        )
+            .andExpect(status().is3xxRedirection)
+            .andExpect(header().string("Location", "/login?error=state"))
+            .andReturn()
+
+        for (name in listOf("oidc_state", "oidc_code_verifier")) {
+            val cookie = result.response.cookies.firstOrNull { it.name == name }
+            assertNotNull(cookie, "$name должен быть очищен на неудачной попытке")
+            assertEquals(0, cookie!!.maxAge, "$name должен быть удалён, а не оставлен жить")
+        }
+    }
+
+    @Test
     fun `GET logout clears auth cookie and redirects to login`() {
         val result = mockMvc.perform(get("/logout").with(withAuth(1L)))
             .andExpect(status().is3xxRedirection)

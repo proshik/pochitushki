@@ -52,6 +52,16 @@ pdf:
   playwright:
     enabled: false
 
+app:
+  security:
+    cookie:
+      # Secure-атрибут на auth-куках. Дефолт true — fail-safe, прод не должен
+      # деградировать из-за забытой переменной. Локально по http нужен false:
+      # Safari не принимает Secure-куку с http://localhost (Chrome и Firefox
+      # принимают), а с http://192.168.x.x её не принимает никто — то есть
+      # с телефона иначе не зайти.
+      secure: ${COOKIE_SECURE:true}
+
 telegram:
   # Управляет подключением бота на старте. false => бот не запускается (ни polling, ни webhook),
   # bot-токен не требуется. Вход через Telegram (telegram.oauth.*) работает независимо от этого флага.

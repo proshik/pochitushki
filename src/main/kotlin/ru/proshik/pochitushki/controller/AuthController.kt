@@ -9,6 +9,8 @@ import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
 import feign.FeignException
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import ru.proshik.pochitushki.configuration.properties.CookieProperties
 import ru.proshik.pochitushki.configuration.properties.JwtProperties
 import ru.proshik.pochitushki.service.JwtService
 import ru.proshik.pochitushki.service.TelegramOidcService
@@ -16,11 +18,13 @@ import ru.proshik.pochitushki.service.UserService
 import java.util.UUID
 
 @Controller
+@EnableConfigurationProperties(CookieProperties::class)
 class AuthController(
     private val telegramOidcService: TelegramOidcService,
     private val jwtService: JwtService,
     private val userService: UserService,
     private val jwtProperties: JwtProperties,
+    private val cookieProperties: CookieProperties,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -53,12 +57,15 @@ class AuthController(
         val savedState = request.cookies?.firstOrNull { it.name == "oidc_state" }?.value
         val codeVerifier = request.cookies?.firstOrNull { it.name == "oidc_code_verifier" }?.value
 
+        // Cleared before the check, not after it. code_verifier is half of the
+        // PKCE pair, and leaving it alive for the rest of its 300 seconds after an
+        // attempt has already been judged suspicious is the wrong way round.
+        clearCookie(response, "oidc_state")
+        clearCookie(response, "oidc_code_verifier")
+
         if (savedState == null || state != savedState || code == null || codeVerifier == null) {
             return "redirect:/login?error=state"
         }
-
-        clearCookie(response, "oidc_state")
-        clearCookie(response, "oidc_code_verifier")
 
         return try {
             val userInfo = telegramOidcService.exchangeCode(code, codeVerifier)
@@ -91,7 +98,7 @@ class AuthController(
     private fun baseCookie(name: String, value: String, maxAgeSeconds: Long): ResponseCookie =
         ResponseCookie.from(name, value)
             .httpOnly(true)
-            .secure(true)
+            .secure(cookieProperties.secure)
             .path("/")
             .maxAge(maxAgeSeconds)
             .sameSite("Lax")

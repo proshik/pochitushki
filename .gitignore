@@ -42,3 +42,6 @@ out/
 ### Spring | Spring Boot ###
 src/main/resources/application-local.yml
 .worktrees/
+
+### Локальная разработка ###
+.env.dev
