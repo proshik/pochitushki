@@ -67,12 +67,22 @@ Code + PKCE**, не Login Widget: HMAC-подписи `WebAppData` и прове
 - `extractUserId` возвращает `null` на любой невалидный токен (ловит
   `JwtException`, `IllegalArgumentException`, `NumberFormatException`) — не бросать
   наружу
-- Токен stateless: logout не отзывает его, поэтому TTL короткий (`jwt.ttl-days`)
+- Токен stateless по формату, но **отзываемый**: logout проставляет
+  `users.tokens_valid_after`, а `JwtAuthInterceptor` отвергает токен с `iat` раньше
+  этой отметки. Поэтому `iat` в токене обязателен — `parseToken` возвращает его
+  вместе с `userId`, и токен без `iat` считается отозванным. TTL всё равно короткий
+- Выход — **POST** `/logout` (меняет состояние: отзывает токены всех устройств).
+  В шаблонах это форма, а не ссылка
 
 ## Cookies
 
 - Все куки через `baseCookie()`: `HttpOnly`, `Secure`, `SameSite=Lax`, `path=/`
-- `SameSite=Lax` — основная CSRF-защита для cookie-auth; не ослаблять
+- `SameSite=Lax` — первая CSRF-защита для cookie-auth; не ослаблять. Вторая —
+  `CsrfOriginFilter`: у небезопасных методов сверяется `Origin` (или
+  `Sec-Fetch-Site`) с origin самого сервиса. «Same-site» у куки — это
+  регистрируемый домен, то есть любой соседний поддомен считается своим;
+  «same-origin» — то, что нужно на самом деле. Запросы вообще без этих
+  заголовков (curl, webhook, тесты) пропускаются: там нет и куки
 - Max-age `auth_token` выводится из `jwt.ttl-days`, чтобы кука и токен не разъезжались
 
 ## Interceptor (`JwtAuthInterceptor` + `WebConfig`)
@@ -98,7 +108,12 @@ Code + PKCE**, не Login Widget: HMAC-подписи `WebAppData` и прове
   свои, обложки — через прокси)
 - Webhook: путь эндпоинта — сам токен бота, плюс сверка заголовка
   `X-Telegram-Bot-Api-Secret-Token` с `telegram.webhook-secret`. Секретного пути
-  недостаточно, header-проверку не убирать
+  недостаточно, header-проверку не убирать. Секрет **обязателен** в режиме webhook
+  (`TelegramBotConfiguration` не даст стартовать без него), сравнение — через
+  `MessageDigest.isEqual`, а не `!=`. Повторные доставки отсекаются по `update_id`
+- `UrlSecurityValidator` для IPv6 работает как **аллоулист** (только глобальный
+  unicast `2000::/3`), а не блоклист: JDK-предикаты не знают про `fc00::/7`, и
+  перечисление диапазонов раз за разом оказывалось неполным
 - Actuator: выставлен только `health` без деталей; `env`/`heapdump`/`loggers`/
   `threaddump` не включать
 - `server.error.include-*: never` — не отдавать stacktrace наружу

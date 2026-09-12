@@ -17,6 +17,16 @@ data class PocketCsv(
     val isFavorite: Boolean = false
 )
 
+/**
+ * A CSV row is only importable when its url is one we would have accepted from the bot or the
+ * web form. Pocket exports carry whatever the user once saved, and `javascript:` or `data:`
+ * there would end up in a card's href.
+ */
+fun PocketCsv.hasImportableUrl(): Boolean {
+    val value = url?.trim()?.lowercase() ?: return false
+    return value.startsWith("http://") || value.startsWith("https://")
+}
+
 fun PocketCsv.toPostStoreData(userId: Long) =
     PostStoreData(
         title = title,

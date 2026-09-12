@@ -24,7 +24,13 @@ class PlaywrightPdfGenerator(
         CompletableFuture.supplyAsync({
             logger.info("Playwright: starting background initialization...")
             val pw = Playwright.create()
-            val br = pw.chromium().launch(BrowserType.LaunchOptions().setHeadless(true))
+            // Playwright defaults chromiumSandbox to false, which runs a third party's
+            // JavaScript in this container with no sandbox at all.
+            val br = pw.chromium().launch(
+                BrowserType.LaunchOptions()
+                    .setHeadless(true)
+                    .setChromiumSandbox(true)
+            )
             logger.info("Playwright PDF generator initialized (Chromium headless)")
             pw to br
         }, executor)
@@ -45,6 +51,20 @@ class PlaywrightPdfGenerator(
 
             context.use { ctx ->
                 val page = ctx.newPage()
+
+                // Validating the entry URL is not enough for a browser: the page itself pulls
+                // images, iframes, fonts and fetch() targets of its own choosing, and
+                // `<img src="http://169.254.169.254/…">` would be fetched by Chromium, not by us.
+                // Every request the page makes goes through the same SSRF guard, or is aborted.
+                ctx.route("**/*") { route ->
+                    val target = route.request().url()
+                    if (urlSecurityValidator.isAllowed(target)) {
+                        route.resume()
+                    } else {
+                        logger.debug("Blocked sub-resource from PDF page: {}", target)
+                        route.abort()
+                    }
+                }
 
                 page.navigate(url, Page.NavigateOptions().setTimeout(30000.0))
                 page.waitForLoadState()

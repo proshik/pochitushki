@@ -371,14 +371,25 @@ class AuthControllerTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `GET logout clears auth cookie and redirects to login`() {
-        val result = mockMvc.perform(get("/logout").with(withAuth(1L)))
+    fun `POST logout clears auth cookie and redirects to login`() {
+        // Полное имя: в этом файле `post` уже занят WireMock'ом (стабы token-эндпоинта).
+        val result = mockMvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/logout").with(withAuth(1L))
+        )
             .andExpect(status().is3xxRedirection)
             .andExpect(header().string("Location", "/login"))
             .andReturn()
 
         val authCookie = result.response.cookies.firstOrNull { it.name == "auth_token" }
         assertTrue(authCookie == null || authCookie.maxAge == 0, "auth_token cookie должен быть удалён")
+    }
+
+    @Test
+    fun `GET logout is not a logout — a link cannot sign the user out`() {
+        // Выход меняет состояние (отзывает все токены пользователя), поэтому он POST:
+        // GET отрабатывал бы по <img src="/logout"> с чужой страницы.
+        mockMvc.perform(get("/logout").with(withAuth(1L)))
+            .andExpect(status().isMethodNotAllowed)
     }
 
     // --- Helpers for id_token claim-validation tests ---

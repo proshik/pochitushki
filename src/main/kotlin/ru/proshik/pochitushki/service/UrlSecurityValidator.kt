@@ -95,10 +95,14 @@ class UrlSecurityValidator(
             isReservedRange(addr)
 
     /**
-     * Ranges the JDK's own predicates miss. Java's checks cover loopback, link-local, RFC1918 and
-     * multicast; everything below is either reachable-but-not-public (carrier NAT, "this network")
-     * or a transition mechanism that embeds an IPv4 address and so can be pointed at an internal
-     * host — `64:ff9b::a9fe:a9fe` reaches the metadata endpoint through a NAT64 gateway.
+     * Ranges the JDK's own predicates miss.
+     *
+     * IPv4 is a blocklist: Java's checks cover loopback, link-local, RFC1918 and multicast, and
+     * what is listed below is either reachable-but-not-public (carrier NAT, "this network") or a
+     * transition mechanism that embeds an IPv4 address and so can be pointed at an internal host.
+     *
+     * IPv6 is the other way round — an allowlist of global unicast — because the JDK predicates
+     * do not cover unique-local fc00::/7 at all. See the comment in the 16-byte branch.
      */
     private fun isReservedRange(addr: InetAddress): Boolean {
         val b = addr.address.map { it.toInt() and 0xff }
@@ -115,16 +119,22 @@ class UrlSecurityValidator(
         }
 
         if (b.size == 16) {
+            // IPv6 is an allowlist, not a blocklist. Java's own predicates are thinner here than
+            // they look — isSiteLocalAddress only knows the deprecated fec0::/10 and says false
+            // for fc00::/7 (unique-local), which is what a Docker or cloud internal network
+            // actually uses. Enumerating what to block would keep missing ranges, so only
+            // global unicast 2000::/3 is allowed through and everything else (fc00::/7,
+            // 64:ff9b::/96, 100::/64, ::/128, ::1, IPv4-compatible ::a.b.c.d) is refused.
+            if (b[0] and 0xe0 != 0x20) return true
+
             val first32 = listOf(b[0], b[1], b[2], b[3])
             return when {
-                // 64:ff9b::/96 and 64:ff9b:1::/48 — NAT64 / IPv4-IPv6 translation
-                first32 == listOf(0x00, 0x64, 0xff, 0x9b) -> true
                 // 2002::/16 — 6to4, embeds an IPv4 address in bytes 2..5
                 b[0] == 0x20 && b[1] == 0x02 -> true
                 // 2001::/32 — Teredo tunnelling, also embeds IPv4
                 first32 == listOf(0x20, 0x01, 0x00, 0x00) -> true
-                // 100::/64 — discard-only
-                first32 == listOf(0x01, 0x00, 0x00, 0x00) -> true
+                // 2001:db8::/32 — documentation range, never legitimately routed
+                first32 == listOf(0x20, 0x01, 0x0d, 0xb8) -> true
                 else -> false
             }
         }

@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.configuration.properties.JwtProperties
+import java.time.Instant
 import java.util.Base64
 import java.util.Date
 import javax.crypto.spec.SecretKeySpec
@@ -39,14 +40,22 @@ class JwtService(private val jwtProperties: JwtProperties) {
             .compact()
     }
 
-    fun extractUserId(token: String): Long? = try {
-        Jwts.parser()
+    fun extractUserId(token: String): Long? = parseToken(token)?.userId
+
+    /**
+     * The claims the interceptor needs: who, and when the token was issued. `issuedAt` is what
+     * makes logout able to revoke — it is compared against users.tokens_valid_after.
+     */
+    fun parseToken(token: String): TokenInfo? = try {
+        val claims = Jwts.parser()
             .verifyWith(signingKey)
             .build()
             .parseSignedClaims(token)
             .payload
-            .subject
-            .toLong()
+        TokenInfo(
+            userId = claims.subject.toLong(),
+            issuedAt = claims.issuedAt?.toInstant(),
+        )
     } catch (_: JwtException) {
         null
     } catch (_: IllegalArgumentException) {
@@ -54,4 +63,6 @@ class JwtService(private val jwtProperties: JwtProperties) {
     } catch (_: NumberFormatException) {
         null
     }
+
+    data class TokenInfo(val userId: Long, val issuedAt: Instant?)
 }
