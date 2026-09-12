@@ -10,13 +10,19 @@ spring:
             # оттуда, куда увёл последний хоп. У token-эндпоинта легитимных
             # редиректов не бывает.
             followRedirects: false
+  # Ни один запрос не должен висеть на БД дольше этого: без потолка один тяжёлый
+  # запрос держит и соединение из пула, и поток Tomcat.
+  jdbc:
+    template:
+      query-timeout: PT30S
   datasource:
     url: jdbc:postgresql://localhost:5432/pochitushki
     username: postgres
     password: postgres
     hikari:
       auto-commit: true
-      connection-timeout: 1000
+      # 1 секунда — это отказ при первом же всплеске; 3 переживают короткую очередь.
+      connection-timeout: 3000
       idle-timeout: 30000
       maximum-pool-size: 10
       minimum-idle: 3
@@ -27,8 +33,17 @@ spring:
   liquibase:
     change-log: classpath:liquibase/changelog-master.yml
 
-# Lock down Actuator: only liveness/readiness exposed, no detailed health (which can leak
+# Lock down Actuator: only health exposed, no detailed health (which can leak
 # component/infra info). Sensitive endpoints (env, heapdump, loggers, threaddump) stay disabled.
+#
+# probes.enabled=true включает /actuator/health/liveness и /actuator/health/readiness вне
+# Kubernetes. Различие существенное: readiness включает БД, liveness — нет. Если повесить
+# перезапуск на health с БД внутри, падение Postgres превращается в цикл рестартов.
+#
+# Метрики Prometheus не открыты по умолчанию: реестр в classpath есть, эндпоинт — нет.
+# Чтобы снимать их, поднимите порт управления и добавьте эндпоинт (порт наружу не публиковать):
+#   MANAGEMENT_SERVER_PORT=8081
+#   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,prometheus
 management:
   endpoints:
     web:
@@ -37,6 +52,8 @@ management:
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
 
 # Never leak stack traces / internal messages in error responses.
 server:
@@ -47,6 +64,8 @@ server:
   # Behind a reverse proxy / tunnel the app must trust X-Forwarded-Proto,
   # otherwise sendRedirect() absolutizes Location as http:// on an https site.
   forward-headers-strategy: framework
+  # Дать доработать начатым запросам при остановке, а не рвать их.
+  shutdown: graceful
 
 pdf:
   playwright:
@@ -82,7 +101,10 @@ telegram:
 
 logging:
   level:
-    ru.proshik.pochitushki: DEBUG
+    # INFO, а не DEBUG: на DEBUG в лог уезжают URL каждой сохранённой ссылки (история чтения)
+    # и тела апдейтов Telegram (тексты сообщений, имена, file_id). Поднять на время отладки:
+    # LOGGING_LEVEL_RU_PROSHIK_POCHITUSHKI=DEBUG
+    ru.proshik.pochitushki: ${APP_LOG_LEVEL:INFO}
 
 jwt:
   # No default: the app must fail fast if JWT_SECRET is not provided (≥32 bytes, base64).

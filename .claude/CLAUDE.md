@@ -16,8 +16,9 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 ./gradlew bootRun        # Запустить локально (нужен PostgreSQL на localhost:5432)
 ```
 
-В репозитории есть только `Dockerfile` (compose-файла нет). PostgreSQL для
-локального запуска поднимается отдельно.
+`compose.dev.yaml` поднимает только зависимости для разработки (PostgreSQL +
+telegram-login-broker); само приложение запускается на хосте. Для прода —
+`Dockerfile`, PostgreSQL разворачивается отдельно.
 
 Базовый образ в `Dockerfile` и `java-version` в `.github/workflows/build.yml`
 должны совпадать с toolchain из `build.gradle.kts` (сейчас 25): toolchain-репозиторий
@@ -33,7 +34,8 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 | `JWT_SECRET` | Подпись JWT (≥32 байт base64). Дефолта нет — без переменной приложение падает на старте (осознанный fail-fast) |
 | `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`: `TelegramController` объявляет `@PostMapping("/\${telegram.token}")`, и плейсхолдер должен разрешиться на старте. Ключа `telegram.token` в `application.yml` нет — значение приходит relaxed binding'ом прямо в `TelegramProperties` |
 | `TELEGRAM_ENABLED` | Опц. Запуск бота (polling/webhook). `false` — стартовать без бота, bot-токен не нужен (логин через Telegram работает независимо). По умолчанию `true` |
-| `TELEGRAM_WEBHOOK_SECRET` | Опц. Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token`. Пусто => проверка выключена; в проде задавать |
+| `TELEGRAM_WEBHOOK_SECRET` | Обязателен в режиме webhook (`telegram.webhook-url` задан) — без него приложение не стартует. Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token` через `MessageDigest.isEqual` |
+| `APP_LOG_LEVEL` | Опц. Уровень логов приложения, дефолт `INFO`. На `DEBUG` в лог уезжают URL ссылок и тела апдейтов |
 | `app.security.ssrf.allowed-hosts` | Опц. Список хостов, исключённых из SSRF-проверок `UrlSecurityValidator` (в тестах — `localhost`) |
 
 ## Architecture
@@ -47,7 +49,13 @@ Read-it-later сервис на Kotlin + Spring Boot. Пользователи �
 `static/css/app.css`, htmx и шрифты в `static/`, внешних CDN нет
 **Auth**: Telegram OIDC/OAuth + JWT в cookie `auth_token`; `JwtAuthInterceptor`
 кладёт `userId` в request-атрибут и защищает `/`, `/all`, `/archive`,
-`/favorites`, `/random`, `/profile`, `/api/v1/**` (см. `WebConfig`)
+`/favorites`, `/random`, `/profile`, `/api/v1/**` (см. `WebConfig`). Выход —
+`POST /logout`: отзывает токены через `users.tokens_valid_after` (миграция 9),
+интерцептор сверяет с ним `iat` токена
+**Эксплуатация**: ровно одна реплика (бот + in-memory состояние), probes
+`/actuator/health/{liveness,readiness}`, метрики Prometheus — только по
+`MANAGEMENT_SERVER_PORT` + `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE`,
+`requestId` в логах и в `X-Request-Id`, страница ошибки — `templates/error.html`
 
 ### Key packages
 
@@ -59,12 +67,14 @@ ru.proshik.pochitushki/
 ├── service/             # Бизнес-логика (Post/User/Label/Jwt/TelegramOidc/Export/Import/I18n),
 │                        #   TelegramService — оркестратор бота (самый крупный класс),
 │                        #   UrlSecurityValidator (SSRF), OgImageProxyService,
+│                        #   RateLimitService (бюджеты на пользователя),
 │                        #   PocketCsv, Pdf-генераторы
 ├── service/telegram/    # CommandHandler, CallbackQueryHandler, TelegramKeyboard,
-│                        #   TelegramUpdateHandler (интерфейс обработчика)
+│                        #   TelegramUpdateHandler (интерфейс обработчика),
+│                        #   BotTaskExecutor (пул для PDF/импорта/экспорта)
 ├── configuration/       # TelegramBotConfiguration, BotProvider, JwtAuthInterceptor,
 │                        #   WebConfig, PdfConfiguration, MessageConfiguration,
-│                        #   SecurityHeadersFilter
+│                        #   SecurityHeadersFilter, CsrfOriginFilter, RequestIdFilter
 ├── configuration/properties/  # Типизированные @ConfigurationProperties
 │                        #   (TelegramProperties, TelegramOAuthProperties, JwtProperties)
 ├── model/               # Data-классы (PostData, UserData, PostType, ...)
