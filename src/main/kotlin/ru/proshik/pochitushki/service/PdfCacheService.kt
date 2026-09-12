@@ -1,6 +1,7 @@
 package ru.proshik.pochitushki.service
 
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.repository.PdfCacheDao
 
@@ -28,14 +29,33 @@ class PdfCacheService(private val pdfCacheDao: PdfCacheDao) {
         }
 
         val bytes = generate()
-        pdfCacheDao.store(userId, url, engine, bytes)
-        // Cheap, bounded housekeeping on a path that already did the expensive thing.
-        pdfCacheDao.deleteExpired(userId, TTL_DAYS)
-        logger.debug("pdf cached: userId={}, engine={}, bytes={}", userId, engine, bytes.size)
+        // A render larger than this is handed to the reader but not kept: the column is a
+        // bytea read whole into the heap on every hit, and one 200 MB row would be a cache
+        // entry nobody can afford to serve.
+        if (bytes.size <= MAX_CACHED_BYTES) {
+            pdfCacheDao.store(userId, url, engine, bytes)
+            // Cheap, bounded housekeeping on a path that already did the expensive thing.
+            pdfCacheDao.deleteExpired(userId, TTL_DAYS)
+            logger.debug("pdf cached: userId={}, engine={}, bytes={}", userId, engine, bytes.size)
+        } else {
+            logger.info("pdf too large to cache: userId={}, engine={}, bytes={}", userId, engine, bytes.size)
+        }
         return bytes
+    }
+
+    /**
+     * Sweeps expired rows for everyone, not just the user who happened to write last.
+     * Without it the rows of a user who never asks for another PDF stay forever — in the
+     * table and in every backup.
+     */
+    @Scheduled(cron = "\${pdf.cache.cleanup-cron:0 30 3 * * *}")
+    fun cleanUpExpired() {
+        val deleted = pdfCacheDao.deleteExpired(TTL_DAYS)
+        if (deleted > 0) logger.info("pdf cache cleanup removed {} expired rows", deleted)
     }
 
     companion object {
         const val TTL_DAYS = 30L
+        const val MAX_CACHED_BYTES = 20 * 1024 * 1024
     }
 }

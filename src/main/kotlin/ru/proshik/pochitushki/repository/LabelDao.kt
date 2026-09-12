@@ -189,17 +189,27 @@ class LabelDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplat
                 ORDER BY l.name
             """.trimIndent()
 
-            namedParameterJdbcTemplate.query(
-                sql,
-                MapSqlParameterSource().addValue("post_ids", ids)
-            ) { rs, _ ->
-                val key = target to rs.getLong("post_id")
-                result.getOrPut(key) { mutableListOf() }
-                    .add(LabelData(id = rs.getLong("id"), name = rs.getString("name")))
+            // Chunked because `IN (:post_ids)` expands to one bind parameter per id and the
+            // PostgreSQL wire protocol tops out at 65535 of them. A shelf page is 20 ids, but
+            // export hands over every post the user owns.
+            for (chunk in ids.chunked(ID_CHUNK_SIZE)) {
+                namedParameterJdbcTemplate.query(
+                    sql,
+                    MapSqlParameterSource().addValue("post_ids", chunk)
+                ) { rs, _ ->
+                    val key = target to rs.getLong("post_id")
+                    result.getOrPut(key) { mutableListOf() }
+                        .add(LabelData(id = rs.getLong("id"), name = rs.getString("name")))
+                }
             }
         }
 
         return result
+    }
+
+    companion object {
+        /** Ids per `IN (...)` query — well under the 65535-parameter protocol limit. */
+        private const val ID_CHUNK_SIZE = 1000
     }
 
     /** Copies the label links of a post onto the row it was just moved to. */

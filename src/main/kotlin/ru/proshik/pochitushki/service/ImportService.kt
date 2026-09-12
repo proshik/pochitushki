@@ -3,7 +3,6 @@ package ru.proshik.pochitushki.service
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.dataformat.csv.CsvSchema
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipInputStream
@@ -30,8 +29,10 @@ class ImportService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     companion object {
-        // Caps to prevent decompression bombs and memory/storage abuse.
-        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 64L * 1024 * 1024 // 64 MB across all CSV entries
+        // Caps to prevent decompression bombs and memory/storage abuse. 16 MB of CSV is well
+        // past any real Pocket export (100k rows is a few MB) and comfortably inside a 256 MB
+        // heap even with the parsed rows held alongside it.
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 16L * 1024 * 1024 // 16 MB across all CSV entries
         const val MAX_CSV_ENTRIES = 100
         const val MAX_POSTS = 100_000
     }
@@ -57,15 +58,17 @@ class ImportService(
                     if (++csvEntries > MAX_CSV_ENTRIES) {
                         throw ImportLimitException("too many CSV entries (> $MAX_CSV_ENTRIES)")
                     }
-                    val bytes = readBounded(zipInputStream, MAX_TOTAL_UNCOMPRESSED_BYTES - totalBytes)
-                    totalBytes += bytes.size
-                    val content = String(bytes, Charsets.UTF_8)
-
+                    // Parsed straight off the zip stream through a counting wrapper, instead of
+                    // buffering the entry and then copying it into a String: the old way held the
+                    // bytes, a copy of them and a UTF-16 String at once — three to four times the
+                    // limit, against a 256 MB heap, and OOM takes the whole process down.
+                    val counting = BoundedInputStream(zipInputStream, MAX_TOTAL_UNCOMPRESSED_BYTES - totalBytes)
                     val postsGroups = csvMapper.readerFor(PocketCsv::class.java).with(schema)
-                        .readValues<PocketCsv>(content)
+                        .readValues<PocketCsv>(counting.reader(Charsets.UTF_8))
                         .readAll()
-                        .filter { !it.url.isNullOrBlank() }
+                        .filter { it.hasImportableUrl() }
                         .partition { csv -> csv.status == "unread" }
+                    totalBytes += counting.count
 
                     postsGroups.first.forEach { unreadPosts.add(it.toPostStoreData(userId)) }
                     postsGroups.second.forEach { archivePosts.add(it.toPostStoreData(userId)) }
@@ -144,21 +147,39 @@ class ImportService(
     }
 
     /**
-     * Reads the current zip entry fully but refuses to buffer more than [limit] bytes — a small
-     * compressed archive can otherwise expand to gigabytes (zip bomb) and exhaust the heap.
+     * Passes the zip entry through while counting it, and fails the import as soon as the
+     * decompressed stream exceeds [limit] — a small archive can otherwise expand to gigabytes
+     * (zip bomb). The stream is not closed on purpose: it is one entry of a ZipInputStream
+     * that the caller keeps reading.
      */
-    private fun readBounded(input: InputStream, limit: Long): ByteArray {
-        if (limit <= 0) throw ImportLimitException("uncompressed size exceeds limit")
-        val out = ByteArrayOutputStream()
-        val buffer = ByteArray(8192)
-        var total = 0L
-        while (true) {
-            val read = input.read(buffer)
-            if (read == -1) break
-            total += read
-            if (total > limit) throw ImportLimitException("uncompressed size exceeds limit")
-            out.write(buffer, 0, read)
+    private class BoundedInputStream(private val delegate: InputStream, private val limit: Long) : InputStream() {
+
+        var count: Long = 0
+            private set
+
+        init {
+            if (limit <= 0) throw ImportLimitException("uncompressed size exceeds limit")
         }
-        return out.toByteArray()
+
+        override fun read(): Int {
+            val b = delegate.read()
+            if (b != -1) countBytes(1)
+            return b
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            val read = delegate.read(b, off, len)
+            if (read > 0) countBytes(read.toLong())
+            return read
+        }
+
+        override fun close() {
+            // The underlying ZipInputStream outlives this wrapper.
+        }
+
+        private fun countBytes(read: Long) {
+            count += read
+            if (count > limit) throw ImportLimitException("uncompressed size exceeds limit")
+        }
     }
 }

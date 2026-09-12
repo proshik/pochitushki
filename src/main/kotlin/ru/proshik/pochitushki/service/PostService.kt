@@ -14,6 +14,12 @@ import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.repository.PostDao
 
 
+/**
+ * Two moves of the same post raced and this one lost: its copy was rolled back, the winner's
+ * copy is on the far shelf. Callers should treat it as "already moved", not as a failure.
+ */
+class ConcurrentPostMoveException(postId: Long) : RuntimeException("Post $postId was moved concurrently")
+
 @Service
 class PostService(
     private val postDao: PostDao,
@@ -92,7 +98,7 @@ class PostService(
         val newId = postDao.addToArchivePost(postId, userId) ?: return null
         // Before the delete: the source links go with the row on ON DELETE CASCADE.
         labelService.copyLabelsOnMove(postId, newId, LabelTarget.UNREAD, LabelTarget.ARCHIVE)
-        postDao.deletePost(postId, userId, PostType.UNREAD)
+        requireRowMoved(postDao.deletePost(postId, userId, PostType.UNREAD), postId)
         return newId
     }
 
@@ -102,8 +108,21 @@ class PostService(
         logger.debug("Moving post {} to unread for user {}", postId, userId)
         val newId = postDao.addToUnreadPost(postId, userId) ?: return null
         labelService.copyLabelsOnMove(postId, newId, LabelTarget.ARCHIVE, LabelTarget.UNREAD)
-        postDao.deletePost(postId, userId, PostType.ARCHIVE)
+        requireRowMoved(postDao.deletePost(postId, userId, PostType.ARCHIVE), postId)
         return newId
+    }
+
+    /**
+     * A move is insert-then-delete, and the two halves are not one atomic statement: two clicks
+     * (or the bot and the web at once) can both copy the row before either deletes it, leaving
+     * two copies on the far shelf. The loser of that race deletes nothing — so if the delete
+     * touched no row, the transaction is rolled back and its insert goes with it.
+     */
+    private fun requireRowMoved(deleted: Int, postId: Long) {
+        if (deleted == 0) {
+            logger.info("Concurrent move detected for post {} — rolling this one back", postId)
+            throw ConcurrentPostMoveException(postId)
+        }
     }
 
     fun getRandomPost(userId: Long): PostData? {

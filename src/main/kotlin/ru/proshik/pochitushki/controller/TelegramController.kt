@@ -1,5 +1,10 @@
 package ru.proshik.pochitushki.controller
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
+import java.security.MessageDigest
+import java.time.Duration
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -30,6 +35,18 @@ class TelegramController(
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    private val objectMapper = ObjectMapper()
+
+    /**
+     * update_id values seen recently. Telegram redelivers an update whenever the webhook
+     * call does not finish fast enough, and a redelivered /feed or import would run twice.
+     * Ten minutes is well past Telegram's retry window; the cap keeps this bounded.
+     */
+    private val seenUpdateIds: Cache<Long, Boolean> = Caffeine.newBuilder()
+        .expireAfterWrite(Duration.ofMinutes(10))
+        .maximumSize(10_000)
+        .build()
+
     /**
      * Process webhook updates from Telegram.
      */
@@ -38,17 +55,38 @@ class TelegramController(
         @RequestBody data: String,
         @RequestHeader(value = SECRET_TOKEN_HEADER, required = false) secretToken: String?,
     ) {
-        // Authenticate the caller: when a secret is configured, only Telegram (which echoes it
-        // back in this header) may post updates. The secret URL path alone is not sufficient.
+        // Authenticate the caller: only Telegram, which echoes the configured secret back in
+        // this header, may post updates. The secret URL path is not sufficient — it is the bot
+        // token, and tokens end up in proxy logs. The comparison is constant-time so the header
+        // cannot be guessed byte by byte from response timings.
         val expected = telegramProperties.webhookSecret
-        if (!expected.isNullOrBlank() && secretToken != expected) {
-            logger.warn("Rejected webhook call with missing/invalid secret token")
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid webhook secret")
+        if (!expected.isNullOrBlank()) {
+            val provided = secretToken.orEmpty()
+            if (!MessageDigest.isEqual(provided.toByteArray(), expected.toByteArray())) {
+                logger.warn("Rejected webhook call with missing/invalid secret token")
+                throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid webhook secret")
+            }
+        }
+
+        val updateId = extractUpdateId(data)
+        if (updateId != null && seenUpdateIds.getIfPresent(updateId) != null) {
+            logger.info("Skipping redelivered Telegram update: updateId={}", updateId)
+            return
         }
 
         botProvider.getBot().processUpdate(data)
+        updateId?.let { seenUpdateIds.put(it, true) }
 
-        logger.debug("Processed Telegram update: {}", data)
+        // The update body carries message text, names and file ids — logging it would put user
+        // content in the log. Only the id goes in.
+        logger.debug("Processed Telegram update: updateId={}", updateId)
+    }
+
+    /** null when the body is not JSON or carries no update_id — such a body is not deduplicated. */
+    private fun extractUpdateId(data: String): Long? = try {
+        objectMapper.readTree(data).path("update_id").takeIf { it.isNumber }?.asLong()
+    } catch (e: Exception) {
+        null
     }
 
     companion object {

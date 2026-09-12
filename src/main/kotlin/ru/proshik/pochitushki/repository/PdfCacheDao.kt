@@ -70,6 +70,16 @@ class PdfCacheDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemp
         return namedParameterJdbcTemplate.update(sql, params)
     }
 
+    /** Drops every expired row, whoever wrote it — the scheduled counterpart of the call above. */
+    fun deleteExpired(ttlDays: Long): Int {
+        val sql = """
+            DELETE FROM pdf_cache
+            WHERE created_date <= NOW() - make_interval(days => :ttl_days)
+        """.trimIndent()
+
+        return namedParameterJdbcTemplate.update(sql, MapSqlParameterSource().addValue("ttl_days", ttlDays.toInt()))
+    }
+
     // The url itself is stored alongside for debugging; the hash is what keeps the
     // primary key a fixed size regardless of how long a link is.
     private fun hash(url: String): String =

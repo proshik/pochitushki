@@ -35,6 +35,14 @@ class TelegramBotConfiguration(
             return stub
         }
 
+        val webhookMode = !telegramProperties.webhookUrl.isNullOrBlank()
+        // The webhook path is the bot token itself, and a token leaks easily (proxy access logs,
+        // APM, error reports). The header secret is what actually authenticates Telegram, so in
+        // webhook mode it is mandatory rather than "recommended in production".
+        check(!webhookMode || !telegramProperties.webhookSecret.isNullOrBlank()) {
+            "telegram.webhook-secret is required in webhook mode (set TELEGRAM_WEBHOOK_SECRET)"
+        }
+
         logger.info("initializing telegram bot")
         val bot = bot {
             token = telegramProperties.token
@@ -51,19 +59,26 @@ class TelegramBotConfiguration(
                 }
             }
 
-            if (!telegramProperties.webhookUrl.isNullOrBlank()) {
+            if (webhookMode) {
                 webhook {
                     url = telegramProperties.webhookUrl
-                    allowedUpdates = listOf("message")
+                    // Without "callback_query" Telegram delivers only messages, and every inline
+                    // button on a card (archive, delete, favourite, labels, PDF, paging) goes
+                    // nowhere. Polling has no such filter, which is why this only broke in prod.
+                    allowedUpdates = listOf("message", "callback_query")
                     // Telegram echoes this back in the X-Telegram-Bot-Api-Secret-Token header
                     // so the webhook endpoint can authenticate that updates really come from Telegram.
-                    telegramProperties.webhookSecret?.takeIf { it.isNotBlank() }?.let { secretToken = it }
+                    secretToken = telegramProperties.webhookSecret
                 }
             }
         }
 
-        if (!telegramProperties.webhookUrl.isNullOrBlank()) {
-            bot.startWebhook()
+        if (webhookMode) {
+            // startWebhook() returns false when setWebhook failed. The library only starts its
+            // dispatcher on success, and the update channel is unbuffered — so every incoming
+            // webhook request would then block forever on send and the bot would be silently
+            // dead until a restart. Fail the startup instead.
+            check(bot.startWebhook()) { "telegram setWebhook failed — refusing to start in webhook mode" }
             logger.info("telegram bot started in webhook mode")
         } else {
             bot.startPolling()
