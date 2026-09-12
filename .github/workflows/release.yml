@@ -21,12 +21,16 @@ jobs:
   tag:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Compute next version
         id: ver
+        # Ввод приходит через env, а не подстановкой ${{ }} в тело скрипта:
+        # подстановка склеивает значение с shell-командой до её разбора.
+        env:
+          BUMP: ${{ inputs.bump }}
         run: |
           latest=$(git tag --list 'v*' --sort=-v:refname | head -n1)
           if [ -z "$latest" ]; then
@@ -36,7 +40,7 @@ jobs:
             IFS=. read -r major minor patch <<<"$v"
           fi
 
-          case "${{ inputs.bump }}" in
+          case "$BUMP" in
             patch) patch=$((patch+1));;
             minor) minor=$((minor+1)); patch=0;;
             major) major=$((major+1)); minor=0; patch=0;;
