@@ -71,7 +71,7 @@ dependencies {
     // для Java 17+; старый bucket4j-core заморожен на 8.10.
     implementation("com.bucket4j:bucket4j_jdk17-core:8.19.0")
 
-    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
+    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.85")
     implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
 
     implementation("com.microsoft.playwright:playwright:1.52.0")
