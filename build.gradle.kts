@@ -67,6 +67,10 @@ dependencies {
     // Version comes from the Spring Boot BOM.
     implementation("com.github.ben-manes.caffeine:caffeine")
 
+    // Token-bucket лимиты на пользователя (RateLimitService). Артефакт _jdk17 — линейка
+    // для Java 17+; старый bucket4j-core заморожен на 8.10.
+    implementation("com.bucket4j:bucket4j_jdk17-core:8.19.0")
+
     implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
     implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
 
