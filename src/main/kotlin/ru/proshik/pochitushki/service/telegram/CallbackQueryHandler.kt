@@ -6,6 +6,7 @@ import com.github.kotlintelegrambot.entities.CallbackQuery
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import ru.proshik.pochitushki.model.PostType
+import ru.proshik.pochitushki.model.UserSettingsLimits
 import ru.proshik.pochitushki.service.TelegramService
 
 /**
@@ -193,14 +194,23 @@ class CallbackQueryHandler(
                 telegramService.getLanguageSettings(chatId, messageId)
             }
 
+            // callback_data is attacker-controllable (anyone can post an update with any data to
+            // a webhook whose path leaked), so both settings are checked against what the
+            // keyboards actually offer instead of being written through.
             TelegramKeyboard.CALLBACK_PROFILE_LANGUAGE_SETTINGS_CHANGE -> {
-                val languageCode = data
-                // TODO check exception
-                telegramService.updateUserSettingsLanguageCode(chatId, messageId, languageCode)
+                if (data !in UserSettingsLimits.SUPPORTED_LANGUAGES) {
+                    logger.warn("ignoring unsupported language in callback: {}", data)
+                    return
+                }
+                telegramService.updateUserSettingsLanguageCode(chatId, messageId, data)
             }
 
             TelegramKeyboard.CALLBACK_PROFILE_FEED_SETTINGS_CHANGE -> {
-                val tgFeedEntriesNumber = data.toInt()
+                val tgFeedEntriesNumber = data.toIntOrNull()
+                if (tgFeedEntriesNumber == null || tgFeedEntriesNumber !in UserSettingsLimits.FEED_ENTRIES_RANGE) {
+                    logger.warn("ignoring out-of-range feed size in callback: {}", data)
+                    return
+                }
                 telegramService.updateUserSettingsFeedCount(chatId, messageId, tgFeedEntriesNumber)
             }
 

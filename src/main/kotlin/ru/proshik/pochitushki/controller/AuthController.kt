@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseCookie
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 import feign.FeignException
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -84,9 +85,22 @@ class AuthController(
         }
     }
 
-    @GetMapping("/logout")
-    fun logout(response: HttpServletResponse): String {
+    /**
+     * POST, not GET: logging out changes state (it revokes every token of that user), and a
+     * GET would fire from any `<img src="/logout">` on a page the reader visits.
+     */
+    @PostMapping("/logout")
+    fun logout(request: HttpServletRequest, response: HttpServletResponse): String {
         logger.debug("Logout endpoint called")
+
+        // Dropping the cookie only removes this browser's copy. Stamping the user row is what
+        // makes an already-stolen token stop working before its TTL runs out.
+        val userId = request.cookies?.firstOrNull { it.name == "auth_token" }?.value
+            ?.let { jwtService.extractUserId(it) }
+        if (userId != null) {
+            userService.revokeTokens(userId)
+            logger.info("User {} logged out, tokens revoked", userId)
+        }
 
         clearCookie(response, "auth_token")
 

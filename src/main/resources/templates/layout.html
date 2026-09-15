@@ -26,7 +26,7 @@
 
   <!-- Strings app.js needs but cannot inline (CSP: script-src 'self'). -->
   <span id="app-i18n" hidden
-        th:attr="data-archived=#{web.toast.archived},data-undo=#{web.toast.undo},data-new-label=#{web.labels.new.placeholder}"></span>
+        th:attr="data-archived=#{web.toast.archived},data-undo=#{web.toast.undo},data-new-label=#{web.labels.new.placeholder},data-error-generic=#{web.toast.error},data-error-conflict=#{web.toast.conflict}"></span>
 
   <nav class="nav-links">
     <a href="/" th:classappend="${active == 'feed'} ? 'on'" th:text="#{web.nav.read}">Читать</a>

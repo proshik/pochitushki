@@ -29,6 +29,9 @@ extra["springCloudVersion"] = "2025.0.3"
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // Реестр метрик лежит в classpath, но эндпоинт /actuator/prometheus по умолчанию не
+    // выставлен (см. management в application.yml) — включается переменными окружения.
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")

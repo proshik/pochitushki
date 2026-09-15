@@ -563,6 +563,31 @@ document.addEventListener('htmx:afterRequest', function (e) {
   }
 });
 
+/* ── Failed htmx requests ──
+   Without this a failed archive/delete/favourite click did nothing at all: the
+   afterRequest chain above returns early on !successful, so the card stayed put
+   and the reader had no way to tell a lost request from an ignored click. */
+document.addEventListener('htmx:responseError', function (e) {
+  var status = e.detail.xhr && e.detail.xhr.status;
+  if (status === 401) { location.href = '/login'; return; }
+  showActionError(status === 409 ? 'conflict' : 'error');
+});
+
+document.addEventListener('htmx:sendError', function () { showActionError('error'); });
+
+function showActionError(kind) {
+  var i18n = document.getElementById('app-i18n');
+  var msg = (i18n && (kind === 'conflict' ? i18n.dataset.errorConflict : i18n.dataset.errorGeneric))
+    || (kind === 'conflict' ? 'Уже перенесено' : 'Не получилось, попробуйте ещё раз');
+  document.querySelectorAll('.add-error').forEach(function (t) { t.remove(); });
+  var toast = document.createElement('div');
+  toast.className = 'add-error';
+  toast.setAttribute('role', 'alert');
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(function () { toast.remove(); }, 4000);
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   /* Fail loudly if an hx-on / js: expression sneaks back in, rather than
      quietly needing 'unsafe-eval' again. */

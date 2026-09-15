@@ -23,7 +23,23 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             settings = SerializationUtils.fromJson(rs.getString("settings"), UserSettingsData::class),
             createdData = rs.getTimestamp("created_date").toLocalDateTime(),
             updatedData = rs.getTimestamp("updated_date").toLocalDateTime(),
+            tokensValidAfter = rs.getTimestamp("tokens_valid_after")?.toLocalDateTime(),
         )
+    }
+
+    /**
+     * Marks every token issued up to now as no longer acceptable. One second into the future,
+     * because the JWT's `iat` has second precision: a token minted in the same second as the
+     * logout would otherwise survive it.
+     */
+    fun revokeTokens(userId: Long) {
+        val sql = """
+            UPDATE users
+            SET tokens_valid_after = NOW() + INTERVAL '1 second', updated_date = NOW()
+            WHERE id = :user_id
+        """.trimIndent()
+
+        namedParameterJdbcTemplate.update(sql, MapSqlParameterSource().addValue("user_id", userId))
     }
 
     fun addUser(userStoreData: UserStoreData) {
@@ -44,7 +60,7 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun findUserByChatId(chatId: Long): UserData? {
         val sql = """
-            SELECT id, telegram_id, username, first_name, last_name, settings, created_date, updated_date
+            SELECT id, telegram_id, username, first_name, last_name, settings, tokens_valid_after, created_date, updated_date
             FROM users
             WHERE telegram_id = :telegram_id
         """.trimIndent()
@@ -57,7 +73,7 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getUserByChatId(chatId: Long): UserData {
         val sql = """
-            SELECT id, telegram_id, username, first_name, last_name, settings, created_date, updated_date
+            SELECT id, telegram_id, username, first_name, last_name, settings, tokens_valid_after, created_date, updated_date
             FROM users
             WHERE telegram_id = :telegram_id
         """.trimIndent()
@@ -70,7 +86,7 @@ class UserDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
 
     fun getUserById(userId: Long): UserData {
         val sql = """
-            SELECT id, telegram_id, username, first_name, last_name, settings, created_date, updated_date
+            SELECT id, telegram_id, username, first_name, last_name, settings, tokens_valid_after, created_date, updated_date
             FROM users
             WHERE id = :user_id
         """.trimIndent()

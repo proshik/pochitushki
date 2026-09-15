@@ -57,17 +57,31 @@ class OpenhtmlPdfGenerator(
         // Inline every remote image as a data URI so the renderer performs no network I/O of
         // its own. Handing it a remote src would put the fetch outside our SSRF guard: the
         // guard vets the URL we were given, while the renderer would follow redirects from it.
+        //
+        // Bounded twice over, because the heap is 256 MB and OOM kills the whole process
+        // (bot included): at most MAX_IMAGES images, and at most MAX_TOTAL_IMAGE_BYTES across
+        // all of them. Without the budget a page of a hundred 10 MB images was a way for any
+        // user to take the service down with one link.
+        var inlinedImages = 0
+        var inlinedBytes = 0L
         for (img in cleanDoc.select("img[src]")) {
             val src = img.attr("src")
-            if (src.isNotBlank() && !src.startsWith("data:")) {
-                val resolved = img.absUrl("src").ifBlank { resolveUrl(url, src) }
-                val dataUri = inlineImage(resolved)
-                if (dataUri != null) {
-                    img.attr("src", dataUri)
-                } else {
-                    logger.debug("Removing image that could not be inlined: {}", resolved)
-                    img.remove()
-                }
+            if (src.isBlank() || src.startsWith("data:")) continue
+
+            if (inlinedImages >= MAX_IMAGES || inlinedBytes >= MAX_TOTAL_IMAGE_BYTES) {
+                img.remove()
+                continue
+            }
+
+            val resolved = img.absUrl("src").ifBlank { resolveUrl(url, src) }
+            val dataUri = inlineImage(resolved, MAX_TOTAL_IMAGE_BYTES - inlinedBytes)
+            if (dataUri != null) {
+                img.attr("src", dataUri)
+                inlinedImages++
+                inlinedBytes += dataUri.length.toLong()
+            } else {
+                logger.debug("Removing image that could not be inlined: {}", resolved)
+                img.remove()
             }
         }
 
@@ -135,13 +149,23 @@ class OpenhtmlPdfGenerator(
      * Formats PDFBox embeds directly are passed through untouched; anything else (WebP, TIFF, …)
      * is decoded and re-encoded as PNG.
      */
-    private fun inlineImage(imageUrl: String): String? {
-        val (bytes, contentType) = fetchImage(imageUrl) ?: return null
+    private fun inlineImage(imageUrl: String, remainingBudget: Long): String? {
+        val limit = minOf(MAX_IMAGE_BYTES.toLong(), remainingBudget).toInt()
+        if (limit <= 0) return null
+
+        val (bytes, contentType) = fetchImage(imageUrl, limit) ?: return null
 
         val mediaType = contentType ?: guessMediaTypeFromPath(imageUrl)
         if (mediaType in DIRECTLY_EMBEDDABLE_MEDIA_TYPES) {
             return "data:$mediaType;base64,${Base64.getEncoder().encodeToString(bytes)}"
         }
+
+        // A format PDFBox cannot embed has to be decoded first, and decoding is where the
+        // bytes stop bounding the memory: a few KB of WebP or TIFF can declare 16000x16000
+        // and allocate a gigabyte of raster. Read the header, check the pixel count, and only
+        // then decode. ImageIO.read would otherwise throw OutOfMemoryError, which `catch
+        // (Exception)` does not catch and which takes the JVM down with ExitOnOutOfMemoryError.
+        if (!isDecodableSize(bytes, imageUrl)) return null
 
         return try {
             val image = bytes.inputStream().use { ImageIO.read(it) } ?: return null
@@ -166,7 +190,38 @@ class OpenhtmlPdfGenerator(
      * the guard. Article images have no legitimate need for a redirect, so refusing is simpler
      * and safer than following-and-revalidating.
      */
-    private fun fetchImage(imageUrl: String): Pair<ByteArray, String?>? {
+    /**
+     * True when the image header declares a pixel count we are willing to decode.
+     * Unreadable headers are refused rather than decoded blindly.
+     */
+    private fun isDecodableSize(bytes: ByteArray, imageUrl: String): Boolean = try {
+        ImageIO.createImageInputStream(bytes.inputStream()).use { input ->
+            val readers = ImageIO.getImageReaders(input)
+            if (!readers.hasNext()) {
+                logger.debug("No ImageIO reader for image: {}", imageUrl)
+                false
+            } else {
+                val reader = readers.next()
+                try {
+                    reader.setInput(input, true, true)
+                    val pixels = reader.getWidth(0).toLong() * reader.getHeight(0).toLong()
+                    if (pixels > MAX_IMAGE_PIXELS) {
+                        logger.debug("Skipping oversized image ({} px): {}", pixels, imageUrl)
+                        false
+                    } else {
+                        true
+                    }
+                } finally {
+                    reader.dispose()
+                }
+            }
+        }
+    } catch (e: Exception) {
+        logger.debug("Could not read image header: {} => {}", imageUrl, e.message)
+        false
+    }
+
+    private fun fetchImage(imageUrl: String, maxBytes: Int): Pair<ByteArray, String?>? {
         if (!urlSecurityValidator.isAllowed(imageUrl)) {
             logger.debug("Refusing image with disallowed URL: {}", imageUrl)
             return null
@@ -189,9 +244,9 @@ class OpenhtmlPdfGenerator(
             }
 
             // Cap the download to avoid decompression-bomb / huge images exhausting memory.
-            val bytes = connection.inputStream.use { readUpTo(it, MAX_IMAGE_BYTES) }
+            val bytes = connection.inputStream.use { readUpTo(it, maxBytes) }
                 ?: run {
-                    logger.debug("Skipping oversized image (> {} bytes): {}", MAX_IMAGE_BYTES, imageUrl)
+                    logger.debug("Skipping oversized image (> {} bytes): {}", maxBytes, imageUrl)
                     return null
                 }
 
@@ -246,6 +301,11 @@ class OpenhtmlPdfGenerator(
     companion object {
         private const val FONT_FAMILY = "document-font"
         private const val MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB per image
+        /** Across the whole document, counted as base64 characters actually embedded. */
+        private const val MAX_TOTAL_IMAGE_BYTES = 20L * 1024 * 1024
+        private const val MAX_IMAGES = 50
+        /** ~25 megapixels: an A4 page at 600 dpi is 35 MP, a photo from a phone is 12. */
+        private const val MAX_IMAGE_PIXELS = 25_000_000L
         private const val USER_AGENT = "Mozilla/5.0 (compatible; Pochitushki/1.0)"
 
         /** Embedded as-is — no decode/re-encode round trip. */

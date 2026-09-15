@@ -21,6 +21,7 @@ import ru.proshik.pochitushki.model.LabelData
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserStoreData
+import ru.proshik.pochitushki.service.telegram.BotTaskExecutor
 import ru.proshik.pochitushki.service.telegram.PendingLabelInput
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
 
@@ -38,6 +39,8 @@ class TelegramService(
     private val labelService: LabelService,
     private val pendingLabelInput: PendingLabelInput,
     private val pdfCacheService: PdfCacheService,
+    private val botTaskExecutor: BotTaskExecutor,
+    private val rateLimitService: RateLimitService,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -208,19 +211,18 @@ class TelegramService(
         } else {
             logger.debug("post already added: chatId={}, url={}", chatId, url)
 
-            storedPost.forEach { post ->
-                val message = buildPostMessage(
-                    url.toString(),
-                    post.title,
-                    i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode),
-                    labels = post.labels,
-                )
-                val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.UNREAD, post.isFavorite, user.settings.languageCode)
+            // One answer, not one per row: the lookup is an exact match now, and any
+            // historical duplicates of the same URL would otherwise each get a card.
+            val post = storedPost.first()
+            val message = buildPostMessage(
+                url.toString(),
+                post.title,
+                i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode),
+                labels = post.labels,
+            )
+            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.UNREAD, post.isFavorite, user.settings.languageCode)
 
-                val postFeedItem = PostFeedItem(message, keyboard)
-
-                sendPostMessage(chatId = chatId, postItem = postFeedItem)
-            }
+            sendPostMessage(chatId = chatId, postItem = PostFeedItem(message, keyboard))
         }
 
         logger.info("addPost success: chatId={}, messageId={}, rawUrl={}", chatId, messageId, rawUrl)
@@ -256,7 +258,13 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("toArchivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.archivePost(postId, user.id)
+        // A double tap on the same inline button sends the same callback twice. The loser of
+        // that race is told nothing — the post is archived either way, and the card goes.
+        try {
+            postService.archivePost(postId, user.id)
+        } catch (e: ConcurrentPostMoveException) {
+            logger.info("toArchivePost: post {} already moved by a concurrent request", postId)
+        }
 
         botProvider.getBot().deleteMessage(
             chatId = ChatId.fromId(chatId),
@@ -272,7 +280,11 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("archivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.archivePost(postId, user.id)
+        try {
+            postService.archivePost(postId, user.id)
+        } catch (e: ConcurrentPostMoveException) {
+            logger.info("archivePost: post {} already moved by a concurrent request", postId)
+        }
 
         logger.info("archivePost success: chatId={}, postId={}", chatId, postId)
     }
@@ -283,7 +295,11 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
         logger.debug("toUnreadPost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
 
-        postService.unreadPost(postId, user.id)
+        try {
+            postService.unreadPost(postId, user.id)
+        } catch (e: ConcurrentPostMoveException) {
+            logger.info("toUnreadPost: post {} already moved by a concurrent request", postId)
+        }
 
         botProvider.getBot().deleteMessage(
             chatId = ChatId.fromId(chatId),
@@ -300,7 +316,12 @@ class TelegramService(
             logger.warn("favoritesToArchive: post not found postId={}", postId)
             return
         }
-        val newArchiveId = postService.archivePost(postId, user.id) ?: run {
+        val newArchiveId = try {
+            postService.archivePost(postId, user.id)
+        } catch (e: ConcurrentPostMoveException) {
+            logger.info("favoritesToArchive: post {} already moved by a concurrent request", postId)
+            return
+        } ?: run {
             logger.warn("favoritesToArchive: post not owned/found postId={}", postId)
             return
         }
@@ -317,7 +338,12 @@ class TelegramService(
             logger.warn("favoritesToUnread: post not found postId={}", postId)
             return
         }
-        val newUnreadId = postService.unreadPost(postId, user.id) ?: run {
+        val newUnreadId = try {
+            postService.unreadPost(postId, user.id)
+        } catch (e: ConcurrentPostMoveException) {
+            logger.info("favoritesToUnread: post {} already moved by a concurrent request", postId)
+            return
+        } ?: run {
             logger.warn("favoritesToUnread: post not owned/found postId={}", postId)
             return
         }
@@ -603,23 +629,48 @@ class TelegramService(
             return
         }
 
+        if (!rateLimitService.tryAcquire(user.id, RateLimitService.Action.GENERATE_PDF)) {
+            sendMessage(chatId, i18nService.getMessage("command.rate_limited", user.settings.languageCode))
+            return
+        }
+
+        // Rendering takes seconds to a minute; the library dispatches every update on one
+        // thread, so doing it here would stall every other user's commands (and, in webhook
+        // mode, make Telegram time out and redeliver the same button press).
+        val accepted = botTaskExecutor.submit("pdf postId=$postId engine=$engine") {
+            generateAndSendPdf(chatId, user.id, post.url, post.title, postId, engine, generator, user.settings.languageCode)
+        }
+        if (!accepted) {
+            sendMessage(chatId, i18nService.getMessage("command.busy", user.settings.languageCode))
+        }
+    }
+
+    private fun generateAndSendPdf(
+        chatId: Long,
+        userId: Long,
+        url: String,
+        title: String?,
+        postId: Long,
+        engine: String,
+        generator: PdfGenerator,
+        languageCode: String,
+    ) {
         try {
             // Same article, same engine, within the month → no refetch, no re-render.
-            val pdfBytes = pdfCacheService.getOrGenerate(user.id, post.url, engine) {
-                generator.generatePdf(post.url)
+            val pdfBytes = pdfCacheService.getOrGenerate(userId, url, engine) {
+                generator.generatePdf(url)
             }
-            val filename = generatePdfFilename(post.title, post.url)
 
             botProvider.getBot().sendDocument(
                 chatId = ChatId.fromId(chatId),
-                document = TelegramFile.ByByteArray(pdfBytes, filename),
-                caption = post.title ?: post.url
+                document = TelegramFile.ByByteArray(pdfBytes, generatePdfFilename(title, url)),
+                caption = title ?: url
             )
 
             logger.info("sendPostPdf success: chatId={}, postId={}, engine={}", chatId, postId, engine)
         } catch (e: Exception) {
-            logger.warn("sendPostPdf error: postId={}, url={}, engine={}", postId, post.url, engine, e)
-            sendMessage(chatId, i18nService.getMessage("command.pdf.error", user.settings.languageCode))
+            logger.warn("sendPostPdf error: postId={}, url={}, engine={}", postId, url, engine, e)
+            sendMessage(chatId, i18nService.getMessage("command.pdf.error", languageCode))
         }
     }
 
@@ -641,6 +692,11 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId)
             ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
+        if (!rateLimitService.tryAcquire(user.id, RateLimitService.Action.IMPORT)) {
+            sendMessage(chatId, i18nService.getMessage("command.rate_limited", user.settings.languageCode))
+            return
+        }
+
         val byteArray = botProvider.getBot().downloadFileBytes(fileId)
         if (byteArray == null) {
             sendMessage(chatId, i18nService.getMessage("command.import.download_error", user.settings.languageCode))
@@ -650,17 +706,27 @@ class TelegramService(
         val file = File.createTempFile("pocket_import_${user.id}_", ".zip")
         FileUtils.writeByteArrayToFile(file, byteArray)
 
-        try {
-            importService.importZipArchive(user.id, file)
-            sendMessage(chatId, i18nService.getMessage("command.import.success", user.settings.languageCode))
-        } catch (ex: Exception) {
-            logger.warn("import file error: userId={}", user.id, ex)
-            sendMessage(chatId, i18nService.getMessage("command.import.error", user.settings.languageCode))
-        } finally {
+        val languageCode = user.settings.languageCode
+        val userId = user.id
+        // Off the dispatcher thread: an import parses up to MAX_POSTS rows and writes them in
+        // one transaction, and every other user's commands queue behind it otherwise.
+        val accepted = botTaskExecutor.submit("import userId=$userId") {
+            try {
+                importService.importZipArchive(userId, file)
+                sendMessage(chatId, i18nService.getMessage("command.import.success", languageCode))
+            } catch (ex: Exception) {
+                logger.warn("import file error: userId={}", userId, ex)
+                sendMessage(chatId, i18nService.getMessage("command.import.error", languageCode))
+            } finally {
+                FileUtils.delete(file)
+            }
+        }
+        if (!accepted) {
             FileUtils.delete(file)
+            sendMessage(chatId, i18nService.getMessage("command.busy", languageCode))
         }
 
-        logger.info("importData success: chatId={}", chatId)
+        logger.info("importData accepted: chatId={}", chatId)
     }
 
     fun showImportInstruction(chatId: Long) {
@@ -680,24 +746,33 @@ class TelegramService(
         val user = userService.findUserByChatId(chatId)
             ?: throw RuntimeException("Can't find user data for chatId=$chatId")
 
-        val file = exportService.export(user.id)
-        if (file == null) {
-            sendMessage(chatId, i18nService.getMessage("command.export.nothing_to_export", user.settings.languageCode))
-            return
-        }
+        val languageCode = user.settings.languageCode
+        val userId = user.id
 
-        try {
-            val bytes = file.readBytes()
-            botProvider.getBot().sendDocument(
-                chatId = ChatId.fromId(chatId),
-                document = TelegramFile.ByByteArray(bytes, file.name),
-            )
-            logger.info("export success: chatId={}", chatId)
-        } catch (e: Exception) {
-            logger.warn("export send error: chatId={}", chatId, e)
-            sendMessage(chatId, i18nService.getMessage("command.export.error", user.settings.languageCode))
-        } finally {
-            file.delete()
+        // Export reads every post the user owns and zips it — same reason as import.
+        val accepted = botTaskExecutor.submit("export userId=$userId") {
+            val file = exportService.export(userId)
+            if (file == null) {
+                sendMessage(chatId, i18nService.getMessage("command.export.nothing_to_export", languageCode))
+                return@submit
+            }
+
+            try {
+                val bytes = file.readBytes()
+                botProvider.getBot().sendDocument(
+                    chatId = ChatId.fromId(chatId),
+                    document = TelegramFile.ByByteArray(bytes, file.name),
+                )
+                logger.info("export success: chatId={}", chatId)
+            } catch (e: Exception) {
+                logger.warn("export send error: chatId={}", chatId, e)
+                sendMessage(chatId, i18nService.getMessage("command.export.error", languageCode))
+            } finally {
+                file.delete()
+            }
+        }
+        if (!accepted) {
+            sendMessage(chatId, i18nService.getMessage("command.busy", languageCode))
         }
     }
 
@@ -934,8 +1009,12 @@ class TelegramService(
         handleTgErrorResponse(result, chatId)
     }
 
+    // The backslash goes first: escaping it after the others would double-escape the
+    // backslashes this function just inserted. A title containing a literal "\*" otherwise
+    // either injected markup or made Telegram reject the message with a 400.
     private fun escapeTextMarkdown2(text: String): String =
         text
+            .replace("\\", "\\\\")
             .replace("_", "\\_")
             .replace("*", "\\*")
             .replace("[", "\\[")

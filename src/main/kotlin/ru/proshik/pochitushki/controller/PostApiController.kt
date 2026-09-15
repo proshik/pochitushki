@@ -21,9 +21,11 @@ import org.springframework.web.server.ResponseStatusException
 import ru.proshik.pochitushki.configuration.JwtAuthInterceptor
 import ru.proshik.pochitushki.model.PostType
 import org.springframework.http.HttpHeaders
+import ru.proshik.pochitushki.service.ConcurrentPostMoveException
 import ru.proshik.pochitushki.service.CoverService
 import ru.proshik.pochitushki.service.OgImageProxyService
 import ru.proshik.pochitushki.service.PostService
+import ru.proshik.pochitushki.service.RateLimitService
 import ru.proshik.pochitushki.service.SsrfValidationException
 import ru.proshik.pochitushki.service.UrlSecurityValidator
 
@@ -34,6 +36,7 @@ class PostApiController(
     private val urlSecurityValidator: UrlSecurityValidator,
     private val coverService: CoverService,
     private val ogImageProxyService: OgImageProxyService,
+    private val rateLimitService: RateLimitService,
 ) {
 
     @GetMapping("/fragment")
@@ -116,6 +119,13 @@ class PostApiController(
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         model: Model
     ): String {
+        // Each save makes the server fetch a URL the caller chose, so it is budgeted: otherwise
+        // one account is a traffic amplifier pointed at someone else's host, and a loop of
+        // requests keeps every Tomcat thread busy on outbound I/O.
+        if (!rateLimitService.tryAcquire(userId, RateLimitService.Action.ADD_POST)) {
+            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many requests")
+        }
+
         val parsedUrl = try {
             URL(url).also { u ->
                 if (u.protocol !in listOf("http", "https")) {
@@ -157,8 +167,12 @@ class PostApiController(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
     ): ResponseEntity<Map<String, Long>> {
-        val archivedId = postService.archivePost(id, userId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
+        val archivedId = try {
+            postService.archivePost(id, userId)
+        } catch (e: ConcurrentPostMoveException) {
+            // Two clicks on the same card: the other one won and the post is already archived.
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Post was moved concurrently")
+        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         return ResponseEntity.ok(mapOf("archivedId" to archivedId))
     }
 
@@ -167,8 +181,11 @@ class PostApiController(
         @RequestAttribute("userId") userId: Long,
         @PathVariable id: Long
     ): ResponseEntity<Void> {
-        postService.unreadPost(id, userId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
+        try {
+            postService.unreadPost(id, userId)
+        } catch (e: ConcurrentPostMoveException) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Post was moved concurrently")
+        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         return ResponseEntity.ok().build()
     }
 

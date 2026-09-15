@@ -175,15 +175,18 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             PostType.ALL -> error("findPost does not support ALL")
         }
 
+        // Exact match, not `ILIKE :url || '%'`: a prefix match reported ".../article" as already
+        // saved whenever ".../article-2" happened to be on the shelf, and `_`/`%` inside a URL
+        // acted as wildcards — so a whole domain could match everything under it.
         val sql = """
             SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, og_image_url, created_date, updated_date
             FROM $tableName
-            WHERE user_id = :user_id AND url ilike :url
+            WHERE user_id = :user_id AND url = :url
         """.trimIndent()
 
         val params = MapSqlParameterSource()
             .addValue("user_id", userId)
-            .addValue("url", "$url%")
+            .addValue("url", url)
 
         return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
     }

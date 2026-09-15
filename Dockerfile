@@ -31,10 +31,16 @@ RUN java -Djarmode=tools -jar app.jar extract --destination /app/extracted && rm
 # To include Playwright again: docker build --build-arg INSTALL_PLAYWRIGHT=true
 ARG INSTALL_PLAYWRIGHT=false
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+# The else branch drops playwright's driver-bundle jar: ~200MB of node + browser driver that
+# only the Playwright engine ever loads, dead weight in every layer when the engine is off.
+# (No `#` comments inside the RUN below — line continuations make one logical line, and a
+# comment would swallow the rest of it.)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends fonts-dejavu-core && \
+    apt-get install -y --no-install-recommends fonts-dejavu-core curl && \
     if [ "$INSTALL_PLAYWRIGHT" = "true" ]; then \
       java -cp "/app/extracted/lib/*" com.microsoft.playwright.CLI install --with-deps chromium; \
+    else \
+      rm -f /app/extracted/lib/driver-bundle-*.jar; \
     fi && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
@@ -54,4 +60,10 @@ USER spring:spring
 ENV JAVA_TOOL_OPTIONS="-XX:+UseSerialGC -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError"
 
 EXPOSE 8080
+
+# readiness, а не liveness: она включает проверку БД, и контейнер без базы честно
+# считается неготовым принимать трафик.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD curl -fsS http://localhost:8080/actuator/health/readiness || exit 1
+
 ENTRYPOINT ["java", "-jar", "/app/extracted/app.jar"]

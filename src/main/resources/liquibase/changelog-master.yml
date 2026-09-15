@@ -13,3 +13,7 @@ databaseChangeLog:
       file: liquibase/scripts/6_backfill_labels_from_tags.sql
   - include:
       file: liquibase/scripts/7_add_pdf_cache.sql
+  - include:
+      file: liquibase/scripts/8_fix_indexes.sql
+  - include:
+      file: liquibase/scripts/9_add_token_revocation.sql

@@ -10,7 +10,12 @@ data class UserData(
     val lastName: String?,
     val settings: UserSettingsData,
     val createdData: LocalDateTime,
-    val updatedData: LocalDateTime
+    val updatedData: LocalDateTime,
+    /**
+     * Tokens issued before this moment are refused (see JwtAuthInterceptor). Stamped by
+     * logout; null for a user who has never logged out.
+     */
+    val tokensValidAfter: LocalDateTime? = null,
 )
 
 data class UserStoreData(

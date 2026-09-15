@@ -44,4 +44,13 @@ src/main/resources/application-local.yml
 .worktrees/
 
 ### Локальная разработка ###
-.env.dev
+.env
+.env.*
+!.env.dev.example
+
+### macOS ###
+.DS_Store
+
+### Агентские артефакты и логи ###
+.superpowers/
+*.log

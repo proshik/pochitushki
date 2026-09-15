@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.model.UserData
 import ru.proshik.pochitushki.model.UserSettingsData
+import ru.proshik.pochitushki.model.UserSettingsLimits
 import ru.proshik.pochitushki.model.UserStoreData
 import ru.proshik.pochitushki.repository.UserDao
 
@@ -32,13 +33,21 @@ class UserService(private val userDao: UserDao) {
         userDao.updateUserSettings(userId, updatedUserSettings)
     }
 
+    /**
+     * Invalidates every JWT already issued to this user (logout). The token itself stays
+     * signed and unexpired — what changes is that the interceptor now refuses it.
+     */
+    fun revokeTokens(userId: Long) {
+        userDao.revokeTokens(userId)
+    }
+
     fun getOrCreateUser(telegramId: Long, firstName: String?, username: String?, languageCode: String): UserData {
         val existing = userDao.findUserByChatId(telegramId)
         if (existing != null) return existing
 
         logger.info("New user registered: telegramId={}, username={}", telegramId, username)
 
-        val resolvedLang = if (languageCode in setOf("ru", "en")) languageCode else "ru"
+        val resolvedLang = if (languageCode in UserSettingsLimits.SUPPORTED_LANGUAGES) languageCode else "ru"
         return try {
             userDao.addUser(
                 UserStoreData(

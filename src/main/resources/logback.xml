@@ -2,8 +2,10 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
+    <!-- requestId приходит из RequestIdFilter. Раньше здесь печатались transaction.id и
+         trace.id, которые никто не заполнял, — то есть пустые скобки в каждой строке. -->
     <property name="CONSOLE_LOG_PATTERN"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS Z} [%X{transaction.id},%X{trace.id}] [%thread] %-5level [%class{0}] : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS Z} [%X{requestId:-}] [%thread] %-5level [%class{0}] : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
 
     <appender name="ConsoleAppender" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -15,7 +17,8 @@
         <appender-ref ref="ConsoleAppender"/>
     </root>
 
-    <logger name="ru.proshik.pochitushki" level="DEBUG"/>
+    <!-- Уровень приложения задаётся в application.yml (logging.level), а не прибит здесь:
+         на DEBUG в лог уезжают URL сохранённых ссылок и тела апдейтов Telegram. -->
 
     <!-- to suppress useless WARN: https://github.com/Netflix/Hystrix/issues/275 -->
     <logger name="com.netflix.config.sources.URLConfigurationSource" level="ERROR"/>

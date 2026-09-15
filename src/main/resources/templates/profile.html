@@ -10,7 +10,10 @@
         th:text="${user.firstName != null ? user.firstName : user.username}">Name</h1>
     <span class="profile-sub"
           th:text="${user.username != null ? '@' + user.username + ' · Telegram' : 'Telegram'}">@username</span>
-    <a href="/logout" class="btn btn-ghost" th:text="#{web.profile.logout}">Выйти</a>
+    <!-- Форма, а не ссылка: выход отзывает выданные токены, то есть меняет состояние. -->
+    <form method="post" action="/logout">
+      <button type="submit" class="btn btn-ghost" th:text="#{web.profile.logout}">Выйти</button>
+    </form>
   </div>
 
   <div class="stats">

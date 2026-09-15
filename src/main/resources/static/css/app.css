@@ -107,6 +107,11 @@ a { color: inherit; }
   padding: 10px 16px; font-size: 13px; box-shadow: var(--shadow-s); z-index: 40;
 }
 
+/* Страница ошибки (templates/error.html) — вместо Whitelabel Error Page. */
+.error-page { text-align: center; padding-block: 80px; }
+.error-code { font-size: 64px; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.02em; }
+.error-text { margin: 0 0 24px; color: var(--muted); }
+
 /* Undo toast — inverted ink so it reads as chrome, not as another card. */
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px;

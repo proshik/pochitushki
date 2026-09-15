@@ -37,7 +37,11 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
 
     private lateinit var wireMockExternalUrl: WireMockServer
 
-    private var updateIdCounter = 100
+    // Общий на класс и монотонный. Контроллер отбрасывает повторный update_id (Telegram
+    // пересылает необработанный апдейт), а кэш дедупликации живёт в контексте Spring —
+    // то есть переживает отдельный тест. Счётчик, стартующий заново в каждом тесте, отдавал
+    // бы уже виденные id, и апдейты молча исчезали.
+    private fun nextUpdateId(): Int = updateIdCounter.incrementAndGet()
 
     @BeforeEach
     fun setUp() {
@@ -63,7 +67,7 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
 
     @Test
     fun `start command should call sendMessage with chat_id`() {
-        postUpdate(buildStartUpdate(updateId = 1, messageId = 1))
+        postUpdate(buildStartUpdate(updateId = nextUpdateId(), messageId = nextUpdateId()))
 
         awaitSendMessage()
         wireMockTelegramApi.verify(
@@ -625,7 +629,9 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         setupTelegramApiStubs()
     }
 
-    private fun nextUpdateId(): Int = updateIdCounter++
+    companion object {
+        private val updateIdCounter = java.util.concurrent.atomic.AtomicInteger(1000)
+    }
 
     private fun getUserId(): Long {
         return jdbcTemplate.queryForObject(

@@ -61,14 +61,42 @@ class ProfileApiControllerTest : BaseIntegrationTest() {
             post("/api/v1/profile/settings")
                 .with(withAuth(userId))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"tgFeedEntriesNumber":20}""")
+                .content("""{"tgFeedEntriesNumber":4}""")
         ).andExpect(status().isOk)
 
         val count = jdbcTemplate.queryForObject(
             "SELECT (settings->>'tgFeedEntriesNumber')::int FROM users WHERE id = ?",
             Int::class.java, userId
         )
-        assertEquals(20, count)
+        assertEquals(4, count)
+    }
+
+    @Test
+    fun `POST settings rejects a feed size the keyboard never offers`() {
+        // The value decides how many messages one /feed sends; 100000 would occupy the bot
+        // for hours. Only what buildSettingsFeedKeyboard draws (1..5) is accepted.
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"tgFeedEntriesNumber":100000}""")
+        ).andExpect(status().isBadRequest)
+
+        val count = jdbcTemplate.queryForObject(
+            "SELECT (settings->>'tgFeedEntriesNumber')::int FROM users WHERE id = ?",
+            Int::class.java, userId
+        )
+        assertEquals(5, count)
+    }
+
+    @Test
+    fun `POST settings rejects an unsupported language`() {
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"languageCode":"zz"}""")
+        ).andExpect(status().isBadRequest)
     }
 
     @Test

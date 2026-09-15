@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="#{web.error.title}">Ошибка — Почитушки</title>
+  <link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
+  <script src="/js/theme-init.js"></script>
+  <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<!-- Своя страница вместо Whitelabel Error Page: та показывает читателю трассу Spring'а
+     и ничего не предлагает сделать. Модели у неё нет, поэтому ни topbar, ни userInfo. -->
+<main class="page-main error-page">
+  <h1 class="error-code" th:text="${status} ?: '500'">500</h1>
+  <p class="error-text" th:text="#{web.error.text}">Что-то пошло не так. Попробуйте ещё раз.</p>
+  <a class="btn" href="/" th:text="#{web.error.home}">На главную</a>
+</main>
+</body>
+</html>
