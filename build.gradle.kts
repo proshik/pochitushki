@@ -65,7 +65,7 @@ dependencies {
 
     implementation("tools.jackson.dataformat:jackson-dataformat-csv")
 
-    implementation("org.jsoup:jsoup:1.21.1")
+    implementation("org.jsoup:jsoup:1.23.2")
 
     // Bounded in-memory cache for the OG image proxy (weight = bytes, not entries).
     // Version comes from the Spring Boot BOM.
@@ -73,9 +73,9 @@ dependencies {
 
     // Token-bucket лимиты на пользователя (RateLimitService). Артефакт _jdk17 — линейка
     // для Java 17+; старый bucket4j-core заморожен на 8.10.
-    implementation("com.bucket4j:bucket4j_jdk17-core:8.19.0")
+    implementation("com.bucket4j:bucket4j_jdk17-core:8.20.0")
 
-    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.85")
+    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.86")
     implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
 
     implementation("com.microsoft.playwright:playwright:1.52.0")
