@@ -59,7 +59,7 @@ dependencies {
     // The K2 compiler (Kotlin 2.x) requires those types on the compile classpath, while the
     // library declares retrofit as `implementation` (runtime-only). Pin it to the version the
     // bot resolves transitively (see runtimeClasspath) so nothing changes at runtime.
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:retrofit:3.0.0")
 
     implementation("org.apache.commons:commons-csv:1.14.1")
 
