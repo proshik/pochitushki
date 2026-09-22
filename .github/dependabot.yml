@@ -11,6 +11,11 @@ updates:
         patterns:
           - "org.springframework*"
           - "io.spring*"
+    ignore:
+      # Boot 4.1+ пока не поддержан ни одним релизом Spring Cloud (2025.1.x собран под 4.0.x),
+      # PR на него заведомо красный. Снять, когда выйдет Spring Cloud 2026.0.
+      - dependency-name: "org.springframework.boot*"
+        versions: [">= 4.1.0"]
 
   - package-ecosystem: github-actions
     directory: "/"

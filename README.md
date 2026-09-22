@@ -7,7 +7,7 @@
 [![Last commit](https://img.shields.io/github/last-commit/proshik/pochitushki)](https://github.com/proshik/pochitushki/commits)
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.16-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.8-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk&logoColor=white)](https://adoptium.net)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -329,7 +329,7 @@ sequenceDiagram
 
 ## Технологии
 
-Kotlin 2.4 · Spring Boot 3.5 · Java 25 · PostgreSQL 16 · Spring JDBC (без ORM) ·
+Kotlin 2.4 · Spring Boot 4.0 · Java 25 · PostgreSQL 16 · Spring JDBC (без ORM) ·
 Liquibase · Thymeleaf · kotlin-telegram-bot · JJWT · OpenHTMLToPDF / Playwright ·
 TestContainers
 

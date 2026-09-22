@@ -228,7 +228,12 @@ TTL 30 дней. Ключ — **(user_id, sha256(url), engine)**, а не post_i
 
 ## Code Conventions
 
-- Kotlin 2.4, Spring Boot 3.5.16, Java 25
+- Kotlin 2.4, Spring Boot 4.0.8 (Spring Cloud 2025.1.3 — он и держит Boot на 4.0.x: под 4.1 релиза Cloud пока нет), Jackson 3 (`tools.jackson.*`; аннотации остаются в `com.fasterxml.jackson.annotation`), Java 25
+- Boot 4 разнёс автоконфигурацию по модулям, и промахи тут **тихие**: голый `liquibase-core`
+  без `spring-boot-starter-liquibase` не накатывает миграции, а переименованные ключи
+  (`server.error.*` → `spring.web.error.*`) просто игнорируются. После смены версии Boot
+  запускать приложение с `spring-boot-properties-migrator` в `runtimeOnly` и читать его отчёт
+  в логе старта; в репозиторий migrator не коммитить
 - Стиль: официальный Kotlin style guide
 - Нет ORM — только `NamedParameterJdbcTemplate` с ручным SQL
 - Интернационализация через `I18nService` (EN/RU); бандлы лежат в

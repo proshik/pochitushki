@@ -70,7 +70,7 @@ class LabelBackfillMigrationTest : BaseIntegrationTest() {
         jdbcTemplate.queryForList(
             "SELECT l.name FROM $table pl JOIN label l ON l.id = pl.label_id WHERE pl.post_id = ? ORDER BY l.name",
             String::class.java, postId
-        )
+        ).map { it!! }
 
     @Test
     fun `plain tags become labels linked to their post`() {

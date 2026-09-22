@@ -1,8 +1,5 @@
 package ru.proshik.pochitushki.service
 
-import com.fasterxml.jackson.dataformat.csv.CsvMapper
-import com.fasterxml.jackson.dataformat.csv.CsvSchema
-import com.fasterxml.jackson.module.paramnames.ParameterNamesModule
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipInputStream
@@ -15,6 +12,8 @@ import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.PostStoreDataWithId
 import ru.proshik.pochitushki.model.toPostStoreDataWithId
 import ru.proshik.pochitushki.repository.PostDao
+import tools.jackson.dataformat.csv.CsvMapper
+import tools.jackson.dataformat.csv.CsvSchema
 
 /** Raised when an uploaded archive exceeds the safety limits (zip bomb / too many records). */
 class ImportLimitException(message: String) : RuntimeException(message)
@@ -40,8 +39,8 @@ class ImportService(
     fun importZipArchive(userId: Long, file: File) {
         logger.info("started importZipArchive for userId={}", userId)
 
+        // Имена параметров конструктора Jackson 3 читает сам, отдельный ParameterNamesModule не нужен.
         val csvMapper = CsvMapper()
-            .registerModule(ParameterNamesModule())
         val schema = CsvSchema.emptySchema().withHeader()
 
         val unreadPosts = mutableListOf<PostStoreData>()
