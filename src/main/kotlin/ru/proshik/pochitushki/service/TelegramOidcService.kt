@@ -1,7 +1,7 @@
 package ru.proshik.pochitushki.service
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.ObjectMapper
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.stereotype.Service

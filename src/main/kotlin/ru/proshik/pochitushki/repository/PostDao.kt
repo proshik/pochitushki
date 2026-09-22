@@ -207,7 +207,8 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("from", from)
             .addValue("to", to)
 
-        return namedParameterJdbcTemplate.queryForList(sql, params, Long::class.java)
+        // NEXTVAL не бывает NULL, а Spring 7 (JSpecify) честно типизирует элементы как Long?.
+        return namedParameterJdbcTemplate.queryForList(sql, params, Long::class.java).map { it!! }
     }
 
     fun addPost(post: PostStoreData): Long {

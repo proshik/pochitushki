@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm") version "2.4.20"
     kotlin("plugin.spring") version "2.4.20"
     id("java-library")
-    id("org.springframework.boot") version "3.5.16"
+    id("org.springframework.boot") version "4.0.8"
     id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -27,24 +27,26 @@ repositories {
 // compiler itself: bump it together with the plugins (Dependabot only touches the plugin lines),
 // otherwise compileKotlin fails with a bare InstantiationException.
 extra["kotlin.version"] = "2.4.20"
-extra["springCloudVersion"] = "2025.0.3"
+extra["springCloudVersion"] = "2025.1.3"
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     // Реестр метрик лежит в classpath, но эндпоинт /actuator/prometheus по умолчанию не
     // выставлен (см. management в application.yml) — включается переменными окружения.
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
     implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
 
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("tools.jackson.module:jackson-module-kotlin")
 
 //    implementation("io.github.wimdeblauwe:htmx-spring-boot-thymeleaf:4.0.1")
 
-    implementation("org.liquibase:liquibase-core")
+    // В Boot 4 автоконфигурация Liquibase вынесена в отдельный модуль: голый liquibase-core
+    // в classpath больше не включает миграции — без стартера приложение стартует на пустой схеме.
+    implementation("org.springframework.boot:spring-boot-starter-liquibase")
 
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
@@ -61,7 +63,7 @@ dependencies {
 
     implementation("org.apache.commons:commons-csv:1.14.1")
 
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-csv")
+    implementation("tools.jackson.dataformat:jackson-dataformat-csv")
 
     implementation("org.jsoup:jsoup:1.21.1")
 
@@ -81,6 +83,10 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // MockMvc и TestRestTemplate в Boot 4 вынесены в отдельные модули.
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    // TestRestTemplate строится из RestTemplateBuilder, а тот лежит в модуле restclient.
+    testImplementation("org.springframework.boot:spring-boot-starter-restclient")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 

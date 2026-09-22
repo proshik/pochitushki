@@ -116,4 +116,4 @@ Code + PKCE**, не Login Widget: HMAC-подписи `WebAppData` и прове
   перечисление диапазонов раз за разом оказывалось неполным
 - Actuator: выставлен только `health` без деталей; `env`/`heapdump`/`loggers`/
   `threaddump` не включать
-- `server.error.include-*: never` — не отдавать stacktrace наружу
+- `spring.web.error.include-*: never` (до Boot 4 — `server.error.*`) — не отдавать stacktrace наружу

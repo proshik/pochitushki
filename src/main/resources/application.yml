@@ -32,6 +32,13 @@ spring:
       max-lifetime: 300000
   liquibase:
     change-log: classpath:liquibase/changelog-master.yml
+  # Never leak stack traces / internal messages in error responses.
+  # До Boot 4 это был server.error.*; старые ключи Boot 4 молча игнорирует.
+  web:
+    error:
+      include-message: never
+      include-stacktrace: never
+      include-binding-errors: never
 
 # Lock down Actuator: only health exposed, no detailed health (which can leak
 # component/infra info). Sensitive endpoints (env, heapdump, loggers, threaddump) stay disabled.
@@ -55,12 +62,7 @@ management:
       probes:
         enabled: true
 
-# Never leak stack traces / internal messages in error responses.
 server:
-  error:
-    include-message: never
-    include-stacktrace: never
-    include-binding-errors: never
   # Behind a reverse proxy / tunnel the app must trust X-Forwarded-Proto,
   # otherwise sendRedirect() absolutizes Location as http:// on an https site.
   forward-headers-strategy: framework
