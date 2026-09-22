@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm") version "2.4.0"
-    kotlin("plugin.spring") version "2.4.0"
+    kotlin("jvm") version "2.4.20"
+    kotlin("plugin.spring") version "2.4.20"
     id("java-library")
     id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.7"
@@ -23,8 +23,10 @@ repositories {
 
 // Keep Spring's BOM-managed Kotlin artifacts (stdlib, reflect, coroutines) aligned with the
 // Kotlin plugin version above; otherwise io.spring.dependency-management pins them to the older
-// version shipped in the Spring Boot BOM.
-extra["kotlin.version"] = "2.4.0"
+// version shipped in the Spring Boot BOM. The pin also covers kotlin-build-tools-impl, i.e. the
+// compiler itself: bump it together with the plugins (Dependabot only touches the plugin lines),
+// otherwise compileKotlin fails with a bare InstantiationException.
+extra["kotlin.version"] = "2.4.20"
 extra["springCloudVersion"] = "2025.0.3"
 
 dependencies {
@@ -71,7 +73,7 @@ dependencies {
     // для Java 17+; старый bucket4j-core заморожен на 8.10.
     implementation("com.bucket4j:bucket4j_jdk17-core:8.19.0")
 
-    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.37")
+    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.85")
     implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
 
     implementation("com.microsoft.playwright:playwright:1.52.0")
@@ -95,9 +97,9 @@ dependencies {
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    implementation("io.jsonwebtoken:jjwt-api:0.12.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
-    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
+    implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
 }
 
 dependencyManagement {
