@@ -65,7 +65,7 @@ dependencies {
 
     implementation("tools.jackson.dataformat:jackson-dataformat-csv")
 
-    implementation("org.jsoup:jsoup:1.21.1")
+    implementation("org.jsoup:jsoup:1.23.2")
 
     // Bounded in-memory cache for the OG image proxy (weight = bytes, not entries).
     // Version comes from the Spring Boot BOM.
