@@ -226,7 +226,7 @@ DELETE /api/v1/posts/{id}
 ```
 
 > Блок выше — снапшот фазы 4. Позже добавлены `GET /api/v1/posts/{id}/og-image`
-> и `POST /api/v1/profile/settings`; актуальный список ведётся в `.claude/CLAUDE.md`.
+> и `POST /api/v1/profile/settings`; актуальный список ведётся в `AGENTS.md`.
 
 ### Новые файлы
 
@@ -424,7 +424,7 @@ runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
 обложки: цвет = hash(домена), композиция = hash(заголовка), OG-фото в
 «суперобложке»). Детальный план выполнения —
 `docs/superpowers/plans/2026-08-01-covers-redesign.md`; правила поддержки —
-раздел «Обложки» в `.claude/CLAUDE.md`.
+раздел «Обложки» в `AGENTS.md`.
 
 Сделано: `CoverService` + юнит-тесты, миграция 4 (`og_image_url` + фикс потери
 `created_date` при переносе), захват og:image при добавлении, единый
