@@ -12,10 +12,12 @@ import tools.jackson.databind.JsonNode
  * `link_preview_options`, so the post card is drawn through here. Same `telegram.api-url`
  * as the library, so tests stub both with one WireMock.
  *
- * `telegram.token` has a default on purpose: with `telegram.enabled=false` the token may be
- * absent, and an unresolvable placeholder would stop the application from starting.
+ * Both placeholders carry defaults on purpose: application.yml has neither key (their defaults
+ * live in TelegramProperties, which this annotation never sees), and an unresolvable
+ * placeholder stops the application from starting — with `telegram.enabled=false` the token
+ * may be absent altogether. Keep the api-url default in step with TelegramProperties.apiUrl.
  */
-@FeignClient(name = "telegram-bot-api", url = "\${telegram.api-url}bot\${telegram.token:}")
+@FeignClient(name = "telegram-bot-api", url = "\${telegram.api-url:https://api.telegram.org/}bot\${telegram.token:}")
 interface TelegramBotApiClient {
 
     @PostMapping("/sendMessage", consumes = ["application/json"])
