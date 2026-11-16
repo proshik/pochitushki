@@ -25,12 +25,9 @@ class PostCardRenderer(private val coverService: CoverService) {
         val title = (post.title?.takeIf { it.isNotBlank() } ?: post.url).let(::cut)
         val link = "<a href=\"${escapeHtml(post.url)}\">${escapeHtml(title)}</a>"
 
-        val locale = Locale.forLanguageTag(languageCode)
-        val created = post.createdDate.toLocalDate()
-        val pattern = if (created.year == today.year) "d MMM" else "d MMM yyyy"
         val meta = listOf(
             coverService.decorate(post, showOgCovers = false).domain,
-            created.format(DateTimeFormatter.ofPattern(pattern, locale)),
+            dateLabel(post, languageCode, today),
         ).joinToString(SEPARATOR) { escapeHtml(it) }
 
         val head = "$link\n$meta"
@@ -44,6 +41,13 @@ class PostCardRenderer(private val coverService: CoverService) {
         }
 
         return CardText(html = head + labels, previewUrl = post.url)
+    }
+
+    /** "20 сент." this year, "1 мар. 2024" otherwise. Shared with the widget. */
+    fun dateLabel(post: PostData, languageCode: String, today: LocalDate = LocalDate.now()): String {
+        val created = post.createdDate.toLocalDate()
+        val pattern = if (created.year == today.year) "d MMM" else "d MMM yyyy"
+        return created.format(DateTimeFormatter.ofPattern(pattern, Locale.forLanguageTag(languageCode)))
     }
 
     private fun cut(title: String): String =

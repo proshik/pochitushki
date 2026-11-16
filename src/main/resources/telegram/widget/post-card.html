@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;font:14px/1.35 system-ui,sans-serif;color:var(--tg-theme-text-color);background:var(--tg-theme-bg-color)}
+.w{display:flex;gap:10px;padding:10px}
+.c{flex:0 0 64px;height:88px;box-sizing:border-box;border-radius:3px 6px 6px 3px;padding:6px 6px 6px 9px;display:flex;flex-direction:column;overflow:hidden;background:var(--b);color:var(--f)}
+.cd{font:700 7px/1.3 monospace;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb{margin:auto 0;font-weight:800;font-size:22px;line-height:1;overflow-wrap:anywhere}
+.co-band .cb,.co-frame .cb{margin:auto -6px auto -9px;padding:4px 6px;font-size:9px;line-height:1.2;max-height:44px;overflow:hidden}
+.co-band .cb{background:var(--f);color:var(--b)}
+.co-frame{outline:1px solid var(--f);outline-offset:-4px}
+.co-frame .cb{text-align:center;font-weight:700}
+.i{flex:1;min-width:0}
+.t{font-weight:600;color:var(--tg-theme-link-color);overflow-wrap:anywhere}
+.m{margin-top:4px;font-size:12px;color:var(--tg-theme-hint-color)}
+.r{display:flex;gap:6px;padding:0 10px 10px}
+button{flex:1;border:0;border-radius:8px;padding:7px 4px;font:inherit;background:var(--tg-theme-secondary-bg-color);color:var(--tg-theme-text-color)}
+.x{color:var(--tg-theme-destructive-text-color)}
+.e,.o{padding:14px;text-align:center;color:var(--tg-theme-hint-color)}
+.o{padding:0 10px 8px;font-size:12px}
+.cv-0{--b:#1D3FBF;--f:#F4F1E8}.cv-1{--b:#F0D64B;--f:#232220}.cv-2{--b:#17493B;--f:#EDE7D8}
+.cv-3{--b:#E8E3D8;--f:#232220}.cv-4{--b:#5A2B8C;--f:#F0E9F7}.cv-5{--b:#1E2430;--f:#E9E6DC}
+.cv-6{--b:#D8442B;--f:#FBEFE7}.cv-7{--b:#BFD7E4;--f:#16303F}.cv-8{--b:#E87A1E;--f:#221204}
+.cv-9{--b:#7A1F2B;--f:#F3E6DC}.cv-10{--b:#16303F;--f:#BFD7E4}.cv-11{--b:#E89CB0;--f:#33121D}
+</style></head><body><div id="a"></div><script>
+var W = window.TelegramWidget, root = document.getElementById('a'), d = null, note = '';
+
+function el(tag, cls, text) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+/* The ref with another offset, for the arrows: "U:3:123:u" -> "U:<o>:123:u". */
+function at(o) { var p = d.r.split(':'); p[1] = String(o); return p.join(':'); }
+
+/* request() must run synchronously inside the tap; the bot answers with an optional toast
+   and redraws through chat_data (chatDataChanged). */
+function act(action, ref) {
+  W.request(action + '|' + (ref || d.r)).then(function (r) {
+    note = (r && r.result) || '';
+    render();
+  }, function () {});
+}
+
+function button(text, action, ref, cls) {
+  var b = el('button', cls, text);
+  b.addEventListener('click', function () { act(action, ref); });
+  return b;
+}
+
+function render() {
+  try { d = W.chatData ? JSON.parse(W.chatData) : null; } catch (e) { d = null; }
+  root.textContent = '';
+  if (!d) return;
+  if (d.e) { root.appendChild(el('div', 'e', d.m)); return; }
+
+  var card = el('div', 'w'), cover = el('div', 'c ' + d.p + ' ' + d.c), info = el('div', 'i');
+  cover.appendChild(el('div', 'cd', d.d));
+  cover.appendChild(el('div', 'cb', d.c === 'co-mono' ? d.b : d.t));
+  var title = el('div', 't', d.t);
+  if (d.u) title.addEventListener('click', function () { W.openLink(d.u); });
+  info.appendChild(title);
+  info.appendChild(el('div', 'm', [d.d, d.a].concat(d.l.map(function (l) { return '#' + l; })).join(' · ')));
+  card.appendChild(cover);
+  card.appendChild(info);
+  root.appendChild(card);
+
+  var row = el('div', 'r');
+  if (d.x) {
+    row.appendChild(button(d.s.y, 'cy', null, 'x'));
+    row.appendChild(button(d.s.n, 'cx'));
+  } else {
+    row.appendChild(d.r.slice(-1) === 'a' ? button(d.s.u, 'cu') : button(d.s.a, 'ca'));
+    row.appendChild(button(d.f ? '★' : '☆', 'cf'));
+    row.appendChild(button('🗑', 'cd'));
+  }
+  root.appendChild(row);
+
+  if (!d.x && d.r.charAt(0) === 'R') {
+    var more = el('div', 'r');
+    more.appendChild(button(d.s.r, 'cr'));
+    root.appendChild(more);
+  } else if (!d.x && d.n) {
+    var nav = el('div', 'r');
+    nav.appendChild(d.o > 0 ? button('‹', 'cn', at(d.o - 1)) : el('button', null, '·'));
+    nav.appendChild(el('button', null, (d.o + 1) + ' / ' + d.n));
+    nav.appendChild(d.o < d.n - 1 ? button('›', 'cn', at(d.o + 1)) : el('button', null, '·'));
+    root.appendChild(nav);
+  }
+  if (note) root.appendChild(el('div', 'o', note));
+}
+
+W.onEvent('chatDataChanged', function () { note = ''; render(); });
+render();
+</script></body></html>
