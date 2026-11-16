@@ -98,6 +98,16 @@ class TelegramKeyboardTest {
     }
 
     @Test
+    fun `widget keyboard links articles the widget cannot open`() {
+        fun widgetKb(url: String) = keyboard.buildWidgetKeyboard(
+            CardView.Post(post(7).copy(url = url), CardRef(CardList.UNREAD, 0, 7, PostLoc.UNREAD, widget = true), 1), "en",
+        )
+        assertEquals("http://e.com/a", widgetKb("http://e.com/a").buttons().last().url)
+        assertEquals("https://t.me/c/1", widgetKb("https://t.me/c/1").buttons().last().url)
+        assertTrue(widgetKb("https://e.com/a").buttons().none { it.url != null })
+    }
+
+    @Test
     fun `engine choice keyboard carries ce and back`() {
         val ref = CardRef(CardList.FAVORITES, 999_999, Long.MAX_VALUE, PostLoc.ARCHIVE)
         val kb = keyboard.buildPdfEngineKeyboard(ref, listOf("openhtml", "playwright"), "en")

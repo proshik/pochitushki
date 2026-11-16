@@ -27,10 +27,14 @@ class WidgetCardPresenter(
         return api.sendWidget(chatId, template.html, data, keyboard.buildWidgetKeyboard(view, languageCode), replyTo) != null
     }
 
+    /**
+     * Data first, buttons only after it: if Telegram refused the new chat_data the widget still
+     * shows the old post, and buttons pointing at the new one would act on a post nobody sees.
+     */
     override fun redraw(chatId: Long, messageId: Long, view: CardView, languageCode: String): Boolean {
-        val drawn = api.editWidgetData(chatId, messageId, chatData.encode(view, languageCode))
+        if (!api.editWidgetData(chatId, messageId, chatData.encode(view, languageCode))) return false
         val buttons = if (view is CardView.Post) keyboard.buildWidgetKeyboard(view, languageCode) else null
-        return api.editKeyboard(chatId, messageId, buttons) && drawn
+        return api.editKeyboard(chatId, messageId, buttons)
     }
 
     override fun redrawButtons(chatId: Long, messageId: Long, view: CardView.Post, languageCode: String): Boolean =

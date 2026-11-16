@@ -53,6 +53,23 @@ class WidgetChatDataTest {
     }
 
     @Test
+    fun `thousands of labels are cheap`() {
+        val labels = (1..10_000L).map { LabelData(it, "label-$it-" + "x".repeat(30)) }
+        val started = System.nanoTime()
+        val encoded = chatData.encode(view(post("T", labels = labels)), "en")
+        val millis = (System.nanoTime() - started) / 1_000_000
+        assertTrue(encoded.toByteArray().size <= 1024)
+        assertTrue(millis < 500, "encoding took $millis ms")
+    }
+
+    @Test
+    fun `links openLink refuses are left out`() {
+        for (url in listOf("http://example.com/article", "https://t.me/channel/123", "https://telegram.me/x")) {
+            assertFalse(mapper.readTree(chatData.encode(view(post("T", url = url)), "en")).has("u"), url)
+        }
+    }
+
+    @Test
     fun `long url is left out`() {
         val json = mapper.readTree(chatData.encode(view(post("T", url = "https://e.com/" + "x".repeat(300))), "en"))
         assertFalse(json.has("u"))

@@ -29,6 +29,7 @@ import ru.proshik.pochitushki.service.I18nService
 /** Widgets need webhook mode, so this class runs the bot behind its own webhook URL. */
 @AutoConfigureTestRestTemplate
 @ActiveProfiles("test", "telegram-test", "telegram-widgets-test")
+@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation::class)
 class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
 
     @Autowired private lateinit var restTemplate: TestRestTemplate
@@ -108,13 +109,36 @@ class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
     """.trimIndent()
 
     @Test
+    @org.junit.jupiter.api.Order(1)
     fun `webhook asks for widget updates`() {
+        // setWebhook runs once, at context start; this test runs first (@Order), before any
+        // tearDown of this class resets the request journal.
         val setWebhook = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/setWebhook")))
-        // The stub log may have been reset by another class after startup; the configuration
-        // itself is pinned in TelegramBotConfigurationTest. When the call is still here, check it.
-        setWebhook.map { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }.forEach {
-            assertTrue(it.contains("widget_query") && it.contains("shared_widget_query"), it)
+            .map { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }
+        assertEquals(1, setWebhook.size, "setWebhook at startup")
+        // Form-encoded by the library: allowed_updates=message&allowed_updates=callback_query&…
+        val body = setWebhook.single()
+        for (type in listOf("message", "callback_query", "widget_query", "shared_widget_query")) {
+            assertTrue(body.contains("allowed_updates=$type&") || body.endsWith("allowed_updates=$type"), "$type in $body")
         }
+    }
+
+    @Test
+    fun `refused widget redraw keeps the old buttons`() {
+        val p = createPost("A", "https://a.com")
+        createPost("B", "https://b.com")
+        wireMockTelegramApi.stubFor(
+            post(urlEqualTo("/bottest_token/editMessageWidgetData")).willReturn(
+                aResponse().withStatus(400).withHeader("Content-Type", "application/json")
+                    .withBody("""{"ok":false,"error_code":400,"description":"Bad Request: message to edit not found"}""")
+            )
+        )
+
+        postUpdate(widgetQuery("q5", "cn|U:1:$p:u"))
+
+        val answer = awaitBody("answerWidgetQuery")
+        assertTrue(answer.contains(i18nService.getMessage("card.toast.error", "en")), answer)
+        assertTrue(bodies("editMessageReplyMarkup").isEmpty(), "buttons must not move to the other post")
     }
 
     @Test

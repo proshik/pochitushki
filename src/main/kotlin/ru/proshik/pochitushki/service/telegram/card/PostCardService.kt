@@ -99,7 +99,8 @@ class PostCardService(
             CardAction.LABELS -> card.showLabels()
             CardAction.LABEL_TOGGLE -> card.toggleLabel(extra?.toLongOrNull())
             CardAction.LABEL_NEW -> card.promptLabel()
-            CardAction.LABELS_BACK -> card.redrawButtons { it }
+            // Full redraw, not just the buttons: the labels in the card's text may have changed.
+            CardAction.LABELS_BACK -> card.redrawPost()
             else -> {
                 logger.warn("card action not handled: {}", action)
                 null
@@ -122,9 +123,18 @@ class PostCardService(
         /** Redraws the card at [offset], stepping back if the list got shorter. */
         fun redrawAt(offset: Int): CallbackAnswer? {
             val view = load(user, ref.list, offset, ref.widget) ?: CardView.Notice(i18n.getMessage("card.all_read", lang))
-            presenter.redraw(chatId, messageId, view, lang)
-            return null
+            return draw(view)
         }
+
+        /** The same post, redrawn whole from fresh data. */
+        fun redrawPost(): CallbackAnswer? {
+            val post = post() ?: return gone()
+            return draw(CardView.Post(post, ref, total()))
+        }
+
+        /** A redraw Telegram refused leaves the card as it was; the reader learns from the toast. */
+        fun draw(view: CardView): CallbackAnswer? =
+            if (presenter.redraw(chatId, messageId, view, lang)) null else CallbackAnswer(i18n.getMessage("card.toast.error", lang))
 
         /** The post is gone: say so, and show what now sits at this offset. */
         fun gone(): CallbackAnswer {
@@ -138,8 +148,7 @@ class PostCardService(
          */
         fun leave(statusKey: String): CallbackAnswer? {
             if (ref.list == CardList.SAVED) {
-                presenter.redraw(chatId, messageId, CardView.Notice(i18n.getMessage(statusKey, lang)), lang)
-                return null
+                return draw(CardView.Notice(i18n.getMessage(statusKey, lang)))
             }
             return redrawAt(ref.offset)
         }
@@ -166,8 +175,7 @@ class PostCardService(
             if (ref.list == CardList.FAVORITES) {
                 val loc = if (toArchive) PostLoc.ARCHIVE else PostLoc.UNREAD
                 val moved = post.copy(id = newId, isArchived = toArchive)
-                presenter.redraw(chatId, messageId, CardView.Post(moved, ref.copy(postId = newId, loc = loc), total()), lang)
-                return null
+                return draw(CardView.Post(moved, ref.copy(postId = newId, loc = loc), total()))
             }
             return leave(if (toArchive) "card.saved.archived" else "card.saved.unread")
         }

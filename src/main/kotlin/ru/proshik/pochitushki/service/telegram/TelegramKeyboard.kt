@@ -13,6 +13,8 @@ import ru.proshik.pochitushki.service.telegram.api.WebAppRef
 import com.github.kotlintelegrambot.entities.keyboard.WebAppInfo
 import ru.proshik.pochitushki.service.telegram.card.CardAction
 import ru.proshik.pochitushki.service.telegram.card.CardList
+import ru.proshik.pochitushki.service.telegram.card.CardPaging
+import ru.proshik.pochitushki.service.telegram.widget.WidgetChatData
 import ru.proshik.pochitushki.service.telegram.card.CardRef
 import ru.proshik.pochitushki.service.telegram.card.CardView
 import ru.proshik.pochitushki.service.telegram.card.PostLoc
@@ -43,7 +45,6 @@ class TelegramKeyboard(
         private const val NEXT = "›"
         private const val INERT = "·"
         private val PAGED_LISTS = setOf(CardList.UNREAD, CardList.ARCHIVE, CardList.FAVORITES)
-        private const val OPEN_LINK_MAX = 256
 
     }
 
@@ -94,19 +95,13 @@ class TelegramKeyboard(
             rows += listOf(button(i18nService.getMessage("card.button.random_more", languageCode), CardAction.RANDOM_NEXT))
         }
         if (ref.list in PAGED_LISTS) {
-            val last = view.total - 1
+            fun arrow(symbol: String, target: Int?) =
+                target?.let { InlineButton(symbol, callbackData = cardCallback(CardAction.NAV, ref.at(it))) }
+                    ?: button(INERT, CardAction.NOOP)
             rows += listOf(
-                if (ref.offset > 0) {
-                    InlineButton(PREV, callbackData = cardCallback(CardAction.NAV, ref.at(ref.offset - 1)))
-                } else {
-                    button(INERT, CardAction.NOOP)
-                },
-                button("${ref.offset + 1} / ${view.total}", CardAction.NOOP),
-                if (ref.offset < last) {
-                    InlineButton(NEXT, callbackData = cardCallback(CardAction.NAV, ref.at(ref.offset + 1)))
-                } else {
-                    button(INERT, CardAction.NOOP)
-                },
+                arrow(PREV, CardPaging.prevOffset(view)),
+                button("${ref.offset + 1} / ${CardPaging.shownTotal(view)}", CardAction.NOOP),
+                arrow(NEXT, CardPaging.nextOffset(view)),
             )
         }
         return InlineKeyboard(rows)
@@ -114,8 +109,8 @@ class TelegramKeyboard(
 
     /**
      * The inline keyboard under a widget card: what does not fit in 4 KB of compressed widget
-     * HTML — PDF, labels, the app — plus a link button for articles whose URL is longer than
-     * TelegramWidget.openLink accepts (256 characters).
+     * HTML — PDF, labels, the app — plus a link button for articles TelegramWidget.openLink
+     * refuses (longer than 256 characters, not https, or a Telegram link).
      */
     fun buildWidgetKeyboard(view: CardView.Post, languageCode: String): InlineKeyboard {
         val ref = view.ref.copy(widget = true)
@@ -125,7 +120,7 @@ class TelegramKeyboard(
                 InlineButton(i18nService.getMessage("command.feed.button.labels", languageCode), callbackData = cardCallback(CardAction.LABELS, ref)),
             ) + listOfNotNull(appButton(ref.list, languageCode))
         )
-        if (view.post.url.length > OPEN_LINK_MAX) {
+        if (!WidgetChatData.canOpen(view.post.url)) {
             rows += listOf(InlineButton(i18nService.getMessage("card.button.open_article", languageCode), url = view.post.url))
         }
         return InlineKeyboard(rows)

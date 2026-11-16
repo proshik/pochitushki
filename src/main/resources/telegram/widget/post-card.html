@@ -85,7 +85,7 @@ function render() {
     var nav = el('div', 'r');
     nav.appendChild(d.o > 0 ? button('‹', 'cn', at(d.o - 1)) : el('button', null, '·'));
     nav.appendChild(el('button', null, (d.o + 1) + ' / ' + d.n));
-    nav.appendChild(d.o < d.n - 1 ? button('›', 'cn', at(d.o + 1)) : el('button', null, '·'));
+    nav.appendChild(d.j != null ? button('›', 'cn', at(d.j)) : el('button', null, '·'));
     root.appendChild(nav);
   }
   if (note) root.appendChild(el('div', 'o', note));

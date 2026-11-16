@@ -338,6 +338,41 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `unstarred favorite still pages to the rest`() {
+        registerTestUser()
+        val userId = getUserId()
+        val older = createPostAt(userId, "F2", "https://f2.com", minutesAgo = 20)
+        val newer = createPostAt(userId, "F1", "https://f1.com", minutesAgo = 10)
+        markAsFavorite(older)
+        markAsFavorite(newer)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 103L, "cf|f:0:$newer:u"))
+
+        val keyboard = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(keyboard.contains("\"text\":\"1 / 2\""), keyboard)
+        // F2 moved up to offset 0 once F1 left the list: "›" must lead there, not to offset 1.
+        assertTrue(keyboard.contains("\"text\":\"›\",\"callback_data\":\"cn|f:0:$newer:u\""), keyboard)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 103L, "cn|f:0:$newer:u"))
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(">F2</a>"), body)
+    }
+
+    @Test
+    fun `labels back redraws the card text with fresh labels`() {
+        registerTestUser()
+        val userId = getUserId()
+        val p = createPost(userId, "Tagged", "https://tagged.com")
+        val label = createLabel(userId, "kotlin")
+        jdbcTemplate.update("INSERT INTO post_label(post_id, label_id) VALUES (?, ?)", p, label)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 104L, "lb|u:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains("#kotlin") && body.contains("cd|u:0:$p:u"), body)
+    }
+
+    @Test
     fun `stale card toasts and redraws`() {
         registerTestUser()
         val userId = getUserId()
@@ -443,7 +478,7 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
 
         postUpdate(buildCallbackQuery(nextUpdateId(), 95L, "lb|f:2:$archiveId:a"))
 
-        val body = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        val body = awaitSingleCall("/bottest_token/editMessageText")
         assertTrue(body.contains("\"text\":\"3 / 3\""), body)
         assertTrue(body.contains("cu|f:2:$archiveId:a"), body)
     }

@@ -4,6 +4,7 @@ import java.time.LocalDate
 import org.springframework.stereotype.Component
 import ru.proshik.pochitushki.service.CoverService
 import ru.proshik.pochitushki.service.I18nService
+import ru.proshik.pochitushki.service.telegram.card.CardPaging
 import ru.proshik.pochitushki.service.telegram.card.CardView
 import ru.proshik.pochitushki.service.telegram.card.PostCardRenderer
 import tools.jackson.databind.json.JsonMapper
@@ -32,8 +33,11 @@ class WidgetChatData(
         val post = view.post
         val cover = coverService.decorate(post, showOgCovers = false)
         var title = post.title?.takeIf { it.isNotBlank() } ?: post.url
-        var labels = post.labels.map { it.name }
-        var url: String? = post.url.takeIf { it.length <= MAX_OPEN_LINK }
+        // Only what can possibly fit goes into the loop below: a post may carry thousands of
+        // imported labels, and dropping them one by one with a full serialization each time
+        // would stall the bot's single dispatcher thread.
+        var labels = labelsWithin(post.labels.map { it.name }, MAX_BYTES)
+        var url: String? = post.url.takeIf(::canOpen)
         val strings = linkedMapOf(
             "a" to i18n.getMessage("card.button.archive", lang),
             "u" to i18n.getMessage("card.button.unread", lang),
@@ -50,7 +54,7 @@ class WidgetChatData(
                 "a" to renderer.dateLabel(post, lang, today),
                 "l" to labels,
                 "f" to post.isFavorite,
-                "n" to view.total,
+                "n" to CardPaging.shownTotal(view),
                 "o" to view.ref.offset,
                 "p" to cover.palette,
                 "c" to cover.comp,
@@ -58,6 +62,8 @@ class WidgetChatData(
                 "s" to strings,
             )
             url?.let { data["u"] = it }
+            // Where "›" leads; absent at the end. Not always offset + 1: see CardPaging.
+            CardPaging.nextOffset(view)?.let { data["j"] = it }
             if (view.confirmDelete) data["x"] = 1
             val json = mapper.writeValueAsString(data)
             if (json.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) return json
@@ -72,10 +78,35 @@ class WidgetChatData(
         }
     }
 
+    private fun labelsWithin(names: List<String>, budget: Int): List<String> {
+        var used = 0
+        return names.takeWhile { name ->
+            used += name.toByteArray(Charsets.UTF_8).size + LABEL_OVERHEAD
+            used <= budget
+        }
+    }
+
     companion object {
         const val MAX_BYTES = 1024
         /** TelegramWidget.openLink accepts at most 256 characters. */
         const val MAX_OPEN_LINK = 256
         private const val MIN_TITLE = 20
+        /** Quotes and comma around each label in the JSON array. */
+        private const val LABEL_OVERHEAD = 3
+        private val TELEGRAM_HOSTS = setOf("t.me", "telegram.me", "telegram.dog")
+
+        /**
+         * Whether TelegramWidget.openLink takes [url]: https only, at most 256 characters, and not
+         * a Telegram link. Anything else is opened by an inline URL button under the widget.
+         */
+        fun canOpen(url: String): Boolean {
+            if (url.length > MAX_OPEN_LINK || !url.startsWith("https://")) return false
+            val host = try {
+                java.net.URI(url).host?.lowercase()
+            } catch (e: Exception) {
+                null
+            } ?: return false
+            return TELEGRAM_HOSTS.none { host == it || host.endsWith(".$it") }
+        }
     }
 }
