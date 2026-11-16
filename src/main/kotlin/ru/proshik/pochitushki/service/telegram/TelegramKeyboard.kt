@@ -98,6 +98,17 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         fun button(text: String, action: String, extra: String? = null) =
             InlineButton(text, callbackData = cardCallback(action, ref, extra))
 
+        if (view.confirmDelete) {
+            return InlineKeyboard(
+                listOf(
+                    listOf(
+                        button(i18nService.getMessage("card.delete.confirm", languageCode), CardAction.DELETE_YES),
+                        button(i18nService.getMessage("card.delete.cancel", languageCode), CardAction.DELETE_NO),
+                    )
+                )
+            )
+        }
+
         val move = if (ref.loc == PostLoc.ARCHIVE) {
             button(i18nService.getMessage("card.button.unread", languageCode), CardAction.UNREAD)
         } else {

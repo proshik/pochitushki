@@ -1,13 +1,18 @@
 package ru.proshik.pochitushki.service.telegram
 
+import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.callbackQuery
+import com.github.kotlintelegrambot.dispatcher.handlers.Handler
 import com.github.kotlintelegrambot.entities.CallbackQuery
+import com.github.kotlintelegrambot.entities.Update
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsLimits
+import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService
+import ru.proshik.pochitushki.service.UserService
+import ru.proshik.pochitushki.service.telegram.card.CallbackAnswer
 import ru.proshik.pochitushki.service.telegram.card.CardAction
 import ru.proshik.pochitushki.service.telegram.card.PostCardService
 import ru.proshik.pochitushki.service.telegram.card.parseCardCallback
@@ -19,19 +24,39 @@ import ru.proshik.pochitushki.service.telegram.card.parseCardCallback
 class CallbackQueryHandler(
     private val telegramService: TelegramService,
     private val postCardService: PostCardService,
+    private val userService: UserService,
+    private val i18nService: I18nService,
 ) : TelegramUpdateHandler {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Not the library's `callbackQuery { }` DSL: that one answers the query itself after the
+     * handler, with no text, so a toast would be a second answer Telegram refuses. Here every
+     * update gets exactly one answerCallbackQuery — with the toast when there is one, and also
+     * when handling failed, or the button keeps spinning until Telegram gives up on it.
+     */
     override fun registerHandlers(dispatcher: Dispatcher) {
-        dispatcher.callbackQuery {
-            try {
-                handleCallbacks(callbackQuery)
-            } catch (e: Exception) {
-                // A malformed/forged callback must not crash the dispatcher coroutine.
-                logger.warn("callback handling failed: data={}", callbackQuery.data, e)
+        dispatcher.addHandler(object : Handler {
+            override fun checkUpdate(update: Update): Boolean = update.callbackQuery != null
+
+            override suspend fun handleUpdate(bot: Bot, update: Update) {
+                val callbackQuery = update.callbackQuery ?: return
+                var answer = CallbackAnswer()
+                try {
+                    answer = handleCallbacks(callbackQuery)
+                } catch (e: Exception) {
+                    // A malformed/forged callback must not crash the dispatcher coroutine.
+                    logger.warn("callback handling failed: data={}", callbackQuery.data, e)
+                } finally {
+                    try {
+                        bot.answerCallbackQuery(callbackQueryId = callbackQuery.id, text = answer.text)
+                    } catch (e: Exception) {
+                        logger.warn("answerCallbackQuery failed: {}", e.javaClass.simpleName)
+                    }
+                }
             }
-        }
+        })
     }
 
     fun parseCallbackData(callbackData: String): Pair<String, String> {
@@ -42,8 +67,8 @@ class CallbackQueryHandler(
         return Pair(action, data)
     }
 
-    private fun handleCallbacks(callbackQuery: CallbackQuery) {
-        val message = callbackQuery.message ?: return
+    private fun handleCallbacks(callbackQuery: CallbackQuery): CallbackAnswer {
+        val message = callbackQuery.message ?: return CallbackAnswer()
 
         val chatId = message.chat.id
         val messageId = message.messageId
@@ -56,36 +81,12 @@ class CallbackQueryHandler(
         if (action in CardAction.ALL) {
             val (ref, extra) = parseCardCallback(data) ?: run {
                 logger.warn("ignoring malformed card callback: {}", callbackData)
-                return
+                return CallbackAnswer()
             }
-            postCardService.onCallback(chatId, messageId, action, ref, extra)
-            return
+            return postCardService.onCallback(chatId, messageId, action, ref, extra)
         }
 
         when (action) {
-            TelegramKeyboard.CALLBACK_ARCHIVE_POST -> {
-                val postId = data.toLong()
-                // TODO check exception
-                telegramService.toArchivePost(chatId, message.messageId, postId)
-            }
-
-            TelegramKeyboard.CALLBACK_DELETE_POST -> {
-                val postId = data.toLong()
-                // TODO check exception
-                telegramService.toDeletePost(chatId, message.messageId, postId, PostType.UNREAD)
-            }
-
-            TelegramKeyboard.CALLBACK_UNREAD_POST -> {
-                val postId = data.toLong()
-                // TODO check exception
-                telegramService.toUnreadPost(chatId, message.messageId, postId)
-            }
-
-            TelegramKeyboard.CALLBACK_DELETE_ARCHIVE_POST -> {
-                val postId = data.toLong()
-                // TODO check exception
-                telegramService.toDeletePost(chatId, message.messageId, postId, PostType.ARCHIVE)
-            }
             /**
              * Random post
              */
@@ -105,33 +106,9 @@ class CallbackQueryHandler(
             /**
              * Toggle favorite
              */
-            TelegramKeyboard.CALLBACK_TOGGLE_UNREAD_FAVORITE -> {
-                val postId = data.toLong()
-                telegramService.toggleFavorite(chatId, message.messageId, postId, PostType.UNREAD)
-            }
-            TelegramKeyboard.CALLBACK_TOGGLE_ARCHIVE_FAVORITE -> {
-                val postId = data.toLong()
-                telegramService.toggleFavorite(chatId, message.messageId, postId, PostType.ARCHIVE)
-            }
             TelegramKeyboard.CALLBACK_TOGGLE_RANDOM_FAVORITE -> {
                 val postId = data.toLong()
                 telegramService.toggleFavoriteForRandomPost(chatId, message.messageId, postId)
-            }
-            TelegramKeyboard.CALLBACK_FAVORITES_TO_ARCHIVE -> {
-                val postId = data.toLong()
-                telegramService.favoritesToArchive(chatId, message.messageId, postId)
-            }
-            TelegramKeyboard.CALLBACK_FAVORITES_TO_UNREAD -> {
-                val postId = data.toLong()
-                telegramService.favoritesToUnread(chatId, message.messageId, postId)
-            }
-            TelegramKeyboard.CALLBACK_TOGGLE_FAVORITES_UNREAD_FAVORITE -> {
-                val postId = data.toLong()
-                telegramService.toggleFavoriteFromFavorites(chatId, message.messageId, postId, PostType.UNREAD)
-            }
-            TelegramKeyboard.CALLBACK_TOGGLE_FAVORITES_ARCHIVE_FAVORITE -> {
-                val postId = data.toLong()
-                telegramService.toggleFavoriteFromFavorites(chatId, message.messageId, postId, PostType.ARCHIVE)
             }
             /**
              * PDF generation — engine selection
@@ -155,46 +132,6 @@ class CallbackQueryHandler(
                 telegramService.sendPostPdf(chatId, postId, postType, engine)
             }
             /**
-             * Unread feed navigation
-             */
-            TelegramKeyboard.CALLBACK_NEXT_POSTS -> {
-                val offset = data.toInt()
-                // TODO check exception
-                telegramService.getFeed(chatId, messageId, offset, PostType.UNREAD)
-            }
-
-            TelegramKeyboard.CALLBACK_PREVIOUS_POSTS -> {
-                val offset = data.toInt()
-                // TODO check exception
-                telegramService.getFeed(chatId, messageId, offset, PostType.UNREAD)
-            }
-            /**
-             * Archive feed navigation
-             */
-            TelegramKeyboard.CALLBACK_NEXT_ARCHIVE_POSTS -> {
-                val offset = data.toInt()
-                // TODO check exception
-                telegramService.getFeed(chatId, messageId, offset, PostType.ARCHIVE)
-            }
-
-            TelegramKeyboard.CALLBACK_PREVIOUS_ARCHIVE_POSTS -> {
-                val offset = data.toInt()
-                // TODO check exception
-                telegramService.getFeed(chatId, messageId, offset, PostType.ARCHIVE)
-            }
-            /**
-             * Favorites feed navigation
-             */
-            TelegramKeyboard.CALLBACK_NEXT_FAVORITES -> {
-                val offset = data.toInt()
-                telegramService.getFeed(chatId, messageId, offset, PostType.FAVORITES)
-            }
-
-            TelegramKeyboard.CALLBACK_PREVIOUS_FAVORITES -> {
-                val offset = data.toInt()
-                telegramService.getFeed(chatId, messageId, offset, PostType.FAVORITES)
-            }
-            /**
              * Profile settings block
              */
             TelegramKeyboard.CALLBACK_PROFILE_FEED_SETTINGS -> {
@@ -213,7 +150,7 @@ class CallbackQueryHandler(
             TelegramKeyboard.CALLBACK_PROFILE_LANGUAGE_SETTINGS_CHANGE -> {
                 if (data !in UserSettingsLimits.SUPPORTED_LANGUAGES) {
                     logger.warn("ignoring unsupported language in callback: {}", data)
-                    return
+                    return CallbackAnswer()
                 }
                 telegramService.updateUserSettingsLanguageCode(chatId, messageId, data)
             }
@@ -222,7 +159,7 @@ class CallbackQueryHandler(
                 val tgFeedEntriesNumber = data.toIntOrNull()
                 if (tgFeedEntriesNumber == null || tgFeedEntriesNumber !in UserSettingsLimits.FEED_ENTRIES_RANGE) {
                     logger.warn("ignoring out-of-range feed size in callback: {}", data)
-                    return
+                    return CallbackAnswer()
                 }
                 telegramService.updateUserSettingsFeedCount(chatId, messageId, tgFeedEntriesNumber)
             }
@@ -261,9 +198,17 @@ class CallbackQueryHandler(
                 telegramService.hidePostLabels(chatId, messageId, TelegramKeyboard.LabelCallbackContext.decode(data))
             }
 
-            else -> throw RuntimeException("Unknown callback action $action")
+            // Buttons of cards sent by an earlier version stay in chats after a deploy.
+            else -> {
+                logger.info("outdated callback action: {}", action)
+                return CallbackAnswer(outdatedText(chatId))
+            }
         }
 
         logger.info("handleCallbacks success: chatId={}, action={}, data={}", chatId, action, data)
+        return CallbackAnswer()
     }
+
+    private fun outdatedText(chatId: Long): String? =
+        userService.findUserByChatId(chatId)?.let { i18nService.getMessage("card.toast.outdated", it.settings.languageCode) }
 }

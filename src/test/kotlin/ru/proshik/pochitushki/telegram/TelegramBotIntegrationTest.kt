@@ -228,6 +228,207 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         assertTrue(body.contains("\"text\":\"★\""), body)
     }
 
+    // ==================== Card actions ====================
+
+    @Test
+    fun `archive shows the next post at the same offset`() {
+        registerTestUser()
+        val userId = getUserId()
+        createPostAt(userId, "P1", "https://p1.com", minutesAgo = 30)
+        val p2 = createPostAt(userId, "P2", "https://p2.com", minutesAgo = 20)
+        createPostAt(userId, "P3", "https://p3.com", minutesAgo = 10)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 80L, "ca|u:1:$p2:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(">P1</a>"), body)
+        assertTrue(body.contains("\"text\":\"2 / 2\""), body)
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT count(*) FROM archive_post WHERE url = 'https://p2.com'", Int::class.java))
+    }
+
+    @Test
+    fun `archive of the last post steps back`() {
+        registerTestUser()
+        val userId = getUserId()
+        val p1 = createPostAt(userId, "P1", "https://p1.com", minutesAgo = 30)
+        createPostAt(userId, "P2", "https://p2.com", minutesAgo = 20)
+        createPostAt(userId, "P3", "https://p3.com", minutesAgo = 10)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 81L, "ca|u:2:$p1:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(">P2</a>"), body)
+        assertTrue(body.contains("\"text\":\"2 / 2\""), body)
+    }
+
+    @Test
+    fun `archiving the only post shows all read without buttons`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Only", "https://only.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 82L, "ca|u:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(jsonText(i18nService.getMessage("card.all_read", "en"))), body)
+        assertTrue(body.contains("\"inline_keyboard\":[]"), body)
+    }
+
+    @Test
+    fun `delete asks first`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Doomed", "https://doomed.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 83L, "cd|u:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(body.contains("cy|u:0:$p:u") && body.contains("cx|u:0:$p:u"), body)
+        assertEquals(1, getPostCount("post"))
+    }
+
+    @Test
+    fun `confirmed delete removes the post for good`() {
+        registerTestUser()
+        val userId = getUserId()
+        createPostAt(userId, "Stays", "https://stays.com", minutesAgo = 20)
+        val p = createPostAt(userId, "Doomed", "https://doomed.com", minutesAgo = 10)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 84L, "cy|u:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(">Stays</a>"), body)
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT count(*) FROM post WHERE id = ?", Int::class.java, p))
+        assertEquals(0, getPostCount("archive_post"))
+    }
+
+    @Test
+    fun `cancel delete restores the card buttons`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Spared", "https://spared.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 85L, "cx|u:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(body.contains("ca|u:0:$p:u") && body.contains("cd|u:0:$p:u"), body)
+        assertEquals(1, getPostCount("post"))
+    }
+
+    @Test
+    fun `star redraws only the keyboard`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Star me", "https://star.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 86L, "cf|u:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(body.contains("\"text\":\"★\""), body)
+        assertEquals(0, wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/editMessageText"))).size)
+        assertEquals(true, jdbcTemplate.queryForObject("SELECT is_favorite FROM post WHERE id = ?", Boolean::class.java, p))
+    }
+
+    @Test
+    fun `favorites archive keeps the card with the new id`() {
+        registerTestUser()
+        val userId = getUserId()
+        val p = createPost(userId, "Fav", "https://fav.com")
+        markAsFavorite(p)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 87L, "ca|f:0:$p:u"))
+
+        awaitCondition { getPostCount("archive_post") == 1 }
+        val archiveId = getArchivePostId(userId)
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(">Fav</a>"), body)
+        assertTrue(body.contains("cu|f:0:$archiveId:a"), body)
+    }
+
+    @Test
+    fun `unstar in favorites keeps the card`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Fav", "https://fav.com")
+        markAsFavorite(p)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 88L, "cf|f:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(body.contains("\"text\":\"☆\""), body)
+        assertEquals(0, wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))).size)
+    }
+
+    @Test
+    fun `stale card toasts and redraws`() {
+        registerTestUser()
+        val userId = getUserId()
+        val gone = createPostAt(userId, "Gone", "https://gone.com", minutesAgo = 20)
+        createPostAt(userId, "Current", "https://current.com", minutesAgo = 10)
+        jdbcTemplate.update("DELETE FROM post WHERE id = ?", gone)
+
+        val updateId = nextUpdateId()
+        postUpdate(buildCallbackQuery(updateId, 89L, "ca|u:1:$gone:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(">Current</a>"), body)
+        val answer = awaitAnswer("$updateId")
+        assertTrue(answer.contains("text=" + i18nService.getMessage("card.toast.gone", "en")), answer)
+    }
+
+    @Test
+    fun `double tap archives once`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Twice", "https://twice.com")
+
+        val first = nextUpdateId()
+        val second = nextUpdateId()
+        postUpdate(buildCallbackQuery(first, 90L, "ca|u:0:$p:u"))
+        postUpdate(buildCallbackQuery(second, 90L, "ca|u:0:$p:u"))
+
+        awaitAnswer("$first")
+        awaitAnswer("$second")
+        assertEquals(1, getPostCount("archive_post"))
+        assertEquals(0, getPostCount("post"))
+    }
+
+    @Test
+    fun `every press is answered`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Pressed", "https://pressed.com")
+
+        val ids = listOf("cn|u:0:$p:u", "cf|u:0:$p:u", "cd|u:0:$p:u", "c0|u:0:$p:u").map { data ->
+            nextUpdateId().also { postUpdate(buildCallbackQuery(it, 91L, data)) }
+        }
+
+        ids.forEach { awaitAnswer("$it") }
+        // The library's own callbackQuery DSL answers after the handler; ours must be the only one.
+        await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(3)).until {
+            ids.all { id -> answersFor("$id").size == 1 }
+        }
+    }
+
+    @Test
+    fun `legacy buttons get an outdated toast`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Old card", "https://old-card.com")
+
+        val archive = nextUpdateId()
+        val next = nextUpdateId()
+        postUpdate(buildCallbackQuery(archive, 92L, "archive_button|$p"))
+        postUpdate(buildCallbackQuery(next, 92L, "next_posts|3"))
+
+        val outdated = "text=" + i18nService.getMessage("card.toast.outdated", "en")
+        assertTrue(awaitAnswer("$archive").contains(outdated))
+        assertTrue(awaitAnswer("$next").contains(outdated))
+        assertEquals(1, getPostCount("post"))
+    }
+
+    @Test
+    fun `garbage card data is answered`() {
+        registerTestUser()
+
+        val id = nextUpdateId()
+        postUpdate(buildCallbackQuery(id, 93L, "ca|zz"))
+
+        assertTrue(!awaitAnswer("$id").contains("text="))
+    }
+
     @Test
     fun `post_labels callback should offer the label picker`() {
         registerTestUser()
@@ -352,101 +553,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     // ==================== Callback query tests ====================
 
     @Test
-    fun `archive_button callback should archive post and delete message`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "To Archive", "https://archive-cb.com")
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 50L, "archive_button|$postId"))
-
-        awaitCondition { getPostCount("post") == 0 && getPostCount("archive_post") == 1 }
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))
-        )
-    }
-
-    @Test
-    fun `delete_button callback should delete unread post and delete message`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "To Delete", "https://delete-cb.com")
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 51L, "delete_button|$postId"))
-
-        awaitCondition { getPostCount("post") == 0 }
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))
-        )
-    }
-
-    @Test
-    fun `unread_button callback should move post from archive to unread`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "To Unread", "https://unread-cb.com")
-        archivePost(postId)
-        val archivePostId = getArchivePostId(userId)
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 52L, "unread_button|$archivePostId"))
-
-        awaitCondition { getPostCount("post") == 1 && getPostCount("archive_post") == 0 }
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))
-        )
-    }
-
-    @Test
-    fun `delete_archive_button callback should delete archive post`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Del Archive", "https://del-archive-cb.com")
-        archivePost(postId)
-        val archivePostId = getArchivePostId(userId)
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 53L, "delete_archive_button|$archivePostId"))
-
-        awaitCondition { getPostCount("archive_post") == 0 }
-    }
-
-    @Test
-    fun `toggle_unread_favorite callback should toggle favorite and edit message`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Fav Toggle", "https://fav-toggle.com")
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 54L, "toggle_unread_favorite|$postId"))
-
-        awaitCondition {
-            jdbcTemplate.queryForObject(
-                "SELECT is_favorite FROM post WHERE id = ?", Boolean::class.java, postId
-            ) == true
-        }
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/editMessageText"))
-        )
-    }
-
-    @Test
-    fun `toggle_archive_favorite callback should toggle archive favorite`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Arch Fav", "https://arch-fav.com")
-        archivePost(postId)
-        val archivePostId = getArchivePostId(userId)
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 55L, "toggle_archive_favorite|$archivePostId"))
-
-        awaitCondition {
-            jdbcTemplate.queryForObject(
-                "SELECT is_favorite FROM archive_post WHERE id = ?", Boolean::class.java, archivePostId
-            ) == true
-        }
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/editMessageText"))
-        )
-    }
-
-    @Test
     fun `next_random_post callback should show next random post`() {
         registerTestUser()
         val userId = getUserId()
@@ -537,59 +643,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         awaitSendMessage()
     }
 
-    @Test
-    fun `favorites_to_archive callback should archive post and edit message keyboard, not delete`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Fav To Archive", "https://fav-to-archive.com")
-        markAsFavorite(postId)
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 70L, "favorites_to_archive|$postId"))
-
-        awaitCondition { getPostCount("post") == 0 && getPostCount("archive_post") == 1 }
-        awaitEditMessage()
-        // Ensure message was NOT deleted
-        wireMockTelegramApi.verify(
-            0, postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))
-        )
-    }
-
-    @Test
-    fun `favorites_to_unread callback should move post to unread and edit message keyboard, not delete`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Fav To Unread", "https://fav-to-unread.com")
-        markAsFavorite(postId)
-        archivePost(postId)
-        val archivePostId = getArchivePostId(userId)
-        markArchiveAsFavorite(archivePostId)
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 71L, "favorites_to_unread|$archivePostId"))
-
-        awaitCondition { getPostCount("post") == 1 && getPostCount("archive_post") == 0 }
-        awaitEditMessage()
-        wireMockTelegramApi.verify(
-            0, postRequestedFor(urlEqualTo("/bottest_token/deleteMessage"))
-        )
-    }
-
-    @Test
-    fun `toggle_favorites_unread_favorite callback should delete message when unfavoriting from favorites`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Unfav From Favorites", "https://unfav-favorites.com")
-        markAsFavorite(postId)
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 72L, "toggle_favorites_unread_favorite|$postId"))
-
-        awaitCondition {
-            jdbcTemplate.queryForObject("SELECT is_favorite FROM post WHERE id = ?", Boolean::class.java, postId) == false
-        }
-        wireMockTelegramApi.verify(postRequestedFor(urlEqualTo("/bottest_token/deleteMessage")))
-        // Post still exists in unread, just no longer a favorite
-        awaitCondition { getPostCount("post") == 1 }
-    }
-
     // ==================== Helper methods ====================
 
     private fun setupTelegramApiStubs() {
@@ -649,6 +702,23 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
             wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo(url))).size == 1
         }
         return wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo(url))).single().bodyAsString
+    }
+
+    private fun answersFor(id: String): List<String> =
+        wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/answerCallbackQuery")))
+            .map { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }
+            .filter { it.contains("callback_query_id=$id&") || it.endsWith("callback_query_id=$id") }
+
+    /** The decoded answerCallbackQuery body for callback query [id]. */
+    private fun awaitAnswer(id: String): String {
+        var found: String? = null
+        await().atMost(Duration.ofSeconds(5)).until {
+            found = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/answerCallbackQuery")))
+                .map { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }
+                .firstOrNull { it.contains("callback_query_id=$id&") || it.endsWith("callback_query_id=$id") }
+            found != null
+        }
+        return found!!
     }
 
     /** How Jackson writes [text] inside a JSON string. */

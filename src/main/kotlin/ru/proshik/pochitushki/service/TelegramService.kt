@@ -251,28 +251,6 @@ class TelegramService(
         return userSettings
     }
 
-    fun toArchivePost(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("toArchivePost: chatId={}, postId={}", chatId, postId)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("toArchivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
-
-        // A double tap on the same inline button sends the same callback twice. The loser of
-        // that race is told nothing — the post is archived either way, and the card goes.
-        try {
-            postService.archivePost(postId, user.id)
-        } catch (e: ConcurrentPostMoveException) {
-            logger.info("toArchivePost: post {} already moved by a concurrent request", postId)
-        }
-
-        botProvider.getBot().deleteMessage(
-            chatId = ChatId.fromId(chatId),
-            messageId = messageId
-        )
-
-        logger.info("toArchivePost success: chatId={}, postId={}", chatId, postId)
-    }
-
     fun archivePost(chatId: Long, messageId: Long, postId: Long) {
         logger.debug("archivePost: chatId={}, postId={}", chatId, postId)
 
@@ -286,86 +264,6 @@ class TelegramService(
         }
 
         logger.info("archivePost success: chatId={}, postId={}", chatId, postId)
-    }
-
-    fun toUnreadPost(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("toUnreadPost: chatId={}, postId={}", chatId, postId)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("toUnreadPost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
-
-        try {
-            postService.unreadPost(postId, user.id)
-        } catch (e: ConcurrentPostMoveException) {
-            logger.info("toUnreadPost: post {} already moved by a concurrent request", postId)
-        }
-
-        botProvider.getBot().deleteMessage(
-            chatId = ChatId.fromId(chatId),
-            messageId = messageId
-        )
-
-        logger.info("toUnreadPost success: chatId={}, postId={}", chatId, postId)
-    }
-
-    fun favoritesToArchive(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("favoritesToArchive: chatId={}, postId={}", chatId, postId)
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        val post = postService.getPost(postId, user.id, PostType.UNREAD) ?: run {
-            logger.warn("favoritesToArchive: post not found postId={}", postId)
-            return
-        }
-        val newArchiveId = try {
-            postService.archivePost(postId, user.id)
-        } catch (e: ConcurrentPostMoveException) {
-            logger.info("favoritesToArchive: post {} already moved by a concurrent request", postId)
-            return
-        } ?: run {
-            logger.warn("favoritesToArchive: post not owned/found postId={}", postId)
-            return
-        }
-        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
-        val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newArchiveId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = true)
-        editMessage(chatId, messageId, messageText, keyboard, parseMode = ParseMode.MARKDOWN_V2)
-        logger.info("favoritesToArchive success: chatId={}, postId={}, newArchiveId={}", chatId, postId, newArchiveId)
-    }
-
-    fun favoritesToUnread(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("favoritesToUnread: chatId={}, postId={}", chatId, postId)
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        val post = postService.getPost(postId, user.id, PostType.ARCHIVE) ?: run {
-            logger.warn("favoritesToUnread: post not found postId={}", postId)
-            return
-        }
-        val newUnreadId = try {
-            postService.unreadPost(postId, user.id)
-        } catch (e: ConcurrentPostMoveException) {
-            logger.info("favoritesToUnread: post {} already moved by a concurrent request", postId)
-            return
-        } ?: run {
-            logger.warn("favoritesToUnread: post not owned/found postId={}", postId)
-            return
-        }
-        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
-        val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newUnreadId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = false)
-        editMessage(chatId, messageId, messageText, keyboard, parseMode = ParseMode.MARKDOWN_V2)
-        logger.info("favoritesToUnread success: chatId={}, postId={}, newUnreadId={}", chatId, postId, newUnreadId)
-    }
-
-    fun toDeletePost(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
-        logger.debug("toDeletePost: chatId={}, postId={}, postType={}", chatId, postId, postType)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("toDeletePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
-
-        postService.deletePost(postId, user.id, postType)
-
-        botProvider.getBot().deleteMessage(
-            chatId = ChatId.fromId(chatId),
-            messageId = messageId
-        )
-
-        logger.info("toDeletePost success: chatId={}, postId={}", chatId, postId)
     }
 
     fun deletePost(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
@@ -496,61 +394,6 @@ class TelegramService(
         }
 
         logger.info("getRandomPost success: chatId={}, messageId={}", chatId, messageId)
-    }
-
-    fun toggleFavorite(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
-        logger.debug("toggleFavorite: chatId={}, postId={}, postType={}", chatId, postId, postType)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-
-        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType) ?: run {
-            logger.warn("toggleFavorite: post not owned/found postId={}", postId)
-            return
-        }
-        val post = postService.getPost(postId, user.id, postType)
-        if (post == null) {
-            logger.warn("toggleFavorite: post not found postId={}", postId)
-            return
-        }
-
-        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
-        val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(postId, postType, newIsFavorite, user.settings.languageCode)
-
-        editMessage(
-            chatId = chatId,
-            messageId = messageId,
-            text = messageText,
-            keyboard = keyboard,
-            parseMode = ParseMode.MARKDOWN_V2
-        )
-
-        logger.info("toggleFavorite success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
-    }
-
-    fun toggleFavoriteFromFavorites(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
-        logger.debug("toggleFavoriteFromFavorites: chatId={}, postId={}, postType={}", chatId, postId, postType)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        val newIsFavorite = postService.toggleFavorite(postId, user.id, postType) ?: run {
-            logger.warn("toggleFavoriteFromFavorites: post not owned/found postId={}", postId)
-            return
-        }
-
-        if (!newIsFavorite) {
-            // Post removed from favorites — delete the card from the list
-            botProvider.getBot().deleteMessage(chatId = ChatId.fromId(chatId), messageId = messageId)
-        } else {
-            // Re-added to favorites (edge case) — update keyboard in place
-            val post = postService.getPost(postId, user.id, postType) ?: run {
-                logger.warn("toggleFavoriteFromFavorites: post not found postId={}", postId)
-                return
-            }
-            val isArchived = postType == PostType.ARCHIVE
-            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(postId, PostType.FAVORITES, newIsFavorite, user.settings.languageCode, isArchived = isArchived)
-            editMessage(chatId, messageId, buildPostMessage(post.url, post.title, labels = post.labels), keyboard, parseMode = ParseMode.MARKDOWN_V2)
-        }
-
-        logger.info("toggleFavoriteFromFavorites success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
     }
 
     fun toggleFavoriteForRandomPost(chatId: Long, messageId: Long, postId: Long) {
