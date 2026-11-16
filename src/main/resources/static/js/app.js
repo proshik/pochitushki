@@ -605,14 +605,21 @@ function initMiniApp() {
   applyScheme();
   tg.onEvent('themeChanged', applyScheme);
 
-  /* Telegram's own back button instead of browser navigation on inner pages. */
-  if (location.pathname !== '/') {
-    tg.BackButton.show();
-    tg.BackButton.onClick(function () {
-      if (history.length > 1) history.back();
-      else location.href = '/';
-    });
+  /* Telegram's own back button instead of browser navigation on inner pages. The button
+     is native and keeps its state across page loads, so the feed hides it explicitly —
+     otherwise a button shown on /archive stays on / with nothing listening, and pressing it
+     no longer closes the app. pageshow re-syncs a page restored from the history cache,
+     where DOMContentLoaded does not run again. */
+  function syncBackButton() {
+    if (location.pathname === '/') tg.BackButton.hide();
+    else tg.BackButton.show();
   }
+  tg.BackButton.onClick(function () {
+    if (history.length > 1) history.back();
+    else location.href = '/';
+  });
+  syncBackButton();
+  window.addEventListener('pageshow', syncBackButton);
 
   /* Articles open outside the app: a plain link would navigate the Mini App itself away.
      openLink must run inside the user's tap, which a click listener is. */
