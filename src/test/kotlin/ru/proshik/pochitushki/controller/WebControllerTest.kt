@@ -78,6 +78,13 @@ class WebControllerTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `profile page has no feed size row`() {
+        mockMvc.perform(get("/profile").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("feed-size-btns"))))
+    }
+
+    @Test
     fun `GET random returns 200 with post-list element`() {
         mockMvc.perform(get("/random").with(withAuth(userId)))
             .andExpect(status().isOk)

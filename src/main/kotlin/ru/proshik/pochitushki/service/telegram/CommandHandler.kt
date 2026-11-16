@@ -122,7 +122,7 @@ class CommandHandler(
     }
 
     private fun handleRandomPostOperation(message: Message) {
-        telegramService.getRandomPost(message.chat.id, message.messageId)
+        postCardService.sendCard(message.chat.id, CardList.RANDOM)
     }
 
     /**

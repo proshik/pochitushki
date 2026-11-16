@@ -4,6 +4,7 @@ import com.github.kotlintelegrambot.entities.ChatId
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.configuration.BotProvider
+import ru.proshik.pochitushki.model.PostData
 import ru.proshik.pochitushki.model.UserData
 import ru.proshik.pochitushki.service.ConcurrentPostMoveException
 import ru.proshik.pochitushki.service.I18nService
@@ -48,11 +49,21 @@ class PostCardService(
         logger.info("sendCard success: chatId={}, list={}", chatId, list)
     }
 
+    /** The reply to a link the user sent: "Saved" (or "already saved") and the post's card, no paging. */
+    fun sendSaved(chatId: Long, post: PostData, alreadySaved: Boolean, replyTo: Long) {
+        val user = userService.getUserByChatId(chatId)
+        val lang = user.settings.languageCode
+        val header = i18n.getMessage(if (alreadySaved) "card.saved.already" else "card.saved.added", lang)
+        val view = CardView.Post(post, CardRef(CardList.SAVED, 0, post.id, PostLoc.of(post.isArchived)), 0, header = header)
+        presenter.send(chatId, view, lang, replyTo)
+    }
+
     fun onCallback(chatId: Long, messageId: Long, action: String, ref: CardRef, extra: String?): CallbackAnswer {
         val user = userService.findUserByChatId(chatId) ?: return CallbackAnswer()
         val card = Card(user, chatId, messageId, ref)
         val answer = when (action) {
             CardAction.NAV -> card.redrawAt(ref.offset)
+            CardAction.RANDOM_NEXT -> card.redrawAt(0)
             CardAction.NOOP -> null
             CardAction.ARCHIVE -> card.move(toArchive = true)
             CardAction.UNREAD -> card.move(toArchive = false)
@@ -94,8 +105,20 @@ class PostCardService(
 
         /** The post is gone: say so, and show what now sits at this offset. */
         fun gone(): CallbackAnswer {
-            redrawAt(ref.offset)
+            leave("card.toast.gone")
             return CallbackAnswer(i18n.getMessage("card.toast.gone", lang))
+        }
+
+        /**
+         * The post left the list. A paged card shows the next one at this offset; the reply to
+         * a saved link has no next one, so its text becomes the outcome ([statusKey]).
+         */
+        fun leave(statusKey: String): CallbackAnswer? {
+            if (ref.list == CardList.SAVED) {
+                presenter.redraw(chatId, messageId, CardView.Notice(i18n.getMessage(statusKey, lang)), lang)
+                return null
+            }
+            return redrawAt(ref.offset)
         }
 
         fun redrawButtons(change: (CardView.Post) -> CardView.Post): CallbackAnswer? {
@@ -124,12 +147,12 @@ class PostCardService(
                 presenter.redraw(chatId, messageId, CardView.Post(moved, ref.copy(postId = newId, loc = loc), total()), lang)
                 return null
             }
-            return redrawAt(ref.offset)
+            return leave(if (toArchive) "card.saved.archived" else "card.saved.unread")
         }
 
         fun delete(): CallbackAnswer? {
             if (postService.deletePost(ref.postId, user.id, ref.loc.postType) == 0) return gone()
-            return redrawAt(ref.offset)
+            return leave("card.saved.deleted")
         }
 
         /**
@@ -207,6 +230,10 @@ class PostCardService(
 
     /** The post at [offset] of [list], clamped to the list's end; null when the list is empty. */
     private fun load(user: UserData, list: CardList, offset: Int): CardView.Post? {
+        if (list == CardList.RANDOM) {
+            val post = postService.getRandomPost(user.id) ?: return null
+            return CardView.Post(post, CardRef(list, 0, post.id, PostLoc.UNREAD), 0)
+        }
         val total = postService.getPostCount(user.id, list.postType)
         if (total == 0) return null
         val at = offset.coerceIn(0, total - 1)

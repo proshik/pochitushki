@@ -1,7 +1,6 @@
 package ru.proshik.pochitushki.service
 
 import com.github.kotlintelegrambot.entities.ChatId
-import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.ReplyMarkup
@@ -10,20 +9,18 @@ import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.types.TelegramBotResult
 import java.io.File
 import java.net.URI
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.configuration.BotProvider
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
-import ru.proshik.pochitushki.model.LabelData
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserStoreData
 import ru.proshik.pochitushki.service.telegram.BotTaskExecutor
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
+import ru.proshik.pochitushki.service.telegram.card.PostCardService
 
 @Service
 @EnableConfigurationProperties(value = [TelegramProperties::class])
@@ -35,6 +32,7 @@ class TelegramService(
     private val exportService: ExportService,
     private val i18nService: I18nService,
     private val telegramKeyboard: TelegramKeyboard,
+    private val postCardService: PostCardService,
     private val botTaskExecutor: BotTaskExecutor,
     private val rateLimitService: RateLimitService,
 ) {
@@ -42,23 +40,11 @@ class TelegramService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     companion object {
-        const val DEFAULT_POST_COUNT = 3
-
-        const val NAVIGATION_TEXT_BUTTON =
-            """
-                \-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-
-            """
-
         const val LANGUAGE_RU_CODE = "ru"
         const val LANGUAGE_EN_CODE = "en"
 
         val supportedLanguages: List<String> = listOf(LANGUAGE_EN_CODE, LANGUAGE_RU_CODE)
     }
-
-    data class PostFeedItem(
-        val message: String,
-        val keyboard: InlineKeyboardMarkup
-    )
 
     /**
      * Send a message
@@ -174,7 +160,7 @@ class TelegramService(
         if (storedPost.isEmpty()) {
             logger.debug("post not found: chatId={}, url={}", chatId, url)
 
-            val (storedPostId, storedPostTitle) = try {
+            val (storedPostId, _) = try {
                 postService.addPost(url, user.id)
             } catch (e: SsrfValidationException) {
                 logger.debug("blocked SSRF url from bot: chatId={}, url={}", chatId, url)
@@ -186,37 +172,17 @@ class TelegramService(
                 return
             }
 
-            val textMessage = i18nService.getMessage("command.feed.add_post", user.settings.languageCode)
-            val message = if (storedPostTitle != null) {
-                "$textMessage\n\n$storedPostTitle"
-            } else {
-                textMessage
+            val saved = postService.getPost(storedPostId, user.id, PostType.UNREAD) ?: run {
+                logger.warn("addPost: just saved post {} not found", storedPostId)
+                return
             }
-
-            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(storedPostId, PostType.UNREAD, false, user.settings.languageCode)
-
-            val result = botProvider.getBot().sendMessage(
-                chatId = ChatId.fromId(chatId),
-                text = message,
-                replyParameters = ReplyParameters(messageId = messageId),
-                replyMarkup = keyboard
-            )
-            handleTgErrorResponse(result, chatId)
+            postCardService.sendSaved(chatId, saved, alreadySaved = false, replyTo = messageId)
         } else {
             logger.debug("post already added: chatId={}, url={}", chatId, url)
 
             // One answer, not one per row: the lookup is an exact match now, and any
             // historical duplicates of the same URL would otherwise each get a card.
-            val post = storedPost.first()
-            val message = buildPostMessage(
-                url.toString(),
-                post.title,
-                i18nService.getMessage("command.feed.post_already_added", user.settings.languageCode),
-                labels = post.labels,
-            )
-            val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.UNREAD, post.isFavorite, user.settings.languageCode)
-
-            sendPostMessage(chatId = chatId, postItem = PostFeedItem(message, keyboard))
+            postCardService.sendSaved(chatId, storedPost.first(), alreadySaved = true, replyTo = messageId)
         }
 
         logger.info("addPost success: chatId={}, messageId={}, rawUrl={}", chatId, messageId, rawUrl)
@@ -230,7 +196,7 @@ class TelegramService(
 
         val userData = userService.findUserByChatId(chatId)
         val userSettings = if (userData == null) {
-            val userSettings = UserSettingsData(languageCode, DEFAULT_POST_COUNT)
+            val userSettings = UserSettingsData(languageCode = languageCode)
             val userStoreData = UserStoreData(chatId, username, firstName, lastName, userSettings)
             userService.addUser(userStoreData)
 
@@ -244,180 +210,6 @@ class TelegramService(
         }
 
         return userSettings
-    }
-
-    fun archivePost(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("archivePost: chatId={}, postId={}", chatId, postId)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("archivePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
-
-        try {
-            postService.archivePost(postId, user.id)
-        } catch (e: ConcurrentPostMoveException) {
-            logger.info("archivePost: post {} already moved by a concurrent request", postId)
-        }
-
-        logger.info("archivePost success: chatId={}, postId={}", chatId, postId)
-    }
-
-    fun deletePost(chatId: Long, messageId: Long, postId: Long, postType: PostType) {
-        logger.debug("deletePost: chatId={}, postId={}, postType={}", chatId, postId, postType)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-        logger.debug("deletePost for userId={}, messageId={}, postId={}", user.id, messageId, postId)
-
-        postService.deletePost(postId, user.id, postType)
-
-        logger.info("deletePost success: chatId={}, postId={}, postType={}", chatId, postId, postType)
-    }
-
-    fun getFeed(chatId: Long, messageId: Long, offset: Int = 0, postType: PostType) {
-        logger.debug("getFeed: chatId={}, offset={}", chatId, offset)
-
-        val user = userService.findUserByChatId(chatId)
-            ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-
-        val languageCode = user.settings.languageCode
-
-        val countOfPosts = postService.getPostCount(user.id, postType)
-
-        val posts = postService.getPosts(user.id, postType, user.settings.tgFeedEntriesNumber, offset)
-        if (posts.isEmpty()) {
-            val notFoundCode = when (postType) {
-                PostType.FAVORITES -> "command.feed.not_found_favorites"
-                else -> "command.feed.not_found_post"
-            }
-            sendMessageWithReplayKeyboard(
-                chatId = chatId,
-                text = i18nService.getMessage(notFoundCode, languageCode),
-                replyToMessageId = messageId
-            )
-
-            return
-        }
-
-        val message = posts
-            .map { post ->
-                val date = if (postType == PostType.UNREAD || postType == PostType.ARCHIVE) post.createdDate else null
-                val message = buildPostMessage(post.url, post.title, createdDate = date, labels = post.labels)
-                val keyboard = if (postType == PostType.FAVORITES) {
-                    telegramKeyboard.buildFeedPostInlineKeyboard(post.id, PostType.FAVORITES, post.isFavorite, languageCode, isArchived = post.isArchived)
-                } else {
-                    telegramKeyboard.buildFeedPostInlineKeyboard(post.id, postType, post.isFavorite, languageCode)
-                }
-
-                PostFeedItem(message, keyboard)
-            }
-
-        if (offset == 0) {
-            val messageCode = when (postType) {
-                PostType.UNREAD -> "command.feed.unread_message"
-                PostType.ARCHIVE -> "command.feed.archive_message"
-                PostType.FAVORITES -> "command.favorites.message"
-                PostType.ALL -> error("ALL is not supported in Telegram bot")
-            }
-
-            val text = i18nService.getMessage(messageCode, languageCode, arrayOf(countOfPosts))
-
-            val result = botProvider.getBot().sendMessage(
-                chatId = ChatId.fromId(chatId),
-                text = text,
-            )
-            handleTgErrorResponse(result, chatId)
-        }
-
-        // in loop print N messages with buttons "Archive" и "Delete"
-        message.forEach { postItem ->
-            sendPostMessage(chatId = chatId, postItem = postItem)
-        }
-
-        val navigationKeyboard =
-            telegramKeyboard.buildNavigationKeyboard(
-                postType,
-                posts.size,
-                offset,
-                countOfPosts,
-                languageCode,
-                user.settings.tgFeedEntriesNumber
-            )
-        if (navigationKeyboard != null) {
-            val result = botProvider.getBot().sendMessage(
-                chatId = ChatId.fromId(chatId),
-                parseMode = ParseMode.MARKDOWN_V2,
-                text = NAVIGATION_TEXT_BUTTON,
-                replyMarkup = navigationKeyboard
-            )
-            handleTgErrorResponse(result, chatId)
-        }
-
-        logger.info("getFeed success: chatId={}, offset={}", chatId, offset)
-    }
-
-    fun getRandomPost(chatId: Long, messageId: Long, isEditMessage: Boolean = false) {
-        logger.debug("getRandomPost: chatId={}, messageId={}", chatId, messageId)
-
-        val user = userService.findUserByChatId(chatId)
-            ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-
-        val randomPost = postService.getRandomPost(user.id)
-        if (randomPost == null) {
-            sendMessageWithReplayKeyboard(
-                chatId = chatId,
-                text = i18nService.getMessage("command.random_post.not_found", user.settings.languageCode),
-                replyToMessageId = messageId
-            )
-
-            return
-        }
-
-        val postItem = PostFeedItem(
-            message = buildPostMessage(randomPost.url, randomPost.title, labels = randomPost.labels),
-            keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(randomPost.id, randomPost.isFavorite, user.settings.languageCode)
-        )
-
-        if (isEditMessage) {
-            editMessage(
-                chatId = chatId,
-                messageId = messageId,
-                parseMode = ParseMode.MARKDOWN_V2,
-                text = postItem.message,
-                keyboard = postItem.keyboard
-            )
-        } else {
-            sendPostMessage(chatId, messageId, postItem)
-        }
-
-        logger.info("getRandomPost success: chatId={}, messageId={}", chatId, messageId)
-    }
-
-    fun toggleFavoriteForRandomPost(chatId: Long, messageId: Long, postId: Long) {
-        logger.debug("toggleFavoriteForRandomPost: chatId={}, postId={}", chatId, postId)
-
-        val user = userService.findUserByChatId(chatId) ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-
-        val newIsFavorite = postService.toggleFavorite(postId, user.id, PostType.UNREAD) ?: run {
-            logger.warn("toggleFavoriteForRandomPost: post not owned/found postId={}", postId)
-            return
-        }
-        val post = postService.getPost(postId, user.id, PostType.UNREAD)
-        if (post == null) {
-            logger.warn("toggleFavoriteForRandomPost: post not found postId={}", postId)
-            return
-        }
-
-        val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
-        val keyboard = telegramKeyboard.buildRandomPostInlineKeyboard(postId, newIsFavorite, user.settings.languageCode)
-
-        editMessage(
-            chatId = chatId,
-            messageId = messageId,
-            text = messageText,
-            keyboard = keyboard,
-            parseMode = ParseMode.MARKDOWN_V2
-        )
-
-        logger.info("toggleFavoriteForRandomPost success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
     }
 
     fun import(chatId: Long, fileId: String) {
@@ -510,25 +302,6 @@ class TelegramService(
         }
     }
 
-    fun getFeedSettings(chatId: Long, messageId: Long) {
-        logger.debug("getFeedSettings: chatId={}, messageId={}", chatId, messageId)
-
-        val user = userService.findUserByChatId(chatId)
-            ?: throw RuntimeException("Can't find user data for chatId=$chatId")
-
-        val languageCode = user.settings.languageCode
-
-        // TODO handle warning
-        editMessage(
-            chatId = chatId,
-            messageId = messageId,
-            text = i18nService.getMessage("command.profile.settings.feed.message", languageCode),
-            keyboard = telegramKeyboard.buildSettingsFeedKeyboard(user.settings.tgFeedEntriesNumber, languageCode)
-        )
-
-        logger.debug("getFeedSettings success: chatId={}, messageId={}", chatId, messageId)
-    }
-
     fun getLanguageSettings(chatId: Long, messageId: Long) {
         logger.debug("getLanguageSettings: chatId={}, messageId={}", chatId, messageId)
 
@@ -592,83 +365,4 @@ class TelegramService(
 
         logger.info("updateUserSettingsLanguageCode success: chatId={}, messageId={}, languageCode={}", chatId, messageId, languageCode)
     }
-
-    fun updateUserSettingsFeedCount(chatId: Long, messageId: Long, tgFeedEntriesNumber: Int) {
-        logger.debug("updateUserSettingsFeedCount chatId={}, messageId={}, languageCode={}", chatId, messageId, tgFeedEntriesNumber)
-
-        val user = userService.findUserByChatId(chatId)
-            ?: throw RuntimeException("user could not be found for chatId=$chatId")
-
-        val updatedUserSettings = user.settings.copy(tgFeedEntriesNumber = tgFeedEntriesNumber)
-
-        userService.updateUserSettings(user.id, updatedUserSettings)
-
-        editMessage(
-            chatId = chatId,
-            messageId = messageId,
-            text = i18nService.getMessage("command.profile.settings.feed.message", user.settings.languageCode),
-            keyboard = telegramKeyboard.buildSettingsFeedKeyboard(tgFeedEntriesNumber, user.settings.languageCode)
-        )
-
-        logger.info("updateUserSettingsFeedCount success: chatId={}, tgFeedEntriesNumber={}", chatId, tgFeedEntriesNumber)
-    }
-
-    private fun buildPostMessage(
-        postUrl: String,
-        postTitle: String?,
-        prefixMessage: String? = "",
-        createdDate: LocalDateTime? = null,
-        labels: List<LabelData> = emptyList(),
-    ): String {
-        val escapedUrl = escapeTextMarkdown2(postUrl)
-        val escapedTitle = postTitle?.let { title -> escapeTextMarkdown2(title) } ?: escapedUrl
-        val dateLine = createdDate?.let { date ->
-            "\n_" + escapeTextMarkdown2(date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))) + "_"
-        } ?: ""
-        // '#' is itself a MarkdownV2 special, so the hash is escaped too, not just the name.
-        val labelLine = labels
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString(" ", prefix = "\n") { "\\#" + escapeTextMarkdown2(it.name) }
-            ?: ""
-
-        val message = "$prefixMessage[${escapedTitle}]($escapedUrl)$dateLine$labelLine"
-
-        return message
-    }
-
-    private fun sendPostMessage(chatId: Long, messageId: Long? = null, postItem: PostFeedItem) {
-        val result = botProvider.getBot().sendMessage(
-            chatId = ChatId.fromId(chatId),
-            parseMode = ParseMode.MARKDOWN_V2,
-            text = postItem.message,
-            replyMarkup = postItem.keyboard,
-            replyParameters = messageId?.let { ReplyParameters(messageId = it) }
-        )
-        handleTgErrorResponse(result, chatId)
-    }
-
-    // The backslash goes first: escaping it after the others would double-escape the
-    // backslashes this function just inserted. A title containing a literal "\*" otherwise
-    // either injected markup or made Telegram reject the message with a 400.
-    private fun escapeTextMarkdown2(text: String): String =
-        text
-            .replace("\\", "\\\\")
-            .replace("_", "\\_")
-            .replace("*", "\\*")
-            .replace("[", "\\[")
-            .replace("]", "\\]")
-            .replace("(", "\\(")
-            .replace(")", "\\)")
-            .replace("~", "\\~")
-            .replace("`", "\\`")
-            .replace(">", "\\>")
-            .replace("#", "\\#")
-            .replace("+", "\\+")
-            .replace("-", "\\-")
-            .replace("=", "\\=")
-            .replace("|", "\\|")
-            .replace("{", "\\{")
-            .replace("}", "\\}")
-            .replace(".", "\\.")
-            .replace("!", "\\!")
 }

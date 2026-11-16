@@ -7,7 +7,6 @@ import com.github.kotlintelegrambot.entities.CallbackQuery
 import com.github.kotlintelegrambot.entities.Update
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsLimits
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService
@@ -88,36 +87,8 @@ class CallbackQueryHandler(
 
         when (action) {
             /**
-             * Random post
-             */
-            TelegramKeyboard.CALLBACK_RANDOM_POST_ARCHIVE -> {
-                val postId = data.toLong()
-                telegramService.archivePost(chatId, message.messageId, postId)
-                telegramService.getRandomPost(chatId, message.messageId, true)
-            }
-            TelegramKeyboard.CALLBACK_RANDOM_POST_DELETE -> {
-                val postId = data.toLong()
-                telegramService.deletePost(chatId, message.messageId, postId, PostType.UNREAD)
-                telegramService.getRandomPost(chatId, message.messageId, true)
-            }
-            TelegramKeyboard.CALLBACK_NEXT_RANDOM_POST -> {
-                telegramService.getRandomPost(chatId, message.messageId, true)
-            }
-            /**
-             * Toggle favorite
-             */
-            TelegramKeyboard.CALLBACK_TOGGLE_RANDOM_FAVORITE -> {
-                val postId = data.toLong()
-                telegramService.toggleFavoriteForRandomPost(chatId, message.messageId, postId)
-            }
-            /**
              * Profile settings block
              */
-            TelegramKeyboard.CALLBACK_PROFILE_FEED_SETTINGS -> {
-                // TODO check exception
-                telegramService.getFeedSettings(chatId, messageId)
-            }
-
             TelegramKeyboard.CALLBACK_PROFILE_LANGUAGE_SETTINGS -> {
                 // TODO check exception
                 telegramService.getLanguageSettings(chatId, messageId)
@@ -132,15 +103,6 @@ class CallbackQueryHandler(
                     return CallbackAnswer()
                 }
                 telegramService.updateUserSettingsLanguageCode(chatId, messageId, data)
-            }
-
-            TelegramKeyboard.CALLBACK_PROFILE_FEED_SETTINGS_CHANGE -> {
-                val tgFeedEntriesNumber = data.toIntOrNull()
-                if (tgFeedEntriesNumber == null || tgFeedEntriesNumber !in UserSettingsLimits.FEED_ENTRIES_RANGE) {
-                    logger.warn("ignoring out-of-range feed size in callback: {}", data)
-                    return CallbackAnswer()
-                }
-                telegramService.updateUserSettingsFeedCount(chatId, messageId, tgFeedEntriesNumber)
             }
 
             TelegramKeyboard.CALLBACK_PROFILE_BACK_SETTINGS -> {

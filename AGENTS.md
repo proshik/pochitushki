@@ -42,7 +42,8 @@ telegram-login-broker); само приложение запускается н�
 
 **Слои**: Controller → Service → Repository (DAO) → PostgreSQL
 **БД**: PostgreSQL 16, Spring JDBC + NamedParameterJdbcTemplate (без ORM), миграции Liquibase
-**Telegram**: поддержка polling и webhook, через kotlin-telegram-bot;
+**Telegram**: поддержка polling и webhook, через kotlin-telegram-bot 10.0.0 (диспетчер апдейтов
+и простые вызовы) плюс Feign-клиент `TelegramBotApiClient` (карточка поста, см. ниже);
 бот включается флагом `telegram.enabled` (см. `TelegramBotConfiguration`) — независим от входа через Telegram
 **Web**: Thymeleaf-страницы (`feed/all/archive/favorites/random/profile/login`) + HTML-фрагменты;
 дизайн «Обложки»: генеративные обложки постов (`CoverService`), все стили в
@@ -72,6 +73,9 @@ ru.proshik.pochitushki/
 ├── service/telegram/    # CommandHandler, CallbackQueryHandler, TelegramKeyboard,
 │                        #   TelegramUpdateHandler (интерфейс обработчика),
 │                        #   BotTaskExecutor (пул для PDF/импорта/экспорта)
+├── service/telegram/card/  # Карточка поста: CardRef (формат callback_data),
+│                        #   PostCardService, CardPresenter, PostCardRenderer, PostPdfSender
+├── service/telegram/api/   # TelegramBotApiClient (Feign) + TelegramBotApi (ошибки/логи)
 ├── configuration/       # TelegramBotConfiguration, BotProvider, JwtAuthInterceptor,
 │                        #   WebConfig, PdfConfiguration, MessageConfiguration,
 │                        #   SecurityHeadersFilter, CsrfOriginFilter, RequestIdFilter
@@ -89,8 +93,9 @@ ru.proshik.pochitushki/
 
 - Таблица `post` — непрочитанные ссылки, `archive_post` — архив (та же структура)
 - Флаг `is_favorite` в обеих таблицах (миграция `3_add_favorites`)
-- JSONB-колонка `settings` в таблице `users` (`languageCode`, `tgFeedEntriesNumber`,
-  `showOgCovers`). Миграции под новые ключи нет и не нужно: Jackson KotlinModule
+- JSONB-колонка `settings` в таблице `users` (`languageCode`, `showOgCovers` и legacy
+  `tgFeedEntriesNumber` — его больше никто не читает: бот показывает одну карточку; поле
+  оставлено в `UserSettingsData` с дефолтом, чтобы старые строки читались и не теряли значение). Миграции под новые ключи нет и не нужно: Jackson KotlinModule
   подставляет дефолт из конструктора, поэтому старые строки без ключа читаются как
   `showOgCovers = true`. Новый ключ обязан иметь дефолт, иначе чтение старых строк упадёт
 - `PostType`: `UNREAD` / `ARCHIVE` / `FAVORITES` / `ALL`. Маппинг из строки
@@ -205,6 +210,31 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   поэтому фрагмент всегда отдаётся с `hasMore=false` — сентинел бесконечной
   прокрутки на этой странице появиться не должен
 
+### Telegram-бот: карточка поста
+
+- `/feed`, `/archive`, `/favorites`, `/random_post` и ответ на присланную ссылку — **одно**
+  сообщение-карточка (`PostCardService`). Все кнопки правят его же (`editMessageText` /
+  `editMessageReplyMarkup`), новых сообщений на действия с постом нет. Анти-цель — снова
+  разрастающийся чат
+- Текст — HTML parse mode (`PostCardRenderer`, `escapeHtml`), превью — `link_preview_options`
+  с URL поста. Рисует карточку **Feign-клиент** `TelegramBotApiClient` на `telegram.api-url`,
+  а не библиотека: в kotlin-telegram-bot 10.0.0 у `editMessageText` нет `link_preview_options`
+  (документация библиотеки утверждает обратное). Клавиатура — своя модель `InlineKeyboard`:
+  Gson-модели библиотеки Jackson сериализует неверно
+- `TelegramBotApi` ничего не бросает; `400 message is not modified` — успех. В лог идут только
+  статус и `description`: в URL запроса и в `FeignException.message` лежит токен бота
+- `callback_data` — только `CardRef` (≤ 64 байт): `<действие>|<список>:<offset>:<id>:<таблица>[:extra]`.
+  Кнопка несёт и место карточки (список, offset), и пост (id, таблица): поэтому старая карточка
+  действует на свой пост, а не на тот, что сейчас на этом offset. Пост, которого уже нет, →
+  тост «Пост уже убран» и перерисовка на том же offset. Кнопки карточек старых версий → тост
+  «устарела»
+- На **каждый** `callback_query` — ровно один `answerCallbackQuery`. Поэтому
+  `CallbackQueryHandler` — свой `Handler`, а не DSL `callbackQuery { }` библиотеки: тот отвечает
+  сам после обработчика и без текста, и тост стал бы вторым ответом
+- В избранном «В архив»/«В непрочитанное» меняют только кнопку: пост остаётся на карточке
+  под новым id. Ответ на ссылку (`CardList.SAVED`) без листания; после архива/удаления его
+  текст становится итогом
+
 ### PDF generation
 
 Две реализации `PdfGenerator`. `OpenhtmlPdfGenerator` регистрируется всегда и
@@ -220,11 +250,11 @@ TTL 30 дней. Ключ — **(user_id, sha256(url), engine)**, а не post_i
 `user_id` в ключе, чтобы чужой рендер не отдавался. Протухшие строки чистятся при
 записи, отдельного шедулера нет.
 
-Выбор движка — **рантаймовый, а не конфигурационный**: `TelegramService` инжектит
+Выбор движка — **рантаймовый, а не конфигурационный**: `PostPdfSender` инжектит
 `Map<String, PdfGenerator>` и ищет бин по имени `"${engine}PdfGenerator"`, а движок
-выбирает пользователь inline-кнопкой (когда доступен больше одного). Отсюда
+выбирает пользователь кнопкой в карточке (когда доступен больше одного). Отсюда
 следует, что **имена бинов в `PdfConfiguration` нельзя менять свободно** — они
-часть контракта с `getAvailablePdfEngines()`/`sendPostPdf()`.
+часть контракта с `PostPdfSender.engines()`/`start()`.
 
 ## Code Conventions
 
@@ -268,3 +298,5 @@ TTL 30 дней. Ключ — **(user_id, sha256(url), engine)**, а не post_i
 | `src/main/resources/liquibase/` | Миграции БД |
 | `service/telegram/CommandHandler.kt` | Обработчик Telegram-команд |
 | `service/telegram/CallbackQueryHandler.kt` | Обработчик inline-кнопок |
+| `service/telegram/card/PostCardService.kt` | Карточка поста: показ, листание, действия |
+| `service/telegram/card/CardRef.kt` | Формат `callback_data` карточки |

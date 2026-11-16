@@ -56,31 +56,15 @@ class ProfileApiControllerTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `POST settings updates tgFeedEntriesNumber`() {
+    fun `feed size in the body is ignored`() {
+        // The bot no longer has a feed size: one card, edited in place. An old page may still
+        // post the key; it is accepted and left alone.
         mockMvc.perform(
             post("/api/v1/profile/settings")
                 .with(withAuth(userId))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"tgFeedEntriesNumber":4}""")
+                .content("""{"tgFeedEntriesNumber":3}""")
         ).andExpect(status().isOk)
-
-        val count = jdbcTemplate.queryForObject(
-            "SELECT (settings->>'tgFeedEntriesNumber')::int FROM users WHERE id = ?",
-            Int::class.java, userId
-        )
-        assertEquals(4, count)
-    }
-
-    @Test
-    fun `POST settings rejects a feed size the keyboard never offers`() {
-        // The value decides how many messages one /feed sends; 100000 would occupy the bot
-        // for hours. Only what buildSettingsFeedKeyboard draws (1..5) is accepted.
-        mockMvc.perform(
-            post("/api/v1/profile/settings")
-                .with(withAuth(userId))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"tgFeedEntriesNumber":100000}""")
-        ).andExpect(status().isBadRequest)
 
         val count = jdbcTemplate.queryForObject(
             "SELECT (settings->>'tgFeedEntriesNumber')::int FROM users WHERE id = ?",
@@ -145,7 +129,7 @@ class ProfileApiControllerTest : BaseIntegrationTest() {
             post("/api/v1/profile/settings")
                 .with(withAuth(userId))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"tgFeedEntriesNumber":3}""")
+                .content("""{"languageCode":"en"}""")
         ).andExpect(status().isOk)
 
         val show = jdbcTemplate.queryForObject(

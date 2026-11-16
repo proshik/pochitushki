@@ -28,6 +28,7 @@ import org.springframework.test.context.ActiveProfiles
 import ru.proshik.pochitushki.BaseIntegrationTest
 import ru.proshik.pochitushki.model.PostStoreData
 import ru.proshik.pochitushki.service.I18nService
+import ru.proshik.pochitushki.service.telegram.PendingLabelInput
 
 @AutoConfigureTestRestTemplate
 @ActiveProfiles("test", "telegram-test")
@@ -41,6 +42,9 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var i18nService: I18nService
+
+    @Autowired
+    private lateinit var pendingLabelInput: PendingLabelInput
 
     private lateinit var wireMockExternalUrl: WireMockServer
 
@@ -62,6 +66,9 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     fun tearDown() {
         wireMockExternalUrl.stop()
         wireMockTelegramApi.resetAll()
+        // In-memory and shared by the whole context: a label prompt left by one test would
+        // swallow the next test's first message as a label name.
+        pendingLabelInput.cancel(100)
         jdbcTemplate.execute("DELETE FROM archive_post_label")
         jdbcTemplate.execute("DELETE FROM post_label")
         jdbcTemplate.execute("DELETE FROM label")
@@ -84,38 +91,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `url message should fetch title, save post and confirm via sendMessage`() {
-        registerTestUser()
-
-        // External URL stub
-        wireMockExternalUrl.stubFor(
-            get(urlEqualTo("/article")).willReturn(
-                aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "text/html; charset=utf-8")
-                    .withBody("<html><head><title>Test Article Title</title></head><body>Content</body></html>")
-            )
-        )
-
-        val articleUrl = "http://localhost:${wireMockExternalUrl.port()}/article"
-        postUpdate(buildTextMessage(nextUpdateId(), articleUrl))
-
-        awaitPostCreated()
-
-        wireMockExternalUrl.verify(getRequestedFor(urlEqualTo("/article")))
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/sendMessage"))
-                .withRequestBody(containing("chat_id=100"))
-        )
-
-        val posts = jdbcTemplate.queryForList("SELECT title, url FROM post WHERE url LIKE ?", "%/article%")
-        assert(posts.isNotEmpty()) { "Expected post to be saved in DB" }
-        assert(posts[0]["title"] == "Test Article Title") {
-            "Expected title 'Test Article Title' but got '${posts[0]["title"]}'"
-        }
-    }
-
-    @Test
     fun `url message reply quotes the original message`() {
         registerTestUser()
         wireMockExternalUrl.stubFor(
@@ -133,7 +108,7 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         awaitSendMessage()
         val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
         assertTrue(
-            calls.any { it.bodyAsString.contains("reply_parameters=") && it.bodyAsString.contains("%22message_id%22%3A$updateId") },
+            calls.any { it.bodyAsString.contains("\"reply_parameters\":{\"message_id\":$updateId}") },
             "Expected the confirmation to reply to message $updateId via reply_parameters"
         )
     }
@@ -477,6 +452,141 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         assertTrue(answer.contains("text=" + i18nService.getMessage("card.toast.pdf_started", "en")), answer)
     }
 
+    // ==================== Card: random post and the reply to a saved link ====================
+
+    @Test
+    fun `random_post sends one card with a dice button`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Lucky", "https://lucky.com")
+
+        postUpdate(buildCommandMessage(nextUpdateId(), "/random_post", "random_post"))
+
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains(">Lucky</a>"), body)
+        assertTrue(body.contains("cr|r:0:$p:u"), body)
+        assertTrue(!body.contains("cn|"), "no paging on a random card: $body")
+    }
+
+    @Test
+    fun `random_post without posts says so`() {
+        registerTestUser()
+
+        postUpdate(buildCommandMessage(nextUpdateId(), "/random_post", "random_post"))
+
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains(jsonText(i18nService.getMessage("command.random_post.not_found", "en"))), body)
+    }
+
+    @Test
+    fun `dice edits the same message`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Lucky", "https://lucky.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 97L, "cr|r:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains("\"message_id\":97") && body.contains(">Lucky</a>"), body)
+    }
+
+    @Test
+    fun `archive on random shows another random`() {
+        registerTestUser()
+        val userId = getUserId()
+        val a = createPost(userId, "A", "https://a.com")
+        createPost(userId, "B", "https://b.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 98L, "ca|r:0:$a:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(">B</a>"), body)
+        assertEquals(1, getPostCount("archive_post"))
+    }
+
+    @Test
+    fun `saved link reply is a card without paging`() {
+        registerTestUser()
+        wireMockExternalUrl.stubFor(
+            get(urlEqualTo("/article")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody("<html><head><title>Test Article Title</title></head><body>Content</body></html>")
+            )
+        )
+
+        val updateId = nextUpdateId()
+        postUpdate(buildTextMessage(updateId, "http://localhost:${wireMockExternalUrl.port()}/article"))
+
+        awaitPostCreated()
+        val postId = jdbcTemplate.queryForObject("SELECT id FROM post WHERE url LIKE '%/article'", Long::class.java)!!
+        assertEquals("Test Article Title", jdbcTemplate.queryForObject("SELECT title FROM post WHERE id = ?", String::class.java, postId))
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains(jsonText(i18nService.getMessage("card.saved.added", "en"))), body)
+        assertTrue(body.contains(">Test Article Title</a>"), body)
+        assertTrue(body.contains("ca|s:0:$postId:u"), body)
+        assertTrue(body.contains("\"reply_parameters\":{\"message_id\":$updateId}"), body)
+        assertTrue(!body.contains(" / "), "no counter on the saved reply: $body")
+    }
+
+    @Test
+    fun `saving a known link says it is already there`() {
+        registerTestUser()
+        val url = "http://localhost:${wireMockExternalUrl.port()}/known"
+        val p = createPost(getUserId(), "Known", url)
+
+        postUpdate(buildTextMessage(nextUpdateId(), url))
+
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains(jsonText(i18nService.getMessage("card.saved.already", "en"))), body)
+        assertTrue(body.contains("ca|s:0:$p:u"), body)
+    }
+
+    @Test
+    fun `archive from the saved reply turns it into a status line`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Saved", "https://saved.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 99L, "ca|s:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(jsonText(i18nService.getMessage("card.saved.archived", "en"))), body)
+        assertTrue(body.contains("\"inline_keyboard\":[]"), body)
+        assertEquals(1, getPostCount("archive_post"))
+    }
+
+    @Test
+    fun `delete from the saved reply turns it into a status line`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Saved", "https://saved.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 100L, "cy|s:0:$p:u"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains(jsonText(i18nService.getMessage("card.saved.deleted", "en"))), body)
+        assertEquals(0, getPostCount("post"))
+    }
+
+    @Test
+    fun `profile no longer offers feed size`() {
+        registerTestUser()
+
+        postUpdate(buildCommandMessage(nextUpdateId(), "/profile", "profile"))
+
+        awaitSendMessage()
+        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
+        assertTrue(calls.none { it.bodyAsString.contains("profile_feed_settings") })
+    }
+
+    @Test
+    fun `old feed size button gets an outdated toast`() {
+        registerTestUser()
+
+        val id = nextUpdateId()
+        postUpdate(buildCallbackQuery(id, 101L, "profile_feed_settings|_"))
+
+        assertTrue(awaitAnswer("$id").contains("text=" + i18nService.getMessage("card.toast.outdated", "en")))
+    }
+
     @Test
     fun `post_labels callback should offer the label picker`() {
         registerTestUser()
@@ -545,34 +655,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `random_post command should send random post or not-found`() {
-        registerTestUser()
-
-        postUpdate(buildCommandMessage(nextUpdateId(), "/random_post", "random_post"))
-
-        awaitSendMessage()
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/sendMessage"))
-                .withRequestBody(containing("chat_id=100"))
-        )
-    }
-
-    @Test
-    fun `random_post command with posts should show a post`() {
-        registerTestUser()
-        val userId = getUserId()
-        createPost(userId, "Random Post", "https://random-test.com")
-
-        postUpdate(buildCommandMessage(nextUpdateId(), "/random_post", "random_post"))
-
-        awaitSendMessage()
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/sendMessage"))
-                .withRequestBody(containing("chat_id=100"))
-        )
-    }
-
-    @Test
     fun `profile command should send profile settings`() {
         registerTestUser()
 
@@ -601,51 +683,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     // ==================== Callback query tests ====================
 
     @Test
-    fun `next_random_post callback should show next random post`() {
-        registerTestUser()
-        val userId = getUserId()
-        createPost(userId, "Random 1", "https://random1.com")
-        createPost(userId, "Random 2", "https://random2.com")
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 58L, "next_random_post|_"))
-
-        awaitEditMessage()
-    }
-
-    @Test
-    fun `random_archive_button callback should archive random post and show next`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Rand Arch", "https://rand-arch.com")
-        createPost(userId, "Rand Other", "https://rand-other.com")
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 59L, "random_archive_button|$postId"))
-
-        awaitCondition { getPostCount("archive_post") == 1 }
-    }
-
-    @Test
-    fun `random_delete_button callback should delete random post and show next`() {
-        registerTestUser()
-        val userId = getUserId()
-        val postId = createPost(userId, "Rand Del", "https://rand-del.com")
-        createPost(userId, "Rand Keep", "https://rand-keep.com")
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 60L, "random_delete_button|$postId"))
-
-        awaitCondition { getPostCount("post") == 1 }
-    }
-
-    @Test
-    fun `profile_feed_settings callback should show feed settings`() {
-        registerTestUser()
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 61L, "profile_feed_settings|_"))
-
-        awaitEditMessage()
-    }
-
-    @Test
     fun `profile_language_settings callback should show language settings`() {
         registerTestUser()
 
@@ -665,20 +702,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
                 "SELECT settings::TEXT FROM users WHERE telegram_id = 100", String::class.java
             )
             settings != null && settings.contains("ru")
-        }
-    }
-
-    @Test
-    fun `profile_feed_settings_changed callback should update feed count`() {
-        registerTestUser()
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 64L, "profile_feed_settings_changed|5"))
-
-        awaitCondition {
-            val settings = jdbcTemplate.queryForObject(
-                "SELECT settings::TEXT FROM users WHERE telegram_id = 100", String::class.java
-            )
-            settings != null && settings.contains("5")
         }
     }
 

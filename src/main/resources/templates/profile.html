@@ -80,32 +80,6 @@
                 th:text="#{web.profile.toggle.off}">Выкл</button>
       </span>
     </div>
-    <div class="settings-row">
-      <span>
-        <span class="settings-label" th:text="#{web.profile.feed.size}">Ссылок в ленте бота</span><br>
-        <span class="settings-hint" th:text="#{web.profile.feed.size.hint}">Сколько карточек присылает /feed</span>
-      </span>
-      <span class="pills" id="feed-size-btns">
-        <button type="button" class="pill"
-                th:classappend="${user.settings.tgFeedEntriesNumber == 1} ? 'on'"
-                hx-post="/api/v1/profile/settings"
-                hx-vals='{"tgFeedEntriesNumber":1}'
-                hx-swap="none"
-                data-reload-on-success>1</button>
-        <button type="button" class="pill"
-                th:classappend="${user.settings.tgFeedEntriesNumber == 3} ? 'on'"
-                hx-post="/api/v1/profile/settings"
-                hx-vals='{"tgFeedEntriesNumber":3}'
-                hx-swap="none"
-                data-reload-on-success>3</button>
-        <button type="button" class="pill"
-                th:classappend="${user.settings.tgFeedEntriesNumber == 5} ? 'on'"
-                hx-post="/api/v1/profile/settings"
-                hx-vals='{"tgFeedEntriesNumber":5}'
-                hx-swap="none"
-                data-reload-on-success>5</button>
-      </span>
-    </div>
   </div>
 
 </main>
