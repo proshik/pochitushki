@@ -1,8 +1,8 @@
 plugins {
-    kotlin("jvm") version "2.4.20"
-    kotlin("plugin.spring") version "2.4.20"
+    kotlin("jvm") version "2.4.21"
+    kotlin("plugin.spring") version "2.4.21"
     id("java-library")
-    id("org.springframework.boot") version "4.0.8"
+    id("org.springframework.boot") version "4.0.9"
     id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -26,8 +26,8 @@ repositories {
 // version shipped in the Spring Boot BOM. The pin also covers kotlin-build-tools-impl, i.e. the
 // compiler itself: bump it together with the plugins (Dependabot only touches the plugin lines),
 // otherwise compileKotlin fails with a bare InstantiationException.
-extra["kotlin.version"] = "2.4.20"
-extra["springCloudVersion"] = "2025.1.3"
+extra["kotlin.version"] = "2.4.21"
+extra["springCloudVersion"] = "2025.1.4"
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -65,7 +65,7 @@ dependencies {
 
     implementation("tools.jackson.dataformat:jackson-dataformat-csv")
 
-    implementation("org.jsoup:jsoup:1.23.2")
+    implementation("org.jsoup:jsoup:1.24.1")
 
     // Bounded in-memory cache for the OG image proxy (weight = bytes, not entries).
     // Version comes from the Spring Boot BOM.
@@ -73,12 +73,12 @@ dependencies {
 
     // Token-bucket лимиты на пользователя (RateLimitService). Артефакт _jdk17 — линейка
     // для Java 17+; старый bucket4j-core заморожен на 8.10.
-    implementation("com.bucket4j:bucket4j_jdk17-core:8.20.0")
+    implementation("com.bucket4j:bucket4j_jdk17-core:8.22.0")
 
-    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.86")
-    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
+    implementation("io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.114")
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.15.3")
 
-    implementation("com.microsoft.playwright:playwright:1.52.0")
+    implementation("com.microsoft.playwright:playwright:1.65.0")
 
     runtimeOnly("org.postgresql:postgresql")
 
@@ -99,7 +99,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
 
-    testImplementation("org.wiremock:wiremock-standalone:3.13.0")
+    testImplementation("org.wiremock:wiremock-standalone:3.13.2")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
