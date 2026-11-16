@@ -10,6 +10,13 @@ import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_EN_CODE
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_RU_CODE
+import ru.proshik.pochitushki.service.telegram.api.InlineButton
+import ru.proshik.pochitushki.service.telegram.api.InlineKeyboard
+import ru.proshik.pochitushki.service.telegram.card.CardAction
+import ru.proshik.pochitushki.service.telegram.card.CardList
+import ru.proshik.pochitushki.service.telegram.card.CardView
+import ru.proshik.pochitushki.service.telegram.card.PostLoc
+import ru.proshik.pochitushki.service.telegram.card.cardCallback
 
 @Service
 class TelegramKeyboard(private val i18nService: I18nService) {
@@ -63,9 +70,64 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         const val CALLBACK_POST_LABEL_NEW = "post_label_new"
         const val CALLBACK_POST_LABELS_BACK = "post_labels_back"
 
+        // Card symbols: the same in every language, so they are not resource-bundle text.
+        private const val STAR_ON = "★"
+        private const val STAR_OFF = "☆"
+        private const val TRASH = "🗑"
+        private const val MORE = "⋯"
+        private const val PREV = "‹"
+        private const val NEXT = "›"
+        private const val INERT = "·"
+        private val PAGED_LISTS = setOf(CardList.UNREAD, CardList.ARCHIVE, CardList.FAVORITES)
+
         /** Rebuilding the card's own keyboard after "back" needs the context it was drawn in. */
         const val CONTEXT_FEED = "n"
         const val CONTEXT_FAVORITES = "f"
+    }
+
+    /**
+     * The post card's buttons. Every button carries the card's whole ref, see CardRef.
+     * ```
+     * [ ✓ В архив ] [ ☆ ] [ 🗑 ] [ ⋯ ]
+     * [    ‹    ] [ 3 / 42 ] [    ›    ]
+     * ```
+     * The arrows turn into inert dots at the ends so the row keeps its shape.
+     */
+    fun buildCardKeyboard(view: CardView.Post, languageCode: String): InlineKeyboard {
+        val ref = view.ref
+        fun button(text: String, action: String, extra: String? = null) =
+            InlineButton(text, callbackData = cardCallback(action, ref, extra))
+
+        val move = if (ref.loc == PostLoc.ARCHIVE) {
+            button(i18nService.getMessage("card.button.unread", languageCode), CardAction.UNREAD)
+        } else {
+            button(i18nService.getMessage("card.button.archive", languageCode), CardAction.ARCHIVE)
+        }
+        val actions = listOf(
+            move,
+            button(if (view.post.isFavorite) STAR_ON else STAR_OFF, CardAction.FAVORITE),
+            button(TRASH, CardAction.DELETE_ASK),
+            button(MORE, CardAction.MORE, "1"),
+        )
+
+        val rows = mutableListOf(actions)
+        if (ref.list in PAGED_LISTS) {
+            val last = view.total - 1
+            rows += listOf(
+                if (ref.offset > 0) {
+                    InlineButton(PREV, callbackData = cardCallback(CardAction.NAV, ref.at(ref.offset - 1)))
+                } else {
+                    button(INERT, CardAction.NOOP)
+                },
+                button("${ref.offset + 1} / ${view.total}", CardAction.NOOP),
+                if (ref.offset < last) {
+                    InlineButton(NEXT, callbackData = cardCallback(CardAction.NAV, ref.at(ref.offset + 1)))
+                } else {
+                    button(INERT, CardAction.NOOP)
+                },
+            )
+        }
+        return InlineKeyboard(rows)
     }
 
     /**

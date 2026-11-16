@@ -13,6 +13,7 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import java.time.Duration
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -26,6 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import ru.proshik.pochitushki.BaseIntegrationTest
 import ru.proshik.pochitushki.model.PostStoreData
+import ru.proshik.pochitushki.service.I18nService
 
 @AutoConfigureTestRestTemplate
 @ActiveProfiles("test", "telegram-test")
@@ -36,6 +38,9 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
+
+    @Autowired
+    private lateinit var i18nService: I18nService
 
     private lateinit var wireMockExternalUrl: WireMockServer
 
@@ -146,70 +151,81 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         )
     }
 
+    // ==================== Card: one message, edited in place ====================
+
     @Test
-    fun `feed command should send feed or not-found message`() {
+    fun `feed sends exactly one card`() {
         registerTestUser()
+        val userId = getUserId()
+        createPostAt(userId, "Card 1", "https://card-1.com", minutesAgo = 30)
+        createPostAt(userId, "Card 2", "https://card-2.com", minutesAgo = 20)
+        createPostAt(userId, "Card 3", "https://card-3.com", minutesAgo = 10)
 
         postUpdate(buildCommandMessage(nextUpdateId(), "/feed", "feed"))
 
-        awaitSendMessage()
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/sendMessage"))
-                .withRequestBody(containing("chat_id=100"))
-        )
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains("\"parse_mode\":\"HTML\""), body)
+        assertTrue(body.contains(">Card 3</a>"), "newest post first: $body")
+        assertTrue(body.contains("\"link_preview_options\":{\"url\":\"https://card-3.com\""), body)
+        assertTrue(body.contains("\"text\":\"1 / 3\""), body)
     }
 
     @Test
-    fun `feed command with posts should show posts`() {
+    fun `next arrow edits the same message`() {
         registerTestUser()
         val userId = getUserId()
-        createPost(userId, "Feed Post", "https://feed-test.com")
+        createPostAt(userId, "Card 1", "https://card-1.com", minutesAgo = 30)
+        val second = createPostAt(userId, "Card 2", "https://card-2.com", minutesAgo = 20)
+        val third = createPostAt(userId, "Card 3", "https://card-3.com", minutesAgo = 10)
 
-        postUpdate(buildCommandMessage(nextUpdateId(), "/feed", "feed"))
+        postUpdate(buildCallbackQuery(nextUpdateId(), 77L, "cn|u:1:$third:u"))
 
-        // With 1 post: header message + 1 post message = 2 sendMessage calls
-        awaitTelegramApiCalls("/bottest_token/sendMessage", 2)
+        val body = awaitSingleCall("/bottest_token/editMessageText")
+        assertTrue(body.contains("\"message_id\":77"), body)
+        assertTrue(body.contains(">Card 2</a>"), body)
+        assertTrue(body.contains("\"text\":\"2 / 3\""), body)
+        assertTrue(body.contains("ca|u:1:$second:u"), "buttons now act on the shown post: $body")
+        assertEquals(0, wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage"))).size)
     }
 
     @Test
-    fun `feed command with posts should include date in message body`() {
+    fun `feed without posts says so in one message`() {
         registerTestUser()
-        val userId = getUserId()
-        createPost(userId, "Dated Post", "https://dated-post.com")
 
         postUpdate(buildCommandMessage(nextUpdateId(), "/feed", "feed"))
 
-        awaitTelegramApiCalls("/bottest_token/sendMessage", 2)
-
-        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
-        // The bot sends form-encoded requests: MarkdownV2 backslashes (\) are URL-encoded to %5C
-        // Italic date "_05\.04\.2026_" appears as "_%5C._%5C." etc. in URL-encoded body
-        val hasDate = calls.any { call ->
-            call.bodyAsString.contains(Regex("""_\d{2}%5C\.\d{2}%5C\.\d{4}_"""))
-        }
-        assertTrue(hasDate, "Expected post card to contain an italic date in MarkdownV2 format")
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains(jsonText(i18nService.getMessage("command.feed.not_found_post", "en"))), body)
     }
 
     @Test
-    fun `feed command should render labels under the post`() {
+    fun `archive command shows archive card`() {
         registerTestUser()
         val userId = getUserId()
-        val postId = createPost(userId, "Labelled Post", "https://labelled-post.com")
-        val labelId = jdbcTemplate.queryForObject(
-            "INSERT INTO label(user_id, name) VALUES (?, 'kotlin') RETURNING id",
-            Long::class.java, userId
-        )!!
-        jdbcTemplate.update("INSERT INTO post_label(post_id, label_id) VALUES (?, ?)", postId, labelId)
+        val postId = createPost(userId, "Archived", "https://archived.com")
+        archivePost(postId)
+        val archiveId = getArchivePostId(userId)
 
-        postUpdate(buildCommandMessage(nextUpdateId(), "/feed", "feed"))
+        postUpdate(buildCommandMessage(nextUpdateId(), "/archive", "archive"))
 
-        awaitTelegramApiCalls("/bottest_token/sendMessage", 2)
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains(">Archived</a>"), body)
+        assertTrue(body.contains("cu|a:0:$archiveId:a"), body)
+    }
 
-        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
-        // Form-encoded body: '#' is a MarkdownV2 special, so the bot sends "\#kotlin",
-        // which url-encodes to %5C%23kotlin.
-        val hasLabel = calls.any { it.bodyAsString.contains("%5C%23kotlin") }
-        assertTrue(hasLabel, "Expected the post card to carry an escaped #kotlin label")
+    @Test
+    fun `favorites command shows favorites card`() {
+        registerTestUser()
+        val userId = getUserId()
+        val postId = createPost(userId, "Starred", "https://starred.com")
+        markAsFavorite(postId)
+
+        postUpdate(buildCommandMessage(nextUpdateId(), "/favorites", "favorites"))
+
+        val body = awaitSingleCall("/bottest_token/sendMessage")
+        assertTrue(body.contains(">Starred</a>"), body)
+        assertTrue(body.contains("ca|f:0:$postId:u"), body)
+        assertTrue(body.contains("\"text\":\"★\""), body)
     }
 
     @Test
@@ -277,32 +293,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         postUpdate(buildCallbackQuery(nextUpdateId(), 64L, "post_labels|$postId:u:n"))
 
         awaitTelegramApiCalls("/bottest_token/sendMessage", 1)
-    }
-
-    @Test
-    fun `archive command should send archive feed or not-found`() {
-        registerTestUser()
-
-        postUpdate(buildCommandMessage(nextUpdateId(), "/archive", "archive"))
-
-        awaitSendMessage()
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/sendMessage"))
-                .withRequestBody(containing("chat_id=100"))
-        )
-    }
-
-    @Test
-    fun `favorites command should send favorites feed or not-found`() {
-        registerTestUser()
-
-        postUpdate(buildCommandMessage(nextUpdateId(), "/favorites", "favorites"))
-
-        awaitSendMessage()
-        wireMockTelegramApi.verify(
-            postRequestedFor(urlEqualTo("/bottest_token/sendMessage"))
-                .withRequestBody(containing("chat_id=100"))
-        )
     }
 
     @Test
@@ -454,32 +444,6 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         wireMockTelegramApi.verify(
             postRequestedFor(urlEqualTo("/bottest_token/editMessageText"))
         )
-    }
-
-    @Test
-    fun `next_posts callback should show next page of posts`() {
-        registerTestUser()
-        val userId = getUserId()
-        for (i in 1..5) {
-            createPost(userId, "Post $i", "https://page-$i.com")
-        }
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 56L, "next_posts|3"))
-
-        awaitTelegramApiCalls("/bottest_token/sendMessage", 2)
-    }
-
-    @Test
-    fun `previous_posts callback should show previous page`() {
-        registerTestUser()
-        val userId = getUserId()
-        for (i in 1..6) {
-            createPost(userId, "Post $i", "https://prev-page-$i.com")
-        }
-
-        postUpdate(buildCallbackQuery(nextUpdateId(), 57L, "previous_posts|3"))
-
-        awaitTelegramApiCalls("/bottest_token/sendMessage", 2)
     }
 
     @Test
@@ -670,6 +634,25 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
             Long::class.java, title, url, userId
         )!!
     }
+
+    private fun createPostAt(userId: Long, title: String, url: String, minutesAgo: Long): Long {
+        return jdbcTemplate.queryForObject(
+            "INSERT INTO post (title, url, user_id, created_date) VALUES (?, ?, ?, now() - make_interval(mins => ?)) RETURNING id",
+            Long::class.java, title, url, userId, minutesAgo.toInt()
+        )!!
+    }
+
+    /** Waits for one call to [url], makes sure no second one follows, and returns its body. */
+    private fun awaitSingleCall(url: String): String {
+        awaitTelegramApiCalls(url, 1)
+        await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(3)).until {
+            wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo(url))).size == 1
+        }
+        return wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo(url))).single().bodyAsString
+    }
+
+    /** How Jackson writes [text] inside a JSON string. */
+    private fun jsonText(text: String): String = text.replace("\\", "\\\\").replace("\"", "\\\"")
 
     private fun createLabel(userId: Long, name: String): Long =
         jdbcTemplate.queryForObject(

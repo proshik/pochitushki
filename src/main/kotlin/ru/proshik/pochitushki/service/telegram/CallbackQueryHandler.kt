@@ -8,6 +8,9 @@ import org.springframework.stereotype.Component
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsLimits
 import ru.proshik.pochitushki.service.TelegramService
+import ru.proshik.pochitushki.service.telegram.card.CardAction
+import ru.proshik.pochitushki.service.telegram.card.PostCardService
+import ru.proshik.pochitushki.service.telegram.card.parseCardCallback
 
 /**
  * Handler for Telegram callback queries.
@@ -15,6 +18,7 @@ import ru.proshik.pochitushki.service.TelegramService
 @Component
 class CallbackQueryHandler(
     private val telegramService: TelegramService,
+    private val postCardService: PostCardService,
 ) : TelegramUpdateHandler {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -48,6 +52,15 @@ class CallbackQueryHandler(
 
         val (action, data) = parseCallbackData(callbackData)
         logger.debug("handleCallbacks: action={}, data={}", action, data)
+
+        if (action in CardAction.ALL) {
+            val (ref, extra) = parseCardCallback(data) ?: run {
+                logger.warn("ignoring malformed card callback: {}", callbackData)
+                return
+            }
+            postCardService.onCallback(chatId, messageId, action, ref, extra)
+            return
+        }
 
         when (action) {
             TelegramKeyboard.CALLBACK_ARCHIVE_POST -> {
