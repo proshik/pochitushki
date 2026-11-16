@@ -1,10 +1,7 @@
 package ru.proshik.pochitushki.service.miniapp
 
-import java.net.URLEncoder
 import java.time.Duration
 import java.time.Instant
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -96,16 +93,5 @@ class InitDataValidatorTest {
         assertEquals("archive", InitData.validate(raw, exampleToken, now).startParam)
     }
 
-    /** Signs [fields] the way Telegram does, independently of the code under test. */
-    private fun sign(fields: Map<String, String>, token: String): String {
-        val checkString = fields.toSortedMap().entries.joinToString("\n") { "${it.key}=${it.value}" }
-        val secret = hmac("WebAppData".toByteArray(), token.toByteArray())
-        val hash = hmac(secret, checkString.toByteArray()).joinToString("") { "%02x".format(it) }
-        return (fields + ("hash" to hash)).entries.joinToString("&") {
-            "${it.key}=${URLEncoder.encode(it.value, Charsets.UTF_8)}"
-        }
-    }
-
-    private fun hmac(key: ByteArray, message: ByteArray): ByteArray =
-        Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(key, "HmacSHA256")) }.doFinal(message)
+    private fun sign(fields: Map<String, String>, token: String) = InitDataSigner.sign(fields, token)
 }

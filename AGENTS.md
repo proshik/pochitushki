@@ -52,7 +52,9 @@ telegram-login-broker); само приложение запускается н�
 кладёт `userId` в request-атрибут и защищает `/`, `/all`, `/archive`,
 `/favorites`, `/random`, `/profile`, `/api/v1/**` (см. `WebConfig`). Выход —
 `POST /logout`: отзывает токены через `users.tokens_valid_after` (миграция 9),
-интерцептор сверяет с ним `iat` токена
+интерцептор сверяет с ним `iat` токена. Внутри Telegram сайт открывается как Mini App
+(`/tg`): вход по `initData` (`POST /auth/telegram/webapp`, HMAC `WebAppData`), токен с
+claim `tma` включает режим Mini App (см. `.claude/rules/security.md`, раздел «Mini App»)
 **Эксплуатация**: ровно одна реплика (бот + in-memory состояние), probes
 `/actuator/health/{liveness,readiness}`, метрики Prometheus — только по
 `MANAGEMENT_SERVER_PORT` + `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE`,

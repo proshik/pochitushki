@@ -57,6 +57,7 @@ class JwtAuthInterceptor(
         val settings = user?.settings
         request.setAttribute("_userLocale", Locale(settings?.languageCode ?: "ru"))
         request.setAttribute(SHOW_OG_COVERS, settings?.showOgCovers ?: true)
+        request.setAttribute(MINI_APP, tokenInfo.miniApp)
 
         return true
     }
@@ -79,5 +80,8 @@ class JwtAuthInterceptor(
     companion object {
         /** Request attribute carrying UserSettingsData.showOgCovers to the controllers. */
         const val SHOW_OG_COVERS = "showOgCovers"
+
+        /** Request attribute: the session was opened inside Telegram (JWT claim `tma`). */
+        const val MINI_APP = "miniApp"
     }
 }

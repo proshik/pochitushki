@@ -26,6 +26,18 @@ class JwtServiceTest {
     }
 
     @Test
+    fun `mini app claim round trips`() {
+        val info = jwtService.parseToken(jwtService.createToken(42L, miniApp = true))
+        assertEquals(42L, info?.userId)
+        assertEquals(true, info?.miniApp)
+    }
+
+    @Test
+    fun `regular token is not mini app`() {
+        assertEquals(false, jwtService.parseToken(jwtService.createToken(42L))?.miniApp)
+    }
+
+    @Test
     fun `extractUserId returns null for garbage input`() {
         assertNull(jwtService.extractUserId("not.a.jwt.token"))
     }
