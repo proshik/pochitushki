@@ -39,4 +39,11 @@ data class TelegramProperties(
      * Кнопки ставятся только для https: web_app с http Telegram отвергает вместе со всем сообщением.
      */
     val miniAppUrl: String? = null,
-)
+    /** HTML-виджеты Bot API 10.4 вместо текстовой карточки (см. WidgetMode). */
+    val widgets: Widgets = Widgets(),
+) {
+    data class Widgets(
+        /** `TELEGRAM_WIDGETS_ENABLED`. Действует только в режиме webhook. По умолчанию выключено. */
+        val enabled: Boolean = false,
+    )
+}

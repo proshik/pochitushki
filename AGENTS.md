@@ -35,6 +35,7 @@ telegram-login-broker); само приложение запускается н�
 | `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`: `TelegramController` объявляет `@PostMapping("/\${telegram.token}")`, и плейсхолдер должен разрешиться на старте. Ключа `telegram.token` в `application.yml` нет — значение приходит relaxed binding'ом прямо в `TelegramProperties` |
 | `TELEGRAM_ENABLED` | Опц. Запуск бота (polling/webhook). `false` — стартовать без бота, bot-токен не нужен (логин через Telegram работает независимо). По умолчанию `true` |
 | `TELEGRAM_WEBHOOK_SECRET` | Обязателен в режиме webhook (`telegram.webhook-url` задан) — без него приложение не стартует. Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token` через `MessageDigest.isEqual` |
+| `TELEGRAM_WIDGETS_ENABLED` | Опц. Карточка ленты HTML-виджетом (Bot API 10.4), по умолчанию `false`. Действует только в режиме webhook: в polling — предупреждение на старте и текстовая карточка; любой отказ `sendWidget` — тоже текстовая карточка |
 | `APP_LOG_LEVEL` | Опц. Уровень логов приложения, дефолт `INFO`. На `DEBUG` в лог уезжают URL ссылок и тела апдейтов |
 | `app.security.ssrf.allowed-hosts` | Опц. Список хостов, исключённых из SSRF-проверок `UrlSecurityValidator` (в тестах — `localhost`) |
 

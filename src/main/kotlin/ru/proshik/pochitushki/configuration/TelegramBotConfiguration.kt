@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
 import ru.proshik.pochitushki.service.telegram.MiniAppLinks
 import ru.proshik.pochitushki.service.telegram.TelegramUpdateHandler
+import ru.proshik.pochitushki.service.telegram.widget.WidgetMode
 
 
 @Configuration
@@ -22,6 +23,7 @@ class TelegramBotConfiguration(
     private val botProvider: BotProvider,
     private val telegramUpdateHandlers: List<TelegramUpdateHandler>,
     private val miniAppLinks: MiniAppLinks,
+    private val widgetMode: WidgetMode,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -64,10 +66,7 @@ class TelegramBotConfiguration(
             if (webhookMode) {
                 webhook {
                     url = telegramProperties.webhookUrl
-                    // Without "callback_query" Telegram delivers only messages, and every inline
-                    // button on a card (archive, delete, favourite, labels, PDF, paging) goes
-                    // nowhere. Polling has no such filter, which is why this only broke in prod.
-                    allowedUpdates = listOf("message", "callback_query")
+                    allowedUpdates = allowedUpdates(widgetMode.active)
                     // Telegram echoes this back in the X-Telegram-Bot-Api-Secret-Token header
                     // so the webhook endpoint can authenticate that updates really come from Telegram.
                     secretToken = telegramProperties.webhookSecret
@@ -93,5 +92,16 @@ class TelegramBotConfiguration(
         miniAppLinks.installMenuButton(bot)
 
         return bot
+    }
+
+    companion object {
+        /**
+         * Without "callback_query" Telegram delivers only messages, and every inline button on
+         * a card goes nowhere; without the two widget types widget taps never arrive. Polling
+         * has no such filter, which is why this only ever breaks in production.
+         */
+        fun allowedUpdates(widgetsActive: Boolean): List<String> =
+            listOf("message", "callback_query") +
+                (if (widgetsActive) listOf("widget_query", "shared_widget_query") else emptyList())
     }
 }

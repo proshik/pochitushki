@@ -99,6 +99,10 @@ telegram:
   # Адрес главной Mini App (он же — в BotFather). Кнопки «Открыть в приложении» появляются
   # только для https; локально по http их просто нет.
   mini-app-url: ${APP_BASE_URL:}/tg
+  widgets:
+    # Карточка ленты HTML-виджетом (Bot API 10.4). Только в режиме webhook; в polling —
+    # предупреждение на старте и текстовая карточка. Любой отказ sendWidget тоже даёт текст.
+    enabled: ${TELEGRAM_WIDGETS_ENABLED:false}
   oauth:
     # base-url и expected-issuer меняются вместе и только осознанно: это и есть
     # переключение на локальный брокер входа (telegram-login-broker), который

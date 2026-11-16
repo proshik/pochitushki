@@ -40,7 +40,9 @@ paths:
 - Polling для локальной разработки, webhook для продакшна
 - Конфигурация через `TelegramBotConfiguration` и `TelegramProperties`
 - В тестах Telegram отключён (профиль `test`)
-- `allowedUpdates` в webhook-режиме обязан включать `callback_query`: без него
+- `allowedUpdates` (`TelegramBotConfiguration.allowedUpdates`) в webhook-режиме обязан
+  включать `callback_query`, а при активных виджетах ещё `widget_query` и
+  `shared_widget_query`: без них
   Telegram не присылает нажатия inline-кнопок, и в проде отваливается всё, что
   на кнопках. В polling такого фильтра нет, поэтому тесты это не ловят
 - `telegram.webhook-secret` обязателен в webhook-режиме, иначе приложение не стартует

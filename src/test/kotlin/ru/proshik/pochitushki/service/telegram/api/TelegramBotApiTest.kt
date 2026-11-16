@@ -94,6 +94,39 @@ class TelegramBotApiTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `sendWidget asks for queries`() {
+        stub("sendWidget", 200, okMessage)
+        val keyboard = InlineKeyboard(listOf(listOf(InlineButton("📄", callbackData = "cp|U:0:1:u"))))
+
+        assertEquals(55L, api.sendWidget(100, "<p>w</p>", "{\"r\":\"U:0:1:u\"}", keyboard, replyTo = 9))
+        val body = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("$base/sendWidget"))).single().bodyAsString
+        assertTrue(body.contains("\"allow_queries\":true"), body)
+        assertTrue(body.contains("\"html\":\"<p>w</p>\""), body)
+        assertTrue(body.contains("\"chat_data\":\"{\\\"r\\\":\\\"U:0:1:u\\\"}\""), body)
+        assertTrue(body.contains("\"reply_parameters\":{\"message_id\":9}"), body)
+    }
+
+    @Test
+    fun `sendWidget refusal returns null`() {
+        stub("sendWidget", 400, """{"ok":false,"error_code":400,"description":"Bad Request: WIDGETS_NOT_ALLOWED"}""")
+
+        assertNull(api.sendWidget(100, "<p>w</p>", "{}", null))
+    }
+
+    @Test
+    fun `editWidgetData and answerWidgetQuery`() {
+        stub("editMessageWidgetData", 200, """{"ok":true,"result":true}""")
+        stub("answerWidgetQuery", 200, """{"ok":true,"result":true}""")
+
+        assertTrue(api.editWidgetData(100, 88, "{}"))
+        assertTrue(api.answerWidgetQuery("q1", null))
+        val edit = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("$base/editMessageWidgetData"))).single().bodyAsString
+        assertTrue(edit.contains("\"message_id\":88") && edit.contains("\"chat_data\":\"{}\""), edit)
+        val answer = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("$base/answerWidgetQuery"))).single().bodyAsString
+        assertEquals("{\"widget_query_id\":\"q1\"}", answer)
+    }
+
+    @Test
     fun `unreachable api returns null instead of throwing`() {
         // No stub: WireMock answers 404.
         assertNull(api.sendHtml(100, "hi", null, null))
