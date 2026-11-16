@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
+import ru.proshik.pochitushki.service.telegram.MiniAppLinks
 import ru.proshik.pochitushki.service.telegram.TelegramUpdateHandler
 
 
@@ -20,6 +21,7 @@ class TelegramBotConfiguration(
     private val telegramProperties: TelegramProperties,
     private val botProvider: BotProvider,
     private val telegramUpdateHandlers: List<TelegramUpdateHandler>,
+    private val miniAppLinks: MiniAppLinks,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -87,6 +89,8 @@ class TelegramBotConfiguration(
 
         // Set the bot instance in the provider
         botProvider.setBot(bot)
+
+        miniAppLinks.installMenuButton(bot)
 
         return bot
     }

@@ -27,6 +27,7 @@ class CommandHandler(
     private val i18nService: I18nService,
     private val telegramService: TelegramService,
     private val postCardService: PostCardService,
+    private val telegramKeyboard: TelegramKeyboard,
 ) : TelegramUpdateHandler {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -185,7 +186,8 @@ class CommandHandler(
     private fun startWelcomeMessage(chatId: Long, languageCode: String) {
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,
-            text = i18nService.getMessage("command.start.message", languageCode)
+            text = i18nService.getMessage("command.start.message", languageCode),
+            replyMarkup = telegramKeyboard.buildStartKeyboard(languageCode),
         )
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,

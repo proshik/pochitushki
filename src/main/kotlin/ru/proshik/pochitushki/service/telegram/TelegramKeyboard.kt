@@ -9,6 +9,8 @@ import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_EN_CODE
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_RU_CODE
 import ru.proshik.pochitushki.service.telegram.api.InlineButton
 import ru.proshik.pochitushki.service.telegram.api.InlineKeyboard
+import ru.proshik.pochitushki.service.telegram.api.WebAppRef
+import com.github.kotlintelegrambot.entities.keyboard.WebAppInfo
 import ru.proshik.pochitushki.service.telegram.card.CardAction
 import ru.proshik.pochitushki.service.telegram.card.CardList
 import ru.proshik.pochitushki.service.telegram.card.CardRef
@@ -17,7 +19,10 @@ import ru.proshik.pochitushki.service.telegram.card.PostLoc
 import ru.proshik.pochitushki.service.telegram.card.cardCallback
 
 @Service
-class TelegramKeyboard(private val i18nService: I18nService) {
+class TelegramKeyboard(
+    private val i18nService: I18nService,
+    private val miniAppLinks: MiniAppLinks,
+) {
 
     companion object {
 
@@ -82,7 +87,7 @@ class TelegramKeyboard(private val i18nService: I18nService) {
             rows += listOf(
                 button(i18nService.getMessage("command.feed.button.pdf", languageCode), CardAction.PDF),
                 button(i18nService.getMessage("command.feed.button.labels", languageCode), CardAction.LABELS),
-            )
+            ) + listOfNotNull(appButton(ref.list, languageCode))
         }
         if (ref.list == CardList.RANDOM) {
             rows += listOf(button(i18nService.getMessage("card.button.random_more", languageCode), CardAction.RANDOM_NEXT))
@@ -105,6 +110,18 @@ class TelegramKeyboard(private val i18nService: I18nService) {
         }
         return InlineKeyboard(rows)
     }
+
+    /** "Open in the app" on the card's shelf; null without an https Mini App URL. */
+    private fun appButton(list: CardList, languageCode: String): InlineButton? =
+        miniAppLinks.url(list)?.let { InlineButton(i18nService.getMessage("card.button.app", languageCode), webApp = WebAppRef(it)) }
+
+    /** The app button under the /start greeting; null without an https Mini App URL. */
+    fun buildStartKeyboard(languageCode: String): InlineKeyboardMarkup? =
+        miniAppLinks.url()?.let { url ->
+            InlineKeyboardMarkup.create(
+                listOf(InlineKeyboardButton.WebApp(i18nService.getMessage("card.button.app", languageCode), WebAppInfo(url)))
+            )
+        }
 
     /**
      * The label picker that replaces a post card's buttons:

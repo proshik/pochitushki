@@ -30,7 +30,7 @@ telegram-login-broker); само приложение запускается н�
 | Переменная | Назначение |
 |------------|-----------|
 | `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` | Telegram OAuth-приложение |
-| `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка |
+| `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка и адреса Mini App `${APP_BASE_URL}/tg` (`telegram.mini-app-url`). Его же прописать в BotFather как адрес главной Mini App. Кнопки «Открыть в приложении» и кнопка меню бота появляются только для https |
 | `JWT_SECRET` | Подпись JWT (≥32 байт base64). Дефолта нет — без переменной приложение падает на старте (осознанный fail-fast) |
 | `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`: `TelegramController` объявляет `@PostMapping("/\${telegram.token}")`, и плейсхолдер должен разрешиться на старте. Ключа `telegram.token` в `application.yml` нет — значение приходит relaxed binding'ом прямо в `TelegramProperties` |
 | `TELEGRAM_ENABLED` | Опц. Запуск бота (polling/webhook). `false` — стартовать без бота, bot-токен не нужен (логин через Telegram работает независимо). По умолчанию `true` |

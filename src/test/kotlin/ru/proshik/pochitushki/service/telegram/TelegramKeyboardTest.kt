@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import ru.proshik.pochitushki.configuration.MessageConfiguration
+import ru.proshik.pochitushki.configuration.properties.TelegramProperties
 import ru.proshik.pochitushki.model.PostData
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.telegram.api.InlineKeyboard
@@ -16,7 +17,9 @@ import ru.proshik.pochitushki.service.telegram.card.PostLoc
 class TelegramKeyboardTest {
 
     private val i18n = I18nService(MessageConfiguration().messageSource())
-    private val keyboard = TelegramKeyboard(i18n)
+    private fun keyboardWith(miniAppUrl: String?) =
+        TelegramKeyboard(i18n, MiniAppLinks(TelegramProperties(enabled = true, miniAppUrl = miniAppUrl), i18n))
+    private val keyboard = keyboardWith(null)
 
     private fun post(id: Long, favorite: Boolean = false, archived: Boolean = false) = PostData(
         id = id, title = "T", url = "https://t.com", userId = 1, tags = null,
@@ -76,6 +79,22 @@ class TelegramKeyboardTest {
         val kb = keyboard.buildCardKeyboard(view, "en")
         assertEquals(listOf("cp|u:0:7:u", "lp|u:0:7:u"), kb.data(1))
         assertEquals("cm|u:0:7:u:0", kb.data(0)[3])
+    }
+
+    @Test
+    fun `expanded card opens the app on the same shelf`() {
+        val view = CardView.Post(post(7), CardRef(CardList.ARCHIVE, 0, 7, PostLoc.ARCHIVE), 1, expanded = true)
+        val app = keyboardWith("https://app.test/tg").buildCardKeyboard(view, "en").rows[1].last()
+        assertEquals("https://app.test/tg?p=archive", app.webApp?.url)
+        assertEquals(i18n.getMessage("card.button.app", "en"), app.text)
+    }
+
+    @Test
+    fun `no https url, no app button`() {
+        val view = CardView.Post(post(7), CardRef(CardList.UNREAD, 0, 7, PostLoc.UNREAD), 1, expanded = true)
+        val kb = keyboardWith("http://localhost:8080/tg").buildCardKeyboard(view, "en")
+        assertTrue(kb.buttons().none { it.webApp != null })
+        assertEquals(null, keyboardWith("http://localhost:8080/tg").buildStartKeyboard("en"))
     }
 
     @Test

@@ -29,6 +29,8 @@ import ru.proshik.pochitushki.BaseIntegrationTest
 import ru.proshik.pochitushki.model.PostStoreData
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.telegram.PendingLabelInput
+import ru.proshik.pochitushki.service.telegram.MiniAppLinks
+import ru.proshik.pochitushki.configuration.BotProvider
 
 @AutoConfigureTestRestTemplate
 @ActiveProfiles("test", "telegram-test")
@@ -45,6 +47,12 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var pendingLabelInput: PendingLabelInput
+
+    @Autowired
+    private lateinit var miniAppLinks: MiniAppLinks
+
+    @Autowired
+    private lateinit var botProvider: BotProvider
 
     private lateinit var wireMockExternalUrl: WireMockServer
 
@@ -585,6 +593,40 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         postUpdate(buildCallbackQuery(id, 101L, "profile_feed_settings|_"))
 
         assertTrue(awaitAnswer("$id").contains("text=" + i18nService.getMessage("card.toast.outdated", "en")))
+    }
+
+    // ==================== Mini App entry points ====================
+
+    @Test
+    fun `more row opens the app`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Shelved", "https://shelved.com")
+        archivePost(p)
+        val archiveId = getArchivePostId(getUserId())
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 102L, "cm|a:0:$archiveId:a:1"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(body.contains("\"web_app\":{\"url\":\"https://app.test/tg?p=archive\"}"), body)
+    }
+
+    @Test
+    fun `start offers the app button`() {
+        postUpdate(buildStartUpdate(updateId = nextUpdateId(), messageId = nextUpdateId()))
+
+        awaitSendMessage()
+        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
+            .map { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }
+        assertTrue(calls.any { it.contains("\"web_app\":{\"url\":\"https://app.test/tg\"}") }, calls.toString())
+    }
+
+    @Test
+    fun `menu button is installed`() {
+        miniAppLinks.installMenuButton(botProvider.getBot())
+
+        val body = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/setChatMenuButton")))
+            .single().let { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }
+        assertTrue(body.contains("\"type\":\"web_app\"") && body.contains("https://app.test/tg"), body)
     }
 
     @Test
