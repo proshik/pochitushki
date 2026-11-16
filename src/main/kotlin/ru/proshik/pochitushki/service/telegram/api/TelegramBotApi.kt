@@ -48,6 +48,11 @@ class TelegramBotApi(private val client: TelegramBotApiClient) {
             client.editMessageReplyMarkup(EditReplyMarkupRequest(chatId, messageId, keyboard ?: EMPTY)).ok
         } ?: false
 
+    fun setWebhook(url: String, allowedUpdates: List<String>, secretToken: String?): Boolean =
+        call("setWebhook", onNotModified = null) {
+            client.setWebhook(SetWebhookRequest(url, allowedUpdates, secretToken)).ok
+        } ?: false
+
     /** @return the widget message's id, or null on any refusal — the caller falls back to text. */
     fun sendWidget(chatId: Long, html: String, chatData: String, keyboard: InlineKeyboard?, replyTo: Long? = null): Long? =
         call("sendWidget", onNotModified = null) {

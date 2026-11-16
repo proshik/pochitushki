@@ -104,6 +104,7 @@ class TelegramKeyboardTest {
         )
         assertEquals("http://e.com/a", widgetKb("http://e.com/a").buttons().last().url)
         assertEquals("https://t.me/c/1", widgetKb("https://t.me/c/1").buttons().last().url)
+        assertEquals("https://reader@example.com/a", widgetKb("https://reader@example.com/a").buttons().last().url)
         assertTrue(widgetKb("https://e.com/a").buttons().none { it.url != null })
     }
 

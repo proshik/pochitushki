@@ -23,18 +23,24 @@ class WidgetCardPresenter(
 
     override fun send(chatId: Long, view: CardView, languageCode: String, replyTo: Long?): Boolean {
         if (view !is CardView.Post) return false
-        val data = chatData.encode(view, languageCode)
-        return api.sendWidget(chatId, template.html, data, keyboard.buildWidgetKeyboard(view, languageCode), replyTo) != null
+        val packed = chatData.pack(view, languageCode)
+        val buttons = keyboard.buildWidgetKeyboard(view, languageCode, linkButton = !packed.link)
+        return api.sendWidget(chatId, template.html, packed.json, buttons, replyTo) != null
     }
 
     /**
-     * Data first, buttons only after it: if Telegram refused the new chat_data the widget still
-     * shows the old post, and buttons pointing at the new one would act on a post nobody sees.
+     * The widget's data and the keyboard under it are two calls with no common rollback, and
+     * the keyboard's buttons name a post. So: take the old buttons off, then change the data,
+     * then put the new buttons on. Whichever step Telegram refuses, no button is left acting
+     * on a post other than the one the widget shows — at worst there are no buttons until the
+     * next tap, and the reader gets the error toast.
      */
     override fun redraw(chatId: Long, messageId: Long, view: CardView, languageCode: String): Boolean {
-        if (!api.editWidgetData(chatId, messageId, chatData.encode(view, languageCode))) return false
-        val buttons = if (view is CardView.Post) keyboard.buildWidgetKeyboard(view, languageCode) else null
-        return api.editKeyboard(chatId, messageId, buttons)
+        if (!api.editKeyboard(chatId, messageId, null)) return false
+        val packed = chatData.pack(view, languageCode)
+        if (!api.editWidgetData(chatId, messageId, packed.json)) return false
+        if (view !is CardView.Post) return true
+        return api.editKeyboard(chatId, messageId, keyboard.buildWidgetKeyboard(view, languageCode, linkButton = !packed.link))
     }
 
     override fun redrawButtons(chatId: Long, messageId: Long, view: CardView.Post, languageCode: String): Boolean =

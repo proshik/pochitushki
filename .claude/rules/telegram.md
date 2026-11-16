@@ -49,8 +49,11 @@ paths:
 - `widget_query`/`shared_widget_query` библиотека не разбирает: их перехватывает
   `TelegramController` до `processUpdate` (только при `WidgetMode.active`). Виджеты
   работают только в webhook; в polling — текстовая карточка
-- Результат `startWebhook()` проверяется: при `false` библиотека не поднимает
-  dispatcher, и каждый входящий запрос навсегда повисает на отправке в канал
+- Webhook регистрирует **не библиотека**, а `TelegramBotApi.setWebhook` (Feign, JSON):
+  kotlin-telegram-bot шлёт `allowed_updates` повторяющимися полями формы, Telegram такое не
+  разбирает и молча оставляет прежний фильтр. Поэтому в `webhook { }` стоит
+  `createOnStart = false`, а `startWebhook()` только запускает диспетчер. Оба результата
+  проверяются: без них каждый входящий webhook-запрос навсегда повиснет на отправке в канал
 
 ## Долгие операции
 

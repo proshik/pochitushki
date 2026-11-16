@@ -112,7 +112,11 @@ class TelegramKeyboard(
      * HTML — PDF, labels, the app — plus a link button for articles TelegramWidget.openLink
      * refuses (longer than 256 characters, not https, or a Telegram link).
      */
-    fun buildWidgetKeyboard(view: CardView.Post, languageCode: String): InlineKeyboard {
+    fun buildWidgetKeyboard(
+        view: CardView.Post,
+        languageCode: String,
+        linkButton: Boolean = !WidgetChatData.canOpen(view.post.url),
+    ): InlineKeyboard {
         val ref = view.ref.copy(widget = true)
         val rows = mutableListOf(
             listOf(
@@ -120,7 +124,7 @@ class TelegramKeyboard(
                 InlineButton(i18nService.getMessage("command.feed.button.labels", languageCode), callbackData = cardCallback(CardAction.LABELS, ref)),
             ) + listOfNotNull(appButton(ref.list, languageCode))
         )
-        if (!WidgetChatData.canOpen(view.post.url)) {
+        if (linkButton) {
             rows += listOf(InlineButton(i18nService.getMessage("card.button.open_article", languageCode), url = view.post.url))
         }
         return InlineKeyboard(rows)

@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
 import ru.proshik.pochitushki.service.telegram.MiniAppLinks
 import ru.proshik.pochitushki.service.telegram.TelegramUpdateHandler
+import ru.proshik.pochitushki.service.telegram.api.TelegramBotApi
 import ru.proshik.pochitushki.service.telegram.widget.WidgetMode
 
 
@@ -24,6 +25,7 @@ class TelegramBotConfiguration(
     private val telegramUpdateHandlers: List<TelegramUpdateHandler>,
     private val miniAppLinks: MiniAppLinks,
     private val widgetMode: WidgetMode,
+    private val telegramBotApi: TelegramBotApi,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -66,20 +68,28 @@ class TelegramBotConfiguration(
             if (webhookMode) {
                 webhook {
                     url = telegramProperties.webhookUrl
-                    allowedUpdates = allowedUpdates(widgetMode.active)
-                    // Telegram echoes this back in the X-Telegram-Bot-Api-Secret-Token header
-                    // so the webhook endpoint can authenticate that updates really come from Telegram.
-                    secretToken = telegramProperties.webhookSecret
+                    // Registered by registerWebhook() below, not by the library: the library sends
+                    // allowed_updates as repeated form fields, which Telegram does not parse — it then
+                    // keeps whatever filter the bot had before, and widget taps may never arrive.
+                    createOnStart = false
                 }
             }
         }
 
         if (webhookMode) {
-            // startWebhook() returns false when setWebhook failed. The library only starts its
-            // dispatcher on success, and the update channel is unbuffered — so every incoming
-            // webhook request would then block forever on send and the bot would be silently
-            // dead until a restart. Fail the startup instead.
-            check(bot.startWebhook()) { "telegram setWebhook failed — refusing to start in webhook mode" }
+            // Telegram echoes the secret back in the X-Telegram-Bot-Api-Secret-Token header so the
+            // webhook endpoint can authenticate that updates really come from Telegram.
+            check(
+                telegramBotApi.setWebhook(
+                    url = telegramProperties.webhookUrl!!,
+                    allowedUpdates = allowedUpdates(widgetMode.active),
+                    secretToken = telegramProperties.webhookSecret,
+                )
+            ) { "telegram setWebhook failed — refusing to start in webhook mode" }
+            // A failed setWebhook must stop the startup: the update channel is unbuffered, and with
+            // no dispatcher every incoming webhook request would block forever on send. With
+            // createOnStart=false startWebhook() only starts the dispatcher; its result is still checked.
+            check(bot.startWebhook()) { "telegram dispatcher did not start — refusing to start in webhook mode" }
             logger.info("telegram bot started in webhook mode")
         } else {
             bot.startPolling()

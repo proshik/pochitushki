@@ -230,6 +230,8 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   а не библиотека: в kotlin-telegram-bot 10.0.0 у `editMessageText` нет `link_preview_options`
   (документация библиотеки утверждает обратное). Клавиатура — своя модель `InlineKeyboard`:
   Gson-модели библиотеки Jackson сериализует неверно
+- Webhook тоже регистрирует `TelegramBotApi.setWebhook`, а не библиотека: она шлёт
+  `allowed_updates` повторяющимися полями формы, и Telegram молча оставляет прежний фильтр
 - `TelegramBotApi` ничего не бросает; `400 message is not modified` — успех. В лог идут только
   статус и `description`: в URL запроса и в `FeignException.message` лежит токен бота
 - `callback_data` — только `CardRef` (≤ 64 байт): `<действие>|<список>:<offset>:<id>:<таблица>[:extra]`.
@@ -257,9 +259,14 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   раздаётся сайтом). Лимиты Telegram: ≤ 32768 байт и ≤ 4096 байт после zlib 9 — держит
   `WidgetTemplateTest`; он же сверяет палитру `cv-*` с `app.css` — менять обе вместе.
   `chat_data` ≤ 1024 байт (`WidgetChatData`); без OG-фото — внешние картинки виджет не грузит
+- Перерисовка виджета — три шага: снять старую клавиатуру, сменить `chat_data`, поставить
+  новую. У двух частей сообщения нет общего отката, а кнопки называют пост: при любом отказе
+  под виджетом не остаётся кнопок чужого поста. Отказ перерисовки отвечает тостом, а ★ при
+  отказе откатывается
 - PDF, метки и «Открыть в приложении» — обычная inline-клавиатура под виджетом
-  (`buildWidgetKeyboard`), плюс кнопка-ссылка для статей с URL длиннее 256 символов
-  (`TelegramWidget.openLink` больше не принимает)
+  (`buildWidgetKeyboard`), плюс кнопка-ссылка для статей, которые `TelegramWidget.openLink`
+  не откроет (`WidgetChatData.canOpen`: только https, ≤ 256 символов, без логина в URL и не
+  Telegram) или чей URL не уместился в `chat_data`
 
 ### PDF generation
 

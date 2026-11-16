@@ -116,15 +116,70 @@ class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
         val setWebhook = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/setWebhook")))
             .map { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }
         assertEquals(1, setWebhook.size, "setWebhook at startup")
-        // Form-encoded by the library: allowed_updates=message&allowed_updates=callback_query&…
+        // One JSON array, as the Bot API wants: repeated form fields (what the library sends)
+        // are not parsed by Telegram, which then silently keeps the bot's previous filter.
         val body = setWebhook.single()
-        for (type in listOf("message", "callback_query", "widget_query", "shared_widget_query")) {
-            assertTrue(body.contains("allowed_updates=$type&") || body.endsWith("allowed_updates=$type"), "$type in $body")
-        }
+        assertTrue(
+            body.contains("\"allowed_updates\":[\"message\",\"callback_query\",\"widget_query\",\"shared_widget_query\"]"),
+            body,
+        )
+        assertTrue(body.contains("\"secret_token\":\"test-secret\"") && body.contains("\"url\":\"https://example.test/test_token\""), body)
     }
 
     @Test
-    fun `refused widget redraw keeps the old buttons`() {
+    fun `refused keyboard after new data leaves no buttons of the old post`() {
+        val p = createPost("A", "https://a.com")
+        createPost("B", "https://b.com")
+        // Clearing the keyboard succeeds; setting the new one is rate-limited.
+        wireMockTelegramApi.stubFor(
+            post(urlEqualTo("/bottest_token/editMessageReplyMarkup"))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.containing("callback_data"))
+                .willReturn(
+                    aResponse().withStatus(429).withHeader("Content-Type", "application/json")
+                        .withBody("""{"ok":false,"error_code":429,"description":"Too Many Requests: retry after 1"}""")
+                )
+        )
+
+        postUpdate(widgetQuery("q6", "cn|U:1:$p:u"))
+
+        val answer = awaitBody("answerWidgetQuery")
+        assertTrue(answer.contains(i18nService.getMessage("card.toast.error", "en")), answer)
+        val keyboards = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/editMessageReplyMarkup")))
+        val cleared = keyboards.first { it.bodyAsString.contains("\"inline_keyboard\":[]") }
+        val data = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/editMessageWidgetData"))).single()
+        assertTrue(cleared.loggedDate.time <= data.loggedDate.time, "old buttons are removed before the widget shows another post")
+    }
+
+    @Test
+    fun `refused star redraw undoes the star`() {
+        val p = createPost("Star", "https://star.com")
+        wireMockTelegramApi.stubFor(
+            post(urlEqualTo("/bottest_token/editMessageWidgetData")).willReturn(
+                aResponse().withStatus(400).withHeader("Content-Type", "application/json")
+                    .withBody("""{"ok":false,"error_code":400,"description":"Bad Request: message to edit not found"}""")
+            )
+        )
+
+        postUpdate(widgetQuery("q7", "cf|U:0:$p:u"))
+
+        val answer = awaitBody("answerWidgetQuery")
+        assertTrue(answer.contains(i18nService.getMessage("card.toast.error", "en")), answer)
+        assertEquals(false, jdbcTemplate.queryForObject("SELECT is_favorite FROM post WHERE id = ?", Boolean::class.java, p))
+    }
+
+    @Test
+    fun `article link survives a url squeezed out of chat_data`() {
+        // 256 characters, so openLink would take it, but 700+ bytes of UTF-8: it cannot stay in chat_data.
+        createPost("界".repeat(30), "https://example.com/" + "界".repeat(236))
+
+        postUpdate(command("feed"))
+
+        val body = awaitBody("sendWidget")
+        assertTrue(body.contains("\"url\":\"https://example.com/"), "a link button under the widget: $body")
+    }
+
+    @Test
+    fun `refused widget redraw leaves no buttons of another post`() {
         val p = createPost("A", "https://a.com")
         createPost("B", "https://b.com")
         wireMockTelegramApi.stubFor(
@@ -138,7 +193,8 @@ class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
 
         val answer = awaitBody("answerWidgetQuery")
         assertTrue(answer.contains(i18nService.getMessage("card.toast.error", "en")), answer)
-        assertTrue(bodies("editMessageReplyMarkup").isEmpty(), "buttons must not move to the other post")
+        // The old buttons were taken off first; the new post's buttons never went on.
+        assertTrue(bodies("editMessageReplyMarkup").none { it.contains("callback_data") }, "buttons must not move to the other post")
     }
 
     @Test
@@ -223,7 +279,8 @@ class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
               "chat_instance": "1", "data": "lb|U:0:$p:u"}}"""
         )
 
-        val keyboard = awaitBody("editMessageReplyMarkup")
+        await().atMost(Duration.ofSeconds(5)).until { bodies("editMessageReplyMarkup").any { it.contains("callback_data") } }
+        val keyboard = bodies("editMessageReplyMarkup").last { it.contains("callback_data") }
         assertTrue(keyboard.contains("cp|U:0:$p:u") && !keyboard.contains("cn|"), keyboard)
     }
 }

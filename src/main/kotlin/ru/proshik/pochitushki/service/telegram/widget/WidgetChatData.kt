@@ -24,12 +24,22 @@ class WidgetChatData(
 
     private val mapper = JsonMapper.builder().build()
 
-    fun encode(view: CardView, languageCode: String, today: LocalDate = LocalDate.now()): String = when (view) {
-        is CardView.Notice -> mapper.writeValueAsString(linkedMapOf("e" to 1, "m" to view.text))
+    /** The packed chat_data, and whether the article URL made it in (`u`) for openLink. */
+    data class Packed(val json: String, val link: Boolean)
+
+    fun encode(view: CardView, languageCode: String, today: LocalDate = LocalDate.now()): String =
+        pack(view, languageCode, today).json
+
+    /**
+     * When `link` is false the widget cannot open the article itself — the URL was never
+     * openable, or did not fit — and the keyboard under it has to carry a link button.
+     */
+    fun pack(view: CardView, languageCode: String, today: LocalDate = LocalDate.now()): Packed = when (view) {
+        is CardView.Notice -> Packed(mapper.writeValueAsString(linkedMapOf("e" to 1, "m" to view.text)), link = false)
         is CardView.Post -> encodePost(view, languageCode, today)
     }
 
-    private fun encodePost(view: CardView.Post, lang: String, today: LocalDate): String {
+    private fun encodePost(view: CardView.Post, lang: String, today: LocalDate): Packed {
         val post = view.post
         val cover = coverService.decorate(post, showOgCovers = false)
         var title = post.title?.takeIf { it.isNotBlank() } ?: post.url
@@ -66,14 +76,14 @@ class WidgetChatData(
             CardPaging.nextOffset(view)?.let { data["j"] = it }
             if (view.confirmDelete) data["x"] = 1
             val json = mapper.writeValueAsString(data)
-            if (json.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) return json
+            if (json.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) return Packed(json, link = url != null)
 
             when {
                 // Strictly shorter every time (the ellipsis counts), or this would never end.
                 title.length > MIN_TITLE + 1 -> title = title.take(maxOf(MIN_TITLE, title.length * 3 / 4)).trimEnd() + "…"
                 labels.isNotEmpty() -> labels = labels.dropLast(1)
                 url != null -> url = null
-                else -> return json // cannot happen with the fixed fields; Telegram would refuse it
+                else -> return Packed(json, link = false) // cannot happen with the fixed fields; Telegram would refuse it
             }
         }
     }
@@ -96,16 +106,19 @@ class WidgetChatData(
         private val TELEGRAM_HOSTS = setOf("t.me", "telegram.me", "telegram.dog")
 
         /**
-         * Whether TelegramWidget.openLink takes [url]: https only, at most 256 characters, and not
-         * a Telegram link. Anything else is opened by an inline URL button under the widget.
+         * Whether TelegramWidget.openLink takes [url]: https only, at most 256 characters, no
+         * user name or password, and not a Telegram link. Anything else is opened by an inline
+         * URL button under the widget.
          */
         fun canOpen(url: String): Boolean {
             if (url.length > MAX_OPEN_LINK || !url.startsWith("https://")) return false
-            val host = try {
-                java.net.URI(url).host?.lowercase()
+            val uri = try {
+                java.net.URI(url)
             } catch (e: Exception) {
-                null
-            } ?: return false
+                return false
+            }
+            if (uri.rawUserInfo != null) return false
+            val host = uri.host?.lowercase() ?: return false
             return TELEGRAM_HOSTS.none { host == it || host.endsWith(".$it") }
         }
     }

@@ -14,6 +14,7 @@ import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.UserService
 import ru.proshik.pochitushki.service.telegram.PendingLabelInput
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
+import ru.proshik.pochitushki.service.telegram.api.InlineKeyboard
 import ru.proshik.pochitushki.service.telegram.widget.WidgetCardPresenter
 import ru.proshik.pochitushki.service.telegram.widget.WidgetMode
 
@@ -134,7 +135,7 @@ class PostCardService(
 
         /** A redraw Telegram refused leaves the card as it was; the reader learns from the toast. */
         fun draw(view: CardView): CallbackAnswer? =
-            if (presenter.redraw(chatId, messageId, view, lang)) null else CallbackAnswer(i18n.getMessage("card.toast.error", lang))
+            if (presenter.redraw(chatId, messageId, view, lang)) null else failed()
 
         /** The post is gone: say so, and show what now sits at this offset. */
         fun gone(): CallbackAnswer {
@@ -155,9 +156,13 @@ class PostCardService(
 
         fun redrawButtons(change: (CardView.Post) -> CardView.Post): CallbackAnswer? {
             val post = post() ?: return gone()
-            presenter.redrawButtons(chatId, messageId, change(CardView.Post(post, ref, total())), lang)
-            return null
+            return if (presenter.redrawButtons(chatId, messageId, change(CardView.Post(post, ref, total())), lang)) null else failed()
         }
+
+        fun showKeyboard(keyboard: InlineKeyboard): CallbackAnswer? =
+            if (presenter.redrawKeyboard(chatId, messageId, keyboard)) null else failed()
+
+        fun failed() = CallbackAnswer(i18n.getMessage("card.toast.error", lang))
 
         /**
          * Archive or back to unread. In favorites the post stays on the card under its new id —
@@ -194,8 +199,7 @@ class PostCardService(
             val engines = pdfSender.engines()
             val chosen = engine ?: engines.singleOrNull()
             if (chosen == null) {
-                presenter.redrawKeyboard(chatId, messageId, keyboard.buildPdfEngineKeyboard(ref, engines, lang))
-                return null
+                return showKeyboard(keyboard.buildPdfEngineKeyboard(ref, engines, lang))
             }
             if (chosen !in engines) return CallbackAnswer(i18n.getMessage("command.pdf.error", lang))
             if (engine != null) redrawButtons { it }
@@ -208,8 +212,7 @@ class PostCardService(
             val labels = labelService.getLabels(user.id)
             if (labels.isEmpty()) return promptLabel()
             val attached = post.labels.map { it.id }.toSet()
-            presenter.redrawKeyboard(chatId, messageId, keyboard.buildPostLabelsKeyboard(ref, labels, attached, lang))
-            return null
+            return showKeyboard(keyboard.buildPostLabelsKeyboard(ref, labels, attached, lang))
         }
 
         fun toggleLabel(labelId: Long?): CallbackAnswer? {
@@ -231,10 +234,16 @@ class PostCardService(
             return null
         }
 
-        /** Only the star changes, so only the keyboard is redrawn. */
+        /**
+         * Only the star changes, so only the buttons are redrawn. If the redraw is refused the
+         * toggle is undone: otherwise the card shows the old star over the new state, and the
+         * next tap would flip it back while appearing to do what the reader asked.
+         */
         fun toggleFavorite(): CallbackAnswer? {
             postService.toggleFavorite(ref.postId, user.id, ref.loc.postType) ?: return gone()
-            return redrawButtons { it }
+            val answer = redrawButtons { it }
+            if (answer != null) postService.toggleFavorite(ref.postId, user.id, ref.loc.postType)
+            return answer
         }
     }
 

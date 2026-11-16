@@ -488,11 +488,24 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         registerTestUser()
         val p = createPost(getUserId(), "Paper", "http://localhost:${wireMockExternalUrl.port()}/paper")
 
+        wireMockExternalUrl.stubFor(
+            get(urlEqualTo("/paper")).willReturn(
+                aResponse().withStatus(200).withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody("<html><head><title>Paper</title></head><body><p>Text</p></body></html>")
+            )
+        )
+
         val id = nextUpdateId()
         postUpdate(buildCallbackQuery(id, 96L, "cp|u:0:$p:u"))
 
         val answer = awaitAnswer("$id")
         assertTrue(answer.contains("text=" + i18nService.getMessage("card.toast.pdf_started", "en")), answer)
+        // The job runs on BotTaskExecutor: wait for the document itself, before teardown stops the stubs.
+        await().atMost(Duration.ofSeconds(30)).until {
+            wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendDocument"))).isNotEmpty()
+        }
+        val document = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendDocument"))).single()
+        assertTrue(document.bodyAsString.contains("Paper.pdf") && document.bodyAsString.contains("%PDF"), "a PDF for the post")
     }
 
     // ==================== Card: random post and the reply to a saved link ====================

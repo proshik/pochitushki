@@ -29,6 +29,13 @@ interface TelegramBotApiClient {
     @PostMapping("/editMessageReplyMarkup", consumes = ["application/json"])
     fun editMessageReplyMarkup(@RequestBody request: EditReplyMarkupRequest): TgResponse<JsonNode>
 
+    /**
+     * The library sends allowed_updates as repeated form fields; the Bot API wants one JSON
+     * array, and on a value it cannot parse it silently keeps the bot's previous filter.
+     */
+    @PostMapping("/setWebhook", consumes = ["application/json"])
+    fun setWebhook(@RequestBody request: SetWebhookRequest): TgResponse<JsonNode>
+
     // HTML widgets, Bot API 10.4 — not in the library at all.
 
     @PostMapping("/sendWidget", consumes = ["application/json"])
@@ -98,4 +105,11 @@ data class EditWidgetDataRequest(
 data class AnswerWidgetQueryRequest(
     @JsonProperty("widget_query_id") val widgetQueryId: String,
     val data: String? = null,
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class SetWebhookRequest(
+    val url: String,
+    @JsonProperty("allowed_updates") val allowedUpdates: List<String>,
+    @JsonProperty("secret_token") val secretToken: String?,
 )

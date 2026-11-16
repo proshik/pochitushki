@@ -64,7 +64,10 @@ class WidgetChatDataTest {
 
     @Test
     fun `links openLink refuses are left out`() {
-        for (url in listOf("http://example.com/article", "https://t.me/channel/123", "https://telegram.me/x")) {
+        for (url in listOf(
+            "http://example.com/article", "https://t.me/channel/123", "https://telegram.me/x",
+            "https://reader@example.com/article", "https://reader:secret@example.com/article",
+        )) {
             assertFalse(mapper.readTree(chatData.encode(view(post("T", url = url)), "en")).has("u"), url)
         }
     }
