@@ -111,27 +111,6 @@ class CallbackQueryHandler(
                 telegramService.toggleFavoriteForRandomPost(chatId, message.messageId, postId)
             }
             /**
-             * PDF generation — engine selection
-             */
-            TelegramKeyboard.CALLBACK_PDF_UNREAD_POST -> {
-                val postId = data.toLong()
-                telegramService.showPdfEngineSelection(chatId, postId, PostType.UNREAD)
-            }
-            TelegramKeyboard.CALLBACK_PDF_ARCHIVE_POST -> {
-                val postId = data.toLong()
-                telegramService.showPdfEngineSelection(chatId, postId, PostType.ARCHIVE)
-            }
-            /**
-             * PDF generation — with selected engine
-             */
-            TelegramKeyboard.CALLBACK_PDF_ENGINE -> {
-                val parts = data.split("_", limit = 3)
-                val postId = parts[0].toLong()
-                val postType = if (parts[1] == "a") PostType.ARCHIVE else PostType.UNREAD
-                val engine = parts[2]
-                telegramService.sendPostPdf(chatId, postId, postType, engine)
-            }
-            /**
              * Profile settings block
              */
             TelegramKeyboard.CALLBACK_PROFILE_FEED_SETTINGS -> {
@@ -174,28 +153,6 @@ class CallbackQueryHandler(
 
             TelegramKeyboard.CALLBACK_PROFILE_EXPORT -> {
                 telegramService.export(chatId, messageId)
-            }
-
-            /**
-             * Labels
-             */
-            TelegramKeyboard.CALLBACK_POST_LABELS -> {
-                telegramService.showPostLabels(chatId, messageId, TelegramKeyboard.LabelCallbackContext.decode(data))
-            }
-
-            TelegramKeyboard.CALLBACK_POST_LABEL_TOGGLE -> {
-                // data is "<postId>:<table>:<context>:<labelId>" — the label id is the tail.
-                val labelId = data.substringAfterLast(':').toLong()
-                val ctx = TelegramKeyboard.LabelCallbackContext.decode(data.substringBeforeLast(':'))
-                telegramService.togglePostLabel(chatId, messageId, ctx, labelId)
-            }
-
-            TelegramKeyboard.CALLBACK_POST_LABEL_NEW -> {
-                telegramService.promptNewLabel(chatId, TelegramKeyboard.LabelCallbackContext.decode(data))
-            }
-
-            TelegramKeyboard.CALLBACK_POST_LABELS_BACK -> {
-                telegramService.hidePostLabels(chatId, messageId, TelegramKeyboard.LabelCallbackContext.decode(data))
             }
 
             // Buttons of cards sent by an earlier version stay in chats after a deploy.

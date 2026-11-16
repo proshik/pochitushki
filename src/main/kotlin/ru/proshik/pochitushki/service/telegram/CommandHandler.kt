@@ -167,7 +167,7 @@ class CommandHandler(
         if (message.text != null) {
             // A pending "type the label name" prompt wins over the default reading of a
             // message as a URL to save.
-            if (telegramService.consumeLabelName(message.chat.id, message.text!!)) {
+            if (postCardService.consumeLabelName(message.chat.id, message.text!!)) {
                 return
             }
             try {

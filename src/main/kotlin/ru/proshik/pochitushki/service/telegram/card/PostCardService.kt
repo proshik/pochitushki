@@ -1,12 +1,17 @@
 package ru.proshik.pochitushki.service.telegram.card
 
+import com.github.kotlintelegrambot.entities.ChatId
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import ru.proshik.pochitushki.configuration.BotProvider
 import ru.proshik.pochitushki.model.UserData
 import ru.proshik.pochitushki.service.ConcurrentPostMoveException
 import ru.proshik.pochitushki.service.I18nService
+import ru.proshik.pochitushki.service.InvalidLabelNameException
+import ru.proshik.pochitushki.service.LabelService
 import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.UserService
+import ru.proshik.pochitushki.service.telegram.PendingLabelInput
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
 
 /**
@@ -23,6 +28,10 @@ class PostCardService(
     private val i18n: I18nService,
     private val presenter: TextCardPresenter,
     private val keyboard: TelegramKeyboard,
+    private val labelService: LabelService,
+    private val pendingLabelInput: PendingLabelInput,
+    private val pdfSender: PostPdfSender,
+    private val botProvider: BotProvider,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -51,6 +60,13 @@ class PostCardService(
             CardAction.DELETE_NO -> card.redrawButtons { it }
             CardAction.DELETE_YES -> card.delete()
             CardAction.FAVORITE -> card.toggleFavorite()
+            CardAction.MORE -> card.redrawButtons { it.copy(expanded = extra == "1") }
+            CardAction.PDF -> card.pdf(engine = null)
+            CardAction.PDF_ENGINE -> card.pdf(engine = extra)
+            CardAction.LABELS -> card.showLabels()
+            CardAction.LABEL_TOGGLE -> card.toggleLabel(extra?.toLongOrNull())
+            CardAction.LABEL_NEW -> card.promptLabel()
+            CardAction.LABELS_BACK -> card.redrawButtons { it }
             else -> {
                 logger.warn("card action not handled: {}", action)
                 null
@@ -116,11 +132,77 @@ class PostCardService(
             return redrawAt(ref.offset)
         }
 
+        /**
+         * One engine: start right away. Several: the card's buttons become the engine choice,
+         * and the pick (or "back") puts them back. Either way the press is answered with a toast.
+         */
+        fun pdf(engine: String?): CallbackAnswer? {
+            val post = post() ?: return gone()
+            val engines = pdfSender.engines()
+            val chosen = engine ?: engines.singleOrNull()
+            if (chosen == null) {
+                presenter.redrawKeyboard(chatId, messageId, keyboard.buildPdfEngineKeyboard(ref, engines, lang))
+                return null
+            }
+            if (chosen !in engines) return CallbackAnswer(i18n.getMessage("command.pdf.error", lang))
+            if (engine != null) redrawButtons { it }
+            return CallbackAnswer(i18n.getMessage(pdfSender.start(chatId, user, post, chosen), lang))
+        }
+
+        /** The label picker in place of the card's buttons; no labels yet → ask for the first name. */
+        fun showLabels(): CallbackAnswer? {
+            val post = post() ?: return gone()
+            val labels = labelService.getLabels(user.id)
+            if (labels.isEmpty()) return promptLabel()
+            val attached = post.labels.map { it.id }.toSet()
+            presenter.redrawKeyboard(chatId, messageId, keyboard.buildPostLabelsKeyboard(ref, labels, attached, lang))
+            return null
+        }
+
+        fun toggleLabel(labelId: Long?): CallbackAnswer? {
+            labelId ?: return null
+            val post = post() ?: return gone()
+            if (post.labels.any { it.id == labelId }) {
+                labelService.detachLabel(post.id, labelId, user.id, ref.loc.labelTarget)
+            } else {
+                labelService.attachLabel(post.id, labelId, user.id, ref.loc.labelTarget)
+            }
+            return showLabels()
+        }
+
+        /** The next plain message from this chat is read as a label name (see consumeLabelName). */
+        fun promptLabel(): CallbackAnswer? {
+            post() ?: return gone()
+            pendingLabelInput.await(chatId, ref)
+            botProvider.getBot().sendMessage(ChatId.fromId(chatId), i18n.getMessage("command.labels.prompt", lang))
+            return null
+        }
+
         /** Only the star changes, so only the keyboard is redrawn. */
         fun toggleFavorite(): CallbackAnswer? {
             postService.toggleFavorite(ref.postId, user.id, ref.loc.postType) ?: return gone()
             return redrawButtons { it }
         }
+    }
+
+    /**
+     * Reads a plain message as the label name the bot just asked for and attaches it to the
+     * card's post. Returns false when nothing was pending, so the caller treats it as a URL.
+     */
+    fun consumeLabelName(chatId: Long, text: String): Boolean {
+        val pending = pendingLabelInput.take(chatId) ?: return false
+        val user = userService.getUserByChatId(chatId)
+        val lang = user.settings.languageCode
+        val reply = try {
+            val label = labelService.createLabel(user.id, text)
+            labelService.attachLabel(pending.ref.postId, label.id, user.id, pending.ref.loc.labelTarget)
+            logger.info("consumeLabelName success: chatId={}, postId={}", chatId, pending.ref.postId)
+            i18n.getMessage("command.labels.attached", lang, arrayOf(label.name))
+        } catch (e: InvalidLabelNameException) {
+            i18n.getMessage("command.labels.invalid", lang)
+        }
+        botProvider.getBot().sendMessage(ChatId.fromId(chatId), reply)
+        return true
     }
 
     /** The post at [offset] of [list], clamped to the list's end; null when the list is empty. */

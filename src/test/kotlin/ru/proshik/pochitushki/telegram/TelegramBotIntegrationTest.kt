@@ -429,6 +429,54 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         assertTrue(!awaitAnswer("$id").contains("text="))
     }
 
+    // ==================== Card: the ⋯ row ====================
+
+    @Test
+    fun `more opens and closes the second row`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "More", "https://more.com")
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 94L, "cm|u:0:$p:u:1"))
+        val opened = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(opened.contains("cp|u:0:$p:u") && opened.contains("lp|u:0:$p:u"), opened)
+        assertTrue(opened.contains("cm|u:0:$p:u:0"), "⋯ now folds the row: $opened")
+
+        wireMockTelegramApi.resetAll()
+        setupTelegramApiStubs()
+        postUpdate(buildCallbackQuery(nextUpdateId(), 94L, "cm|u:0:$p:u:0"))
+        val closed = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(!closed.contains("cp|") && !closed.contains("lp|"), closed)
+    }
+
+    @Test
+    fun `labels back returns to the same offset`() {
+        registerTestUser()
+        val userId = getUserId()
+        for (i in 1..3) markAsFavorite(createPostAt(userId, "F$i", "https://f$i.com", minutesAgo = 10L * i))
+        val oldest = jdbcTemplate.queryForObject("SELECT id FROM post WHERE url = 'https://f3.com'", Long::class.java)!!
+        archivePost(oldest)
+        jdbcTemplate.update("UPDATE archive_post SET created_date = now() - interval '30 minutes', is_favorite = true")
+        val archiveId = getArchivePostId(userId)
+
+        postUpdate(buildCallbackQuery(nextUpdateId(), 95L, "lb|f:2:$archiveId:a"))
+
+        val body = awaitSingleCall("/bottest_token/editMessageReplyMarkup")
+        assertTrue(body.contains("\"text\":\"3 / 3\""), body)
+        assertTrue(body.contains("cu|f:2:$archiveId:a"), body)
+    }
+
+    @Test
+    fun `pdf from card answers with a toast`() {
+        registerTestUser()
+        val p = createPost(getUserId(), "Paper", "http://localhost:${wireMockExternalUrl.port()}/paper")
+
+        val id = nextUpdateId()
+        postUpdate(buildCallbackQuery(id, 96L, "cp|u:0:$p:u"))
+
+        val answer = awaitAnswer("$id")
+        assertTrue(answer.contains("text=" + i18nService.getMessage("card.toast.pdf_started", "en")), answer)
+    }
+
     @Test
     fun `post_labels callback should offer the label picker`() {
         registerTestUser()
@@ -436,12 +484,12 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         val postId = createPost(userId, "Labelling", "https://labelling.com")
         createLabel(userId, "kotlin")
 
-        postUpdate(buildCallbackQuery(nextUpdateId(), 61L, "post_labels|$postId:u:n"))
+        postUpdate(buildCallbackQuery(nextUpdateId(), 61L, "lp|u:0:$postId:u"))
 
         awaitTelegramApiCalls("/bottest_token/editMessageReplyMarkup", 1)
         val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/editMessageReplyMarkup")))
         assertTrue(
-            calls.any { it.bodyAsString.contains("post_label_toggle") },
+            calls.any { it.bodyAsString.contains("lt|u:0:$postId:u:") },
             "Expected the picker keyboard to carry a toggle callback"
         )
     }
@@ -453,10 +501,10 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         val postId = createPost(userId, "Toggling", "https://toggling.com")
         val labelId = createLabel(userId, "kotlin")
 
-        postUpdate(buildCallbackQuery(nextUpdateId(), 62L, "post_label_toggle|$postId:u:n:$labelId"))
+        postUpdate(buildCallbackQuery(nextUpdateId(), 62L, "lt|u:0:$postId:u:$labelId"))
         await().atMost(Duration.ofSeconds(10)).until { countLinks() == 1 }
 
-        postUpdate(buildCallbackQuery(nextUpdateId(), 62L, "post_label_toggle|$postId:u:n:$labelId"))
+        postUpdate(buildCallbackQuery(nextUpdateId(), 62L, "lt|u:0:$postId:u:$labelId"))
         await().atMost(Duration.ofSeconds(10)).until { countLinks() == 0 }
     }
 
@@ -466,7 +514,7 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         val userId = getUserId()
         val postId = createPost(userId, "Prompting", "https://prompting.com")
 
-        postUpdate(buildCallbackQuery(nextUpdateId(), 63L, "post_label_new|$postId:u:n"))
+        postUpdate(buildCallbackQuery(nextUpdateId(), 63L, "ln|u:0:$postId:u"))
         awaitTelegramApiCalls("/bottest_token/sendMessage", 1)
 
         postUpdate(buildCommandMessage(nextUpdateId(), "вечером", "text"))
@@ -491,7 +539,7 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         val userId = getUserId()
         val postId = createPost(userId, "No labels yet", "https://nolabels.com")
 
-        postUpdate(buildCallbackQuery(nextUpdateId(), 64L, "post_labels|$postId:u:n"))
+        postUpdate(buildCallbackQuery(nextUpdateId(), 64L, "lp|u:0:$postId:u"))
 
         awaitTelegramApiCalls("/bottest_token/sendMessage", 1)
     }

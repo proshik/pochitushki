@@ -71,6 +71,26 @@ class TelegramKeyboardTest {
     }
 
     @Test
+    fun `expanded card has pdf and labels`() {
+        val view = CardView.Post(post(7), CardRef(CardList.UNREAD, 0, 7, PostLoc.UNREAD), 1, expanded = true)
+        val kb = keyboard.buildCardKeyboard(view, "en")
+        assertEquals(listOf("cp|u:0:7:u", "lp|u:0:7:u"), kb.data(1))
+        assertEquals("cm|u:0:7:u:0", kb.data(0)[3])
+    }
+
+    @Test
+    fun `engine choice keyboard carries ce and back`() {
+        val ref = CardRef(CardList.FAVORITES, 999_999, Long.MAX_VALUE, PostLoc.ARCHIVE)
+        val kb = keyboard.buildPdfEngineKeyboard(ref, listOf("openhtml", "playwright"), "en")
+        val data = kb.buttons().map { it.callbackData!! }
+        assertEquals(
+            listOf("ce|${ref.encode()}:openhtml", "ce|${ref.encode()}:playwright", "cm|${ref.encode()}:0"),
+            data,
+        )
+        data.forEach { assertTrue(it.toByteArray().size <= 64, "$it is ${it.toByteArray().size} bytes") }
+    }
+
+    @Test
     fun `every button fits 64 bytes`() {
         for (list in listOf(CardList.UNREAD, CardList.ARCHIVE, CardList.FAVORITES)) {
             val kb = card(list, 999_999, 1_000_000, postId = Long.MAX_VALUE, loc = PostLoc.ARCHIVE)
