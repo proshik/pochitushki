@@ -244,6 +244,23 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   под новым id. Ответ на ссылку (`CardList.SAVED`) без листания; после архива/удаления его
   текст становится итогом
 
+### Telegram-бот: виджеты (Bot API 10.4, под флагом)
+
+- `telegram.widgets.enabled` (`TELEGRAM_WIDGETS_ENABLED`, дефолт `false`) **и** режим webhook
+  (`WidgetMode.active`) — тогда команды ленты шлют карточку HTML-виджетом
+  (`WidgetCardPresenter`). Любой отказ `sendWidget` → `warn` и та же текстовая карточка
+- Нажатия внутри виджета приходят как `widget_query`; библиотека их не знает, поэтому
+  `TelegramController` вынимает их из тела webhook **до** `processUpdate` и отдаёт
+  `WidgetQueryHandler`. Данные — тот же `CardRef`-формат, что `callback_data` (список
+  заглавной буквой = виджет). На каждый запрос — ровно один `answerWidgetQuery` (≤ 15 с)
+- Шаблон один: `src/main/resources/telegram/widget/post-card.html` (не Thymeleaf и не
+  раздаётся сайтом). Лимиты Telegram: ≤ 32768 байт и ≤ 4096 байт после zlib 9 — держит
+  `WidgetTemplateTest`; он же сверяет палитру `cv-*` с `app.css` — менять обе вместе.
+  `chat_data` ≤ 1024 байт (`WidgetChatData`); без OG-фото — внешние картинки виджет не грузит
+- PDF, метки и «Открыть в приложении» — обычная inline-клавиатура под виджетом
+  (`buildWidgetKeyboard`), плюс кнопка-ссылка для статей с URL длиннее 256 символов
+  (`TelegramWidget.openLink` больше не принимает)
+
 ### PDF generation
 
 Две реализации `PdfGenerator`. `OpenhtmlPdfGenerator` регистрируется всегда и

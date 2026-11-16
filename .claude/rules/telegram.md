@@ -46,6 +46,9 @@ paths:
   Telegram не присылает нажатия inline-кнопок, и в проде отваливается всё, что
   на кнопках. В polling такого фильтра нет, поэтому тесты это не ловят
 - `telegram.webhook-secret` обязателен в webhook-режиме, иначе приложение не стартует
+- `widget_query`/`shared_widget_query` библиотека не разбирает: их перехватывает
+  `TelegramController` до `processUpdate` (только при `WidgetMode.active`). Виджеты
+  работают только в webhook; в polling — текстовая карточка
 - Результат `startWebhook()` проверяется: при `false` библиотека не поднимает
   dispatcher, и каждый входящий запрос навсегда повисает на отправке в канал
 

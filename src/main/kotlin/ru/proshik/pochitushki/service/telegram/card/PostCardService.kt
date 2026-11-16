@@ -14,6 +14,8 @@ import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.UserService
 import ru.proshik.pochitushki.service.telegram.PendingLabelInput
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
+import ru.proshik.pochitushki.service.telegram.widget.WidgetCardPresenter
+import ru.proshik.pochitushki.service.telegram.widget.WidgetMode
 
 /**
  * The post card: one message per command, redrawn in place by every button.
@@ -27,7 +29,9 @@ class PostCardService(
     private val userService: UserService,
     private val postService: PostService,
     private val i18n: I18nService,
-    private val presenter: TextCardPresenter,
+    private val textPresenter: TextCardPresenter,
+    private val widgetPresenter: WidgetCardPresenter,
+    private val widgetMode: WidgetMode,
     private val keyboard: TelegramKeyboard,
     private val labelService: LabelService,
     private val pendingLabelInput: PendingLabelInput,
@@ -37,17 +41,35 @@ class PostCardService(
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    /** /feed, /archive, /favorites: one message with the first post of the list. */
+    /**
+     * /feed, /archive, /favorites, /random_post: one message with the first post of the list.
+     * With widgets active the card goes out as a widget first; any refusal (Telegram may not
+     * allow widgets to this bot at all) falls back to the text card, so there is always an answer.
+     */
     fun sendCard(chatId: Long, list: CardList, replyTo: Long? = null) {
         val user = userService.findUserByChatId(chatId) ?: run {
             logger.warn("sendCard: no user for chatId={}", chatId)
             return
         }
         val lang = user.settings.languageCode
-        val view = load(user, list, 0) ?: CardView.Notice(i18n.getMessage(emptyKey(list), lang))
-        presenter.send(chatId, view, lang, replyTo)
+        val view = load(user, list, 0, widget = widgetMode.active)
+        if (view == null) {
+            textPresenter.send(chatId, CardView.Notice(i18n.getMessage(emptyKey(list), lang)), lang, replyTo)
+            return
+        }
+        if (view.ref.widget) {
+            if (widgetPresenter.send(chatId, view, lang, replyTo)) {
+                logger.info("sendCard success: chatId={}, list={}, widget", chatId, list)
+                return
+            }
+            logger.warn("sendCard: widget refused, falling back to the text card: chatId={}", chatId)
+        }
+        textPresenter.send(chatId, view.copy(ref = view.ref.copy(widget = false)), lang, replyTo)
         logger.info("sendCard success: chatId={}, list={}", chatId, list)
     }
+
+    /** A widget card is redrawn as a widget, a text card as text: the ref says which it is. */
+    private fun presenterFor(ref: CardRef): CardPresenter = if (ref.widget) widgetPresenter else textPresenter
 
     /** The reply to a link the user sent: "Saved" (or "already saved") and the post's card, no paging. */
     fun sendSaved(chatId: Long, post: PostData, alreadySaved: Boolean, replyTo: Long) {
@@ -55,7 +77,7 @@ class PostCardService(
         val lang = user.settings.languageCode
         val header = i18n.getMessage(if (alreadySaved) "card.saved.already" else "card.saved.added", lang)
         val view = CardView.Post(post, CardRef(CardList.SAVED, 0, post.id, PostLoc.of(post.isArchived)), 0, header = header)
-        presenter.send(chatId, view, lang, replyTo)
+        textPresenter.send(chatId, view, lang, replyTo)
     }
 
     fun onCallback(chatId: Long, messageId: Long, action: String, ref: CardRef, extra: String?): CallbackAnswer {
@@ -90,6 +112,7 @@ class PostCardService(
     /** One button press on one card message. Every action answers null or a toast. */
     private inner class Card(val user: UserData, val chatId: Long, val messageId: Long, val ref: CardRef) {
         val lang: String = user.settings.languageCode
+        val presenter: CardPresenter = presenterFor(ref)
 
         /** The post the button was drawn for, or null when it is gone (removed via the site, or a lost race). */
         fun post() = postService.getPost(ref.postId, user.id, ref.loc.postType)
@@ -98,7 +121,7 @@ class PostCardService(
 
         /** Redraws the card at [offset], stepping back if the list got shorter. */
         fun redrawAt(offset: Int): CallbackAnswer? {
-            val view = load(user, ref.list, offset) ?: CardView.Notice(i18n.getMessage("card.all_read", lang))
+            val view = load(user, ref.list, offset, ref.widget) ?: CardView.Notice(i18n.getMessage("card.all_read", lang))
             presenter.redraw(chatId, messageId, view, lang)
             return null
         }
@@ -123,8 +146,7 @@ class PostCardService(
 
         fun redrawButtons(change: (CardView.Post) -> CardView.Post): CallbackAnswer? {
             val post = post() ?: return gone()
-            val view = change(CardView.Post(post, ref, total()))
-            presenter.redrawKeyboard(chatId, messageId, keyboard.buildCardKeyboard(view, lang))
+            presenter.redrawButtons(chatId, messageId, change(CardView.Post(post, ref, total())), lang)
             return null
         }
 
@@ -229,16 +251,16 @@ class PostCardService(
     }
 
     /** The post at [offset] of [list], clamped to the list's end; null when the list is empty. */
-    private fun load(user: UserData, list: CardList, offset: Int): CardView.Post? {
+    private fun load(user: UserData, list: CardList, offset: Int, widget: Boolean = false): CardView.Post? {
         if (list == CardList.RANDOM) {
             val post = postService.getRandomPost(user.id) ?: return null
-            return CardView.Post(post, CardRef(list, 0, post.id, PostLoc.UNREAD), 0)
+            return CardView.Post(post, CardRef(list, 0, post.id, PostLoc.UNREAD, widget), 0)
         }
         val total = postService.getPostCount(user.id, list.postType)
         if (total == 0) return null
         val at = offset.coerceIn(0, total - 1)
         val post = postService.getPosts(user.id, list.postType, 1, at).firstOrNull() ?: return null
-        return CardView.Post(post, CardRef(list, at, post.id, PostLoc.of(post.isArchived)), total)
+        return CardView.Post(post, CardRef(list, at, post.id, PostLoc.of(post.isArchived), widget), total)
     }
 
     private fun emptyKey(list: CardList): String = when (list) {

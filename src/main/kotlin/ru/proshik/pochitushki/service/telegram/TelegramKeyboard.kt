@@ -43,6 +43,7 @@ class TelegramKeyboard(
         private const val NEXT = "›"
         private const val INERT = "·"
         private val PAGED_LISTS = setOf(CardList.UNREAD, CardList.ARCHIVE, CardList.FAVORITES)
+        private const val OPEN_LINK_MAX = 256
 
     }
 
@@ -107,6 +108,25 @@ class TelegramKeyboard(
                     button(INERT, CardAction.NOOP)
                 },
             )
+        }
+        return InlineKeyboard(rows)
+    }
+
+    /**
+     * The inline keyboard under a widget card: what does not fit in 4 KB of compressed widget
+     * HTML — PDF, labels, the app — plus a link button for articles whose URL is longer than
+     * TelegramWidget.openLink accepts (256 characters).
+     */
+    fun buildWidgetKeyboard(view: CardView.Post, languageCode: String): InlineKeyboard {
+        val ref = view.ref.copy(widget = true)
+        val rows = mutableListOf(
+            listOf(
+                InlineButton(i18nService.getMessage("command.feed.button.pdf", languageCode), callbackData = cardCallback(CardAction.PDF, ref)),
+                InlineButton(i18nService.getMessage("command.feed.button.labels", languageCode), callbackData = cardCallback(CardAction.LABELS, ref)),
+            ) + listOfNotNull(appButton(ref.list, languageCode))
+        )
+        if (view.post.url.length > OPEN_LINK_MAX) {
+            rows += listOf(InlineButton(i18nService.getMessage("card.button.open_article", languageCode), url = view.post.url))
         }
         return InlineKeyboard(rows)
     }

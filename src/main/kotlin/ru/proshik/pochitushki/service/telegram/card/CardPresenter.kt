@@ -31,6 +31,11 @@ data class CallbackAnswer(val text: String? = null)
 interface CardPresenter {
     fun send(chatId: Long, view: CardView, languageCode: String, replyTo: Long? = null): Boolean
     fun redraw(chatId: Long, messageId: Long, view: CardView, languageCode: String): Boolean
+
+    /** Only the card's own buttons changed (★, delete confirmation, ⋯, back from a picker). */
+    fun redrawButtons(chatId: Long, messageId: Long, view: CardView.Post, languageCode: String): Boolean
+
+    /** Another keyboard in place of the card's buttons: the label picker, the engine choice. */
     fun redrawKeyboard(chatId: Long, messageId: Long, keyboard: InlineKeyboard?): Boolean
 }
 
@@ -53,6 +58,9 @@ class TextCardPresenter(
         // keyboard removes them explicitly.
         return api.editHtml(chatId, messageId, html, preview, markup ?: NO_BUTTONS)
     }
+
+    override fun redrawButtons(chatId: Long, messageId: Long, view: CardView.Post, languageCode: String): Boolean =
+        api.editKeyboard(chatId, messageId, keyboard.buildCardKeyboard(view, languageCode))
 
     override fun redrawKeyboard(chatId: Long, messageId: Long, keyboard: InlineKeyboard?): Boolean =
         api.editKeyboard(chatId, messageId, keyboard)
