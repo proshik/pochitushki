@@ -219,10 +219,12 @@ html:not(.dark) .icon-moon { display: none; }
 }
 
 /* ── /labels page ── */
+/* The profile's link to /labels sits in one column with .stats and .settings-box: the same
+   max-width, and the same 20px above it as .settings-box has. */
 .settings-link {
-  display: block; text-decoration: none;
+  display: block; text-decoration: none; max-width: 640px; margin-top: 20px;
   background: var(--surface); border: 1px solid var(--hair); border-radius: 12px;
-  padding: 14px 18px; margin-bottom: 14px;
+  padding: 14px 18px;
 }
 .settings-link:hover { border-color: var(--muted); }
 .labels-box {
