@@ -169,6 +169,12 @@ Webhook висит на `POST /${telegram.token}`, то есть путь энд
    `img-src 'self'` — единственный источник картинок теперь сам сервис:
    OG-обложки идут через `OgImageProxyService` (`GET /api/v1/posts/{id}/cover-image`),
    а не хотлинком. Не возвращать `https:` в `img-src`, не сняв прокси.
+4. Режим Mini App — единственное исключение, и узкое: на `/tg` и для сессии, чей JWT несёт
+   claim `tma`, `script-src` дополняется `https://telegram.org` (telegram-web-app.js), а
+   `frame-ancestors` — `https://web.telegram.org`, без `X-Frame-Options`. Скрипт Telegram
+   подключает `layout.html` только при атрибуте `miniApp`; адаптация (тема по `colorScheme`,
+   `BackButton`, `openLink` для статей) — `initMiniApp()` в `app.js`, которая в обычном
+   браузере ничего не делает. Не расширять исключение на другие пути
 
 Шрифты — Onest (400/600/800) и JetBrains Mono (400/600), самохостятся
 подмножествами (latin, latin-ext, cyrillic, cyrillic-ext — кириллица

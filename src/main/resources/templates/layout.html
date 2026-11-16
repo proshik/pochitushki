@@ -7,6 +7,10 @@
   <title th:text="${pageTitle} + ' — Почитушки'">Почитушки</title>
   <link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
 
+  <!--/* Mini App only (JWT claim tma): Telegram's script goes before any other, and the CSP
+       allows telegram.org only in this mode (SecurityHeadersFilter). */-->
+  <script th:if="${miniApp == true}" src="https://telegram.org/js/telegram-web-app.js?65"></script>
+
   <!-- Anti-flash: must run before any paint, so no defer. -->
   <script src="/js/theme-init.js"></script>
 

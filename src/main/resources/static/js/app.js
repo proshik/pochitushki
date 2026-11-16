@@ -588,7 +588,47 @@ function showActionError(kind) {
   setTimeout(function () { toast.remove(); }, 4000);
 }
 
+/* ── Mini App: the same site inside Telegram ──
+   Only when telegram-web-app.js is on the page (layout.html loads it in Mini App mode)
+   and Telegram handed over launch data. In a normal browser this does nothing. */
+function initMiniApp() {
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (!tg || !tg.initData) return;
+
+  tg.ready();
+  tg.expand();
+
+  /* Telegram's colour scheme wins over the saved site theme inside the app. */
+  function applyScheme() {
+    document.documentElement.classList.toggle('dark', tg.colorScheme === 'dark');
+  }
+  applyScheme();
+  tg.onEvent('themeChanged', applyScheme);
+
+  /* Telegram's own back button instead of browser navigation on inner pages. */
+  if (location.pathname !== '/') {
+    tg.BackButton.show();
+    tg.BackButton.onClick(function () {
+      if (history.length > 1) history.back();
+      else location.href = '/';
+    });
+  }
+
+  /* Articles open outside the app: a plain link would navigate the Mini App itself away.
+     openLink must run inside the user's tap, which a click listener is. */
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest && e.target.closest('a[href]');
+    if (!link) return;
+    var url;
+    try { url = new URL(link.href, location.href); } catch (ex) { return; }
+    if (url.origin === location.origin || !/^https?:$/.test(url.protocol)) return;
+    e.preventDefault();
+    tg.openLink(url.href);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+  initMiniApp();
   /* Fail loudly if an hx-on / js: expression sneaks back in, rather than
      quietly needing 'unsafe-eval' again. */
   if (typeof htmx !== 'undefined') htmx.config.allowEval = false;

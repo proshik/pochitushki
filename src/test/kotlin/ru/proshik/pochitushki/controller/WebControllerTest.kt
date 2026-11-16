@@ -77,6 +77,34 @@ class WebControllerTest : BaseIntegrationTest() {
             .andExpect(content().string(containsString("webtest")))
     }
 
+    private fun withMiniAppAuth(userId: Long) = org.springframework.test.web.servlet.request.RequestPostProcessor { request ->
+        request.setCookies(jakarta.servlet.http.Cookie("auth_token", jwtService.createToken(userId, miniApp = true)))
+        request
+    }
+
+    @Test
+    fun `mini app feed includes telegram script`() {
+        mockMvc.perform(get("/").with(withMiniAppAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("https://telegram.org/js/telegram-web-app.js")))
+    }
+
+    @Test
+    fun `browser feed does not include telegram script`() {
+        mockMvc.perform(get("/").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("telegram-web-app.js"))))
+    }
+
+    @Test
+    fun `profile hides logout in mini app`() {
+        mockMvc.perform(get("/profile").with(withMiniAppAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("action=\"/logout\""))))
+        mockMvc.perform(get("/profile").with(withAuth(userId)))
+            .andExpect(content().string(containsString("action=\"/logout\"")))
+    }
+
     @Test
     fun `profile page has no feed size row`() {
         mockMvc.perform(get("/profile").with(withAuth(userId)))
