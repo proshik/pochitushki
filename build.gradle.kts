@@ -54,12 +54,12 @@ dependencies {
     // (a stale standalone pin like 1.6.4 caused version skew against the managed core).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 
-    implementation("io.github.kotlin-telegram-bot.kotlin-telegram-bot:telegram:6.3.0")
+    implementation("com.github.kotlin-telegram-bot.kotlin-telegram-bot:telegram:10.0.0")
     // kotlin-telegram-bot exposes retrofit2.Response in its public API (return types of Bot.*).
     // The K2 compiler (Kotlin 2.x) requires those types on the compile classpath, while the
     // library declares retrofit as `implementation` (runtime-only). Pin it to the version the
     // bot resolves transitively (see runtimeClasspath) so nothing changes at runtime.
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:retrofit:2.12.0")
 
     implementation("org.apache.commons:commons-csv:1.14.1")
 

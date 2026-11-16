@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.ReplyMarkup
+import com.github.kotlintelegrambot.entities.ReplyParameters
 import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.types.TelegramBotResult
 import java.io.File
@@ -89,7 +90,7 @@ class TelegramService(
             chatId = ChatId.fromId(chatId),
             text = text,
             replyMarkup = replyMarkup,
-            replyToMessageId = replyToMessageId
+            replyParameters = replyToMessageId?.let { ReplyParameters(messageId = it) },
         )
         handleTgErrorResponse(result, chatId)
         return result
@@ -116,7 +117,6 @@ class TelegramService(
         messageId: Long,
         text: String,
         keyboard: ReplyMarkup,
-        disableWebPagePreview: Boolean? = null,
         parseMode: ParseMode? = null
     ) {
         // TODO handle warning
@@ -125,7 +125,6 @@ class TelegramService(
             messageId = messageId,
             text = text,
             replyMarkup = keyboard,
-            disableWebPagePreview = disableWebPagePreview,
             parseMode = parseMode,
         )
     }
@@ -204,7 +203,7 @@ class TelegramService(
             val result = botProvider.getBot().sendMessage(
                 chatId = ChatId.fromId(chatId),
                 text = message,
-                replyToMessageId = messageId,
+                replyParameters = ReplyParameters(messageId = messageId),
                 replyMarkup = keyboard
             )
             handleTgErrorResponse(result, chatId)
@@ -327,7 +326,7 @@ class TelegramService(
         }
         val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newArchiveId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = true)
-        editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
+        editMessage(chatId, messageId, messageText, keyboard, parseMode = ParseMode.MARKDOWN_V2)
         logger.info("favoritesToArchive success: chatId={}, postId={}, newArchiveId={}", chatId, postId, newArchiveId)
     }
 
@@ -349,7 +348,7 @@ class TelegramService(
         }
         val messageText = buildPostMessage(post.url, post.title, labels = post.labels)
         val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(newUnreadId, PostType.FAVORITES, post.isFavorite, user.settings.languageCode, isArchived = false)
-        editMessage(chatId, messageId, messageText, keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
+        editMessage(chatId, messageId, messageText, keyboard, parseMode = ParseMode.MARKDOWN_V2)
         logger.info("favoritesToUnread success: chatId={}, postId={}, newUnreadId={}", chatId, postId, newUnreadId)
     }
 
@@ -488,7 +487,6 @@ class TelegramService(
             editMessage(
                 chatId = chatId,
                 messageId = messageId,
-                disableWebPagePreview = false,
                 parseMode = ParseMode.MARKDOWN_V2,
                 text = postItem.message,
                 keyboard = postItem.keyboard
@@ -523,7 +521,6 @@ class TelegramService(
             messageId = messageId,
             text = messageText,
             keyboard = keyboard,
-            disableWebPagePreview = false,
             parseMode = ParseMode.MARKDOWN_V2
         )
 
@@ -550,7 +547,7 @@ class TelegramService(
             }
             val isArchived = postType == PostType.ARCHIVE
             val keyboard = telegramKeyboard.buildFeedPostInlineKeyboard(postId, PostType.FAVORITES, newIsFavorite, user.settings.languageCode, isArchived = isArchived)
-            editMessage(chatId, messageId, buildPostMessage(post.url, post.title, labels = post.labels), keyboard, disableWebPagePreview = false, parseMode = ParseMode.MARKDOWN_V2)
+            editMessage(chatId, messageId, buildPostMessage(post.url, post.title, labels = post.labels), keyboard, parseMode = ParseMode.MARKDOWN_V2)
         }
 
         logger.info("toggleFavoriteFromFavorites success: chatId={}, postId={}, newIsFavorite={}", chatId, postId, newIsFavorite)
@@ -579,7 +576,6 @@ class TelegramService(
             messageId = messageId,
             text = messageText,
             keyboard = keyboard,
-            disableWebPagePreview = false,
             parseMode = ParseMode.MARKDOWN_V2
         )
 
@@ -961,7 +957,6 @@ class TelegramService(
                 ctx.postId, postType, post.isFavorite, user.settings.languageCode,
                 isArchived = ctx.target == ru.proshik.pochitushki.model.LabelTarget.ARCHIVE,
             ),
-            disableWebPagePreview = false,
             parseMode = ParseMode.MARKDOWN_V2,
         )
     }
@@ -1000,11 +995,10 @@ class TelegramService(
     private fun sendPostMessage(chatId: Long, messageId: Long? = null, postItem: PostFeedItem) {
         val result = botProvider.getBot().sendMessage(
             chatId = ChatId.fromId(chatId),
-            disableWebPagePreview = false,
             parseMode = ParseMode.MARKDOWN_V2,
             text = postItem.message,
             replyMarkup = postItem.keyboard,
-            replyToMessageId = messageId
+            replyParameters = messageId?.let { ReplyParameters(messageId = it) }
         )
         handleTgErrorResponse(result, chatId)
     }

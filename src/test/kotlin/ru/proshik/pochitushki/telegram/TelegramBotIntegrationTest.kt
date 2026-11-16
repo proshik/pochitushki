@@ -111,6 +111,29 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `url message reply quotes the original message`() {
+        registerTestUser()
+        wireMockExternalUrl.stubFor(
+            get(urlEqualTo("/quoted")).willReturn(
+                aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html; charset=utf-8")
+                    .withBody("<html><head><title>Quoted</title></head><body/></html>")
+            )
+        )
+
+        val updateId = nextUpdateId()
+        postUpdate(buildTextMessage(updateId, "http://localhost:${wireMockExternalUrl.port()}/quoted"))
+
+        awaitSendMessage()
+        val calls = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
+        assertTrue(
+            calls.any { it.bodyAsString.contains("reply_parameters=") && it.bodyAsString.contains("%22message_id%22%3A$updateId") },
+            "Expected the confirmation to reply to message $updateId via reply_parameters"
+        )
+    }
+
+    @Test
     fun `help command should send help message`() {
         registerTestUser()
 
