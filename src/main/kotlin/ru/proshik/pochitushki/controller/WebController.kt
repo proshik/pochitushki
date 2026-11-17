@@ -7,6 +7,7 @@ import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.CookieValue
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestAttribute
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.dao.DataAccessException
 import ru.proshik.pochitushki.configuration.JwtAuthInterceptor
 import ru.proshik.pochitushki.model.PostType
@@ -102,9 +103,24 @@ class WebController(
         return "random"
     }
 
+    /**
+     * 50 labels a page, `?page=N` (out of range → the last page, garbage → the first).
+     * `?label=ID` — sent by the page after creating a label — redirects to the page holding
+     * it, so the new label is on screen and the address keeps a plain page number.
+     * Both are taken as text: a typed-in value must not turn into a 400.
+     */
     @GetMapping("/labels")
-    fun labels(@RequestAttribute("userId") userId: Long, model: Model): String {
-        model.addAttribute("labels", labelService.getLabelsWithCounts(userId))
+    fun labels(
+        @RequestAttribute("userId") userId: Long,
+        @RequestParam(required = false) page: String?,
+        @RequestParam(required = false) label: String?,
+        model: Model,
+    ): String {
+        label?.toLongOrNull()?.let { labelService.pageOf(it, userId) }?.let { return "redirect:/labels?page=$it" }
+
+        val labelsPage = labelService.labelsPage(userId, page)
+        model.addAttribute("labels", labelsPage.labels)
+        model.addAttribute("labelsPage", labelsPage)
         addUserInfo(userId, model)
         return "labels"
     }

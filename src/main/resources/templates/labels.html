@@ -5,12 +5,20 @@
 <header th:replace="~{layout :: topbar('labels')}"></header>
 <main class="page-main" style="max-width: 760px;">
   <div class="page-head">
-    <h1 class="eyebrow" th:text="#{web.head.labels(${labels.size()})}">Метки · 0</h1>
+    <h1 class="eyebrow" th:text="#{web.head.labels(${labelsPage.total})}">Метки · 0</h1>
   </div>
 
   <!-- Rows are managed by initLabelsPage() in /js/app.js — no inline handlers (CSP). -->
   <div class="labels-box" id="labels-box"
        th:attr="data-rename-prompt=#{web.labels.rename.prompt},data-delete-confirm=#{web.labels.delete.confirm},data-taken=#{web.labels.taken}">
+    <!-- On top: with hundreds of labels the bottom of the list is pages away. -->
+    <form class="labels-add" id="label-create-form">
+      <input type="text" id="label-create-name" required maxlength="40"
+             th:placeholder="#{web.labels.new.placeholder}"
+             th:attr="aria-label=#{web.labels.new.placeholder}">
+      <button type="submit" th:text="#{web.labels.new.submit}">Создать</button>
+    </form>
+
     <div class="labels-row" th:each="label : ${labels}" th:attr="data-label-id=${label.id}">
       <a class="labels-name" th:href="@{/labels/{id}(id=${label.id})}" th:text="'#' + ${label.name}">#label</a>
       <span class="labels-count" th:text="${label.postCount}">0</span>
@@ -38,15 +46,24 @@
       </span>
     </div>
 
-    <form class="labels-add" id="label-create-form">
-      <input type="text" id="label-create-name" required maxlength="40"
-             th:placeholder="#{web.labels.new.placeholder}"
-             th:attr="aria-label=#{web.labels.new.placeholder}">
-      <button type="submit" th:text="#{web.labels.new.submit}">Создать</button>
-    </form>
   </div>
 
-  <div th:if="${labels.isEmpty()}" class="empty-state">
+  <!-- Plain links: ?page=N survives a reload and can be shared; no script involved. -->
+  <nav class="pager" th:if="${labelsPage.pages > 1}" th:attr="aria-label=#{web.pager.label}">
+    <a th:if="${labelsPage.page > 1}" class="pager-step" th:href="@{/labels(page=${labelsPage.page - 1})}"
+       th:attr="aria-label=#{web.pager.prev}" rel="prev">‹</a>
+    <span th:unless="${labelsPage.page > 1}" class="pager-step off" aria-hidden="true">‹</span>
+    <th:block th:each="n : ${labelsPage.items}">
+      <span th:if="${n == null}" class="pager-gap" aria-hidden="true">…</span>
+      <span th:if="${n != null and n == labelsPage.page}" class="pager-num on" aria-current="page" th:text="${n}">1</span>
+      <a th:if="${n != null and n != labelsPage.page}" class="pager-num" th:href="@{/labels(page=${n})}" th:text="${n}">2</a>
+    </th:block>
+    <a th:if="${labelsPage.page < labelsPage.pages}" class="pager-step" th:href="@{/labels(page=${labelsPage.page + 1})}"
+       th:attr="aria-label=#{web.pager.next}" rel="next">›</a>
+    <span th:unless="${labelsPage.page < labelsPage.pages}" class="pager-step off" aria-hidden="true">›</span>
+  </nav>
+
+  <div th:if="${labelsPage.total == 0}" class="empty-state">
     <div class="empty-cover" aria-hidden="true">#</div>
     <h2 th:text="#{web.labels.empty.title}">Меток пока нет</h2>
     <p th:text="#{web.labels.empty.text}">Создайте метку здесь или повесьте её на карточку — кнопка с ярлыком.</p>

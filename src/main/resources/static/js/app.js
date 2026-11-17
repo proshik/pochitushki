@@ -351,8 +351,11 @@ function initLabelsPage() {
     }
 
     if (e.target.closest('[data-action="label-delete-yes"]')) {
+      /* Reload rather than drop the row: the next label moves up from the following page,
+         and the total in the head and the pager stay right. The server clamps ?page when
+         this was the last label of the last page. */
       fetch('/api/v1/labels/' + row.dataset.labelId, { method: 'DELETE' })
-        .then(function (r) { if (r.ok) row.remove(); });
+        .then(function (r) { if (r.ok) location.reload(); });
     }
   });
 
@@ -437,7 +440,8 @@ function initLabelsPage() {
         body: JSON.stringify({ name: name })
       })
         .then(function (r) { if (!r.ok) throw new Error('create failed'); return r.json(); })
-        .then(function () { location.reload(); })
+        /* To the page the new label landed on in name order (the server redirects to ?page=N). */
+        .then(function (label) { location.href = '/labels?label=' + encodeURIComponent(label.id); })
         .catch(function () { input.disabled = false; });
     });
   }

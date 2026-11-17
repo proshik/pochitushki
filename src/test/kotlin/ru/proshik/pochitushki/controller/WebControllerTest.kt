@@ -2,6 +2,8 @@ package ru.proshik.pochitushki.controller
 
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -146,6 +148,91 @@ class WebControllerTest : BaseIntegrationTest() {
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("kotlin")))
             .andExpect(content().string(containsString("/labels/${label.id}")))
+    }
+
+    private fun createLabels(count: Int): List<Long> =
+        (1..count).map { labelService.createLabel(userId, "label-%03d".format(it)).id }
+
+    @Test
+    fun `labels are paged by 50 with the total in the head`() {
+        createLabels(120)
+
+        val html = mockMvc.perform(get("/labels").with(withAuth(userId)))
+            .andExpect(status().isOk).andReturn().response.contentAsString
+        assertEquals(50, Regex("class=\"labels-row\"").findAll(html).count())
+        assertTrue(html.contains("label-001") && html.contains("label-050") && !html.contains("label-051"))
+        assertTrue(html.contains("· 120"), "the head counts every label")
+        assertTrue(html.contains("href=\"/labels?page=2\"") && html.contains("href=\"/labels?page=3\""))
+    }
+
+    @Test
+    fun `second page shows the next 50`() {
+        createLabels(120)
+
+        val html = mockMvc.perform(get("/labels").param("page", "2").with(withAuth(userId)))
+            .andExpect(status().isOk).andReturn().response.contentAsString
+        assertTrue(html.contains("label-051") && html.contains("label-100") && !html.contains("label-050"))
+    }
+
+    @Test
+    fun `page beyond the end shows the last page`() {
+        createLabels(120)
+
+        val html = mockMvc.perform(get("/labels").param("page", "99").with(withAuth(userId)))
+            .andExpect(status().isOk).andReturn().response.contentAsString
+        assertTrue(html.contains("label-120") && !html.contains("label-100"))
+    }
+
+    @Test
+    fun `garbage page shows the first page`() {
+        createLabels(60)
+
+        for (raw in listOf("abc", "-1", "0", "")) {
+            val html = mockMvc.perform(get("/labels").param("page", raw).with(withAuth(userId)))
+                .andExpect(status().isOk).andReturn().response.contentAsString
+            assertTrue(html.contains("label-001") && !html.contains("label-060"), "page=$raw")
+        }
+    }
+
+    @Test
+    fun `one page has no pager`() {
+        createLabels(3)
+
+        mockMvc.perform(get("/labels").with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("class=\"pager\""))))
+    }
+
+    @Test
+    fun `new label form is above the list`() {
+        createLabels(3)
+
+        val html = mockMvc.perform(get("/labels").with(withAuth(userId))).andReturn().response.contentAsString
+        assertTrue(html.indexOf("id=\"label-create-form\"") in 0 until html.indexOf("class=\"labels-row\""))
+    }
+
+    @Test
+    fun `label param redirects to the page holding it`() {
+        val ids = createLabels(120)
+
+        mockMvc.perform(get("/labels").param("label", ids[74].toString()).with(withAuth(userId)))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(header().string("Location", "/labels?page=2"))
+    }
+
+    @Test
+    fun `label param of someone else's label is ignored`() {
+        createLabels(3)
+        val otherUser = jdbcTemplate.queryForObject(
+            """INSERT INTO users(telegram_id, username, first_name, settings)
+               VALUES (7002, 'other', 'O', '{"languageCode":"en"}'::jsonb) RETURNING id""",
+            Long::class.java
+        )!!
+        val theirs = labelService.createLabel(otherUser, "secret")
+
+        mockMvc.perform(get("/labels").param("label", theirs.id.toString()).with(withAuth(userId)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("secret"))))
     }
 
     @Test

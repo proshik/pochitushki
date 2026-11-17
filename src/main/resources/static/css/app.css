@@ -254,7 +254,10 @@ html:not(.dark) .icon-moon { display: none; }
 .labels-row.confirming .labels-confirm { display: flex; }
 .labels-row.confirming .icon-btn,
 .labels-row.confirming .labels-count { display: none; }
-.labels-add { display: flex; gap: 8px; align-items: center; padding-top: 12px; }
+.labels-add {
+  display: flex; gap: 8px; align-items: center;
+  padding: 8px 0 12px; border-bottom: 1px solid var(--hair);
+}
 .labels-add input {
   flex: 1; background: var(--bg); color: var(--ink);
   border: 1px solid var(--hair); border-radius: 999px; padding: 7px 14px;
@@ -264,6 +267,21 @@ html:not(.dark) .icon-moon { display: none; }
   background: var(--btn); color: var(--btn-ink); border-radius: 999px;
   font-size: 12.5px; font-weight: 650; padding: 7px 16px; white-space: nowrap;
 }
+/* /labels pager: ‹ 1 2 … 9 › */
+.pager {
+  display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin-top: 18px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px;
+}
+.pager-num, .pager-step {
+  min-width: 32px; height: 32px; padding: 0 8px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); text-decoration: none; border: 1px solid transparent;
+}
+a.pager-num:hover, a.pager-step:hover { color: var(--ink); border-color: var(--hair); }
+.pager-num.on { background: var(--btn); color: var(--btn-ink); font-weight: 650; }
+.pager-step.off { opacity: 0.35; }
+.pager-gap { color: var(--muted); padding: 0 2px; }
 .crumb { color: var(--muted); text-decoration: none; }
 .crumb:hover { color: var(--ink); }
 
