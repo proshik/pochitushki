@@ -253,7 +253,6 @@ thedecisionlab.com · 20 сен · #психология
 
 > **Для исполнителя:** задачи выполняются по порядку, каждая заканчивается зелёным
 > `./gradlew test` и отдельным локальным коммитом. Шаги отмечены чекбоксами (`- [ ]`).
-> Способ исполнения (subagent-driven или в одной сессии) выбирает владелец.
 
 **Goal:** лента бота превращается в одну карточку, которая правится на месте; тот же сайт
 открывается в Telegram как Mini App без экрана логина; HTML-виджеты Bot API 10.4 готовы
@@ -371,7 +370,7 @@ WireMock 3.13.2.
 - Тесты: `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./gradlew test`
   (ниже — `$TEST`). Повторный прогон — `cleanTest test`.
 - Коммиты локальные, в стиле репозитория (`build(deps):`, `feat(bot):`, `docs:` и русский
-  текст), без Co-Authored-By и упоминаний AI. Push делает владелец.
+  текст). Push делает владелец.
 
 ## Review Focus
 
