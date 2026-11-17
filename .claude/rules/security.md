@@ -4,13 +4,17 @@ paths:
   - "src/**/*Jwt*.kt"
   - "src/**/*Interceptor*.kt"
   - "src/**/controller/Auth*.kt"
+  - "src/**/controller/MiniApp*.kt"
+  - "src/**/miniapp/**"
+  - "src/**/*SecurityHeaders*.kt"
 ---
 
 # Security Rules
 
-Веб-аутентификация реализована. Флоу — **Telegram OIDC/OAuth 2.0 Authorization
-Code + PKCE**, не Login Widget: HMAC-подписи `WebAppData` и проверки `auth_date`
-здесь нет и добавлять её не нужно.
+Веб-аутентификация реализована, входов два. В браузере — **Telegram OIDC/OAuth 2.0
+Authorization Code + PKCE** (не Login Widget). Внутри Telegram (Mini App) — по
+`initData` с HMAC `WebAppData`, см. раздел «Mini App». Это два разных флоу: проверки
+одного не переносить в другой
 
 ## Telegram OIDC (`TelegramOidcService`, `AuthController`)
 
@@ -44,7 +48,29 @@ Code + PKCE**, не Login Widget: HMAC-подписи `WebAppData` и прове
   а по умолчанию `id_token` разбирался бы оттуда, куда увёл последний хоп
 - Новые проверки claim'ов добавлять там же, в разбор `id_token`
 
-## Куки (`AuthController`)
+## Mini App (`InitData`, `MiniAppController`)
+
+- `/tg` — адрес главной Mini App в BotFather. Страница шлёт `Telegram.WebApp.initData` в
+  `POST /auth/telegram/webapp`; `/tg` и `/auth/telegram/webapp*` открыты (не в `WebConfig`)
+- Проверка (`service/miniapp/InitDataValidator.kt`, core.telegram.org/bots/webapps):
+  `secret_key = HMAC_SHA256(key = "WebAppData", message = bot_token)`,
+  `hash = hex(HMAC_SHA256(key = secret_key, message = data_check_string))`.
+  `data_check_string` — **все** поля, кроме `hash` (и `signature` тоже: «all received
+  fields»), `key=value` с однократно декодированным значением, по алфавиту, через `\n`.
+  Сравнение — `MessageDigest.isEqual`; повтор ключа → отказ. Алгоритм закреплён
+  опубликованным вектором Telegram в `InitDataValidatorTest` — не «чинить» под свой тест
+- Подпись проверяется **до** свежести; `auth_date` не старше 24 ч (`InitData.MAX_AGE`)
+- Пользователь — `UserService.getOrCreateUser` по Telegram id из `initData.user.id`, как при
+  OIDC. `start_param` и `page` (query `?p=` у кнопок бота) — только белый список
+  (`MiniAppController.redirectFor`): никакого открытого редиректа
+- Режим Mini App — claim `tma=true` в JWT (`JwtService.createToken(userId, miniApp = true)`),
+  а не отдельная cookie: он ослабляет CSP (`telegram.org`, фрейм Telegram Web), и подделать
+  его без ключа нельзя. Вне `/tg` и вне токена с `tma` заголовки строгие
+- Telegram Web открывает страницу во фрейме с чужого сайта, и `SameSite=Lax`-кука там не
+  живёт. Это осознанно: `/tg` проверяет `GET /auth/telegram/webapp/session` и предлагает
+  открыть сайт в браузере. **`SameSite` ради Telegram Web не ослаблять**
+
+## Куки (`AuthCookies`, `AuthController`, `MiniAppController`)
 
 - Все куки — `HttpOnly`, `SameSite=Lax`, `Path=/`. `Lax`, а не `Strict`: браузер
   приходит на колбэк с чужого сайта, и `Strict` не отдал бы куку именно на этой
@@ -76,7 +102,7 @@ Code + PKCE**, не Login Widget: HMAC-подписи `WebAppData` и прове
 
 ## Cookies
 
-- Все куки через `baseCookie()`: `HttpOnly`, `Secure`, `SameSite=Lax`, `path=/`
+- Все куки через `AuthCookies.base()`: `HttpOnly`, `Secure`, `SameSite=Lax`, `path=/`
 - `SameSite=Lax` — первая CSRF-защита для cookie-auth; не ослаблять. Вторая —
   `CsrfOriginFilter`: у небезопасных методов сверяется `Origin` (или
   `Sec-Fetch-Site`) с origin самого сервиса. «Same-site» у куки — это

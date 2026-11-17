@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import ru.proshik.pochitushki.service.JwtService
 
 /**
  * Adds baseline security response headers to every response.
@@ -29,13 +30,18 @@ import org.springframework.web.filter.OncePerRequestFilter
  * `img-src` used to allow all of https: for hot-linked OG images. Those now go
  * through `OgImageProxyService`, so the only image origin is this one — do not
  * reopen it without moving the covers back off the proxy.
+ *
+ * Mini App mode is the one exception, and it is narrow: on `/tg`, and for a session whose
+ * JWT carries the `tma` claim (signed, so it cannot be set by hand), `script-src` adds
+ * `https://telegram.org` for telegram-web-app.js and `frame-ancestors` allows Telegram Web,
+ * with no X-Frame-Options. Everywhere else the headers stay exactly as strict as before.
  */
 @Component
-class SecurityHeadersFilter : OncePerRequestFilter() {
+class SecurityHeadersFilter(private val jwtService: JwtService) : OncePerRequestFilter() {
 
-    private val contentSecurityPolicy = listOf(
+    private fun policy(scriptSrc: String, frameAncestors: String) = listOf(
         "default-src 'self'",
-        "script-src 'self'",
+        "script-src $scriptSrc",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self'",
         "font-src 'self'",
@@ -43,18 +49,37 @@ class SecurityHeadersFilter : OncePerRequestFilter() {
         "form-action 'self'",
         "base-uri 'none'",
         "object-src 'none'",
-        "frame-ancestors 'none'",
+        "frame-ancestors $frameAncestors",
     ).joinToString("; ")
+
+    private val strictPolicy = policy("'self'", "'none'")
+    private val miniAppPolicy = policy("'self' $TELEGRAM_SCRIPTS", TELEGRAM_WEB)
 
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        response.setHeader("X-Frame-Options", "DENY")
+        if (isMiniApp(request)) {
+            response.setHeader("Content-Security-Policy", miniAppPolicy)
+        } else {
+            response.setHeader("X-Frame-Options", "DENY")
+            response.setHeader("Content-Security-Policy", strictPolicy)
+        }
         response.setHeader("X-Content-Type-Options", "nosniff")
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.setHeader("Content-Security-Policy", contentSecurityPolicy)
         filterChain.doFilter(request, response)
+    }
+
+    private fun isMiniApp(request: HttpServletRequest): Boolean {
+        if (request.requestURI == MINI_APP_ENTRY) return true
+        val token = request.cookies?.firstOrNull { it.name == "auth_token" }?.value ?: return false
+        return jwtService.parseToken(token)?.miniApp == true
+    }
+
+    companion object {
+        const val MINI_APP_ENTRY = "/tg"
+        private const val TELEGRAM_SCRIPTS = "https://telegram.org"
+        private const val TELEGRAM_WEB = "https://web.telegram.org"
     }
 }

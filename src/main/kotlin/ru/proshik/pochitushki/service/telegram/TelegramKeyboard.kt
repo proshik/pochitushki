@@ -1,131 +1,172 @@
 package ru.proshik.pochitushki.service.telegram
 
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
-import com.github.kotlintelegrambot.entities.ReplyMarkup
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import org.springframework.stereotype.Service
 import ru.proshik.pochitushki.model.LabelData
-import ru.proshik.pochitushki.model.LabelTarget
-import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_EN_CODE
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_RU_CODE
+import ru.proshik.pochitushki.service.telegram.api.InlineButton
+import ru.proshik.pochitushki.service.telegram.api.InlineKeyboard
+import ru.proshik.pochitushki.service.telegram.api.WebAppRef
+import com.github.kotlintelegrambot.entities.keyboard.WebAppInfo
+import ru.proshik.pochitushki.service.telegram.card.CardAction
+import ru.proshik.pochitushki.service.telegram.card.CardList
+import ru.proshik.pochitushki.service.telegram.card.CardPaging
+import ru.proshik.pochitushki.service.telegram.widget.WidgetChatData
+import ru.proshik.pochitushki.service.telegram.card.CardRef
+import ru.proshik.pochitushki.service.telegram.card.CardView
+import ru.proshik.pochitushki.service.telegram.card.PostLoc
+import ru.proshik.pochitushki.service.telegram.card.cardCallback
 
 @Service
-class TelegramKeyboard(private val i18nService: I18nService) {
+class TelegramKeyboard(
+    private val i18nService: I18nService,
+    private val miniAppLinks: MiniAppLinks,
+) {
 
     companion object {
-        const val CALLBACK_ARCHIVE_POST = "archive_button"
-        const val CALLBACK_UNREAD_POST = "unread_button"
 
-        const val CALLBACK_DELETE_POST = "delete_button"
-        const val CALLBACK_DELETE_ARCHIVE_POST = "delete_archive_button"
-
-        const val CALLBACK_NEXT_POSTS = "next_posts"
-        const val CALLBACK_PREVIOUS_POSTS = "previous_posts"
-
-        const val CALLBACK_RANDOM_POST_ARCHIVE = "random_archive_button"
-        const val CALLBACK_RANDOM_POST_DELETE = "random_delete_button"
-        const val CALLBACK_NEXT_RANDOM_POST = "next_random_post"
-
-        const val CALLBACK_NEXT_ARCHIVE_POSTS = "next_archive_posts"
-        const val CALLBACK_PREVIOUS_ARCHIVE_POSTS = "previous_archive_posts"
-
-        const val CALLBACK_TOGGLE_UNREAD_FAVORITE = "toggle_unread_favorite"
-        const val CALLBACK_TOGGLE_ARCHIVE_FAVORITE = "toggle_archive_favorite"
-        const val CALLBACK_TOGGLE_RANDOM_FAVORITE = "toggle_random_favorite"
-
-        const val CALLBACK_NEXT_FAVORITES = "next_favorites"
-        const val CALLBACK_PREVIOUS_FAVORITES = "previous_favorites"
-
-        const val CALLBACK_PDF_UNREAD_POST = "pdf_unread_post"
-        const val CALLBACK_PDF_ARCHIVE_POST = "pdf_archive_post"
-        const val CALLBACK_PDF_ENGINE = "pdf_engine"
-
-        const val CALLBACK_PROFILE_FEED_SETTINGS = "profile_feed_settings"
         const val CALLBACK_PROFILE_LANGUAGE_SETTINGS = "profile_language_settings"
 
-        const val CALLBACK_PROFILE_FEED_SETTINGS_CHANGE = "profile_feed_settings_changed"
         const val CALLBACK_PROFILE_LANGUAGE_SETTINGS_CHANGE = "profile_language_settings_changed"
         const val CALLBACK_PROFILE_BACK_SETTINGS = "profile_back_button_settings"
-
-        const val CALLBACK_FAVORITES_TO_ARCHIVE = "favorites_to_archive"
-        const val CALLBACK_FAVORITES_TO_UNREAD = "favorites_to_unread"
-
-        const val CALLBACK_TOGGLE_FAVORITES_UNREAD_FAVORITE = "toggle_favorites_unread_favorite"
-        const val CALLBACK_TOGGLE_FAVORITES_ARCHIVE_FAVORITE = "toggle_favorites_archive_favorite"
 
         const val CALLBACK_PROFILE_IMPORT = "profile_import"
         const val CALLBACK_PROFILE_EXPORT = "profile_export"
 
-        const val CALLBACK_POST_LABELS = "post_labels"
-        const val CALLBACK_POST_LABEL_TOGGLE = "post_label_toggle"
-        const val CALLBACK_POST_LABEL_NEW = "post_label_new"
-        const val CALLBACK_POST_LABELS_BACK = "post_labels_back"
+        // Card symbols: the same in every language, so they are not resource-bundle text.
+        private const val STAR_ON = "★"
+        private const val STAR_OFF = "☆"
+        private const val TRASH = "🗑"
+        private const val MORE = "⋯"
+        private const val PREV = "‹"
+        private const val NEXT = "›"
+        private const val INERT = "·"
+        private val PAGED_LISTS = setOf(CardList.UNREAD, CardList.ARCHIVE, CardList.FAVORITES)
 
-        /** Rebuilding the card's own keyboard after "back" needs the context it was drawn in. */
-        const val CONTEXT_FEED = "n"
-        const val CONTEXT_FAVORITES = "f"
     }
 
     /**
-     * Which post a label callback is about, packed small: Telegram caps callback_data at
-     * 64 bytes, so the table is one character and the context another.
+     * The post card's buttons. Every button carries the card's whole ref, see CardRef.
+     * ```
+     * [ ✓ В архив ] [ ☆ ] [ 🗑 ] [ ⋯ ]
+     * [    ‹    ] [ 3 / 42 ] [    ›    ]
+     * ```
+     * The arrows turn into inert dots at the ends so the row keeps its shape.
      */
-    data class LabelCallbackContext(
-        val postId: Long,
-        val target: LabelTarget,
-        val context: String,
-    ) {
-        fun encode(): String = "$postId:${if (target == LabelTarget.ARCHIVE) "a" else "u"}:$context"
+    fun buildCardKeyboard(view: CardView.Post, languageCode: String): InlineKeyboard {
+        val ref = view.ref
+        fun button(text: String, action: String, extra: String? = null) =
+            InlineButton(text, callbackData = cardCallback(action, ref, extra))
 
-        val postType: PostType
-            get() = if (target == LabelTarget.ARCHIVE) PostType.ARCHIVE else PostType.UNREAD
-
-        companion object {
-            fun decode(data: String): LabelCallbackContext {
-                val parts = data.split(":")
-                return LabelCallbackContext(
-                    postId = parts[0].toLong(),
-                    target = if (parts.getOrNull(1) == "a") LabelTarget.ARCHIVE else LabelTarget.UNREAD,
-                    context = parts.getOrElse(2) { CONTEXT_FEED },
+        if (view.confirmDelete) {
+            return InlineKeyboard(
+                listOf(
+                    listOf(
+                        button(i18nService.getMessage("card.delete.confirm", languageCode), CardAction.DELETE_YES),
+                        button(i18nService.getMessage("card.delete.cancel", languageCode), CardAction.DELETE_NO),
+                    )
                 )
-            }
+            )
         }
+
+        val move = if (ref.loc == PostLoc.ARCHIVE) {
+            button(i18nService.getMessage("card.button.unread", languageCode), CardAction.UNREAD)
+        } else {
+            button(i18nService.getMessage("card.button.archive", languageCode), CardAction.ARCHIVE)
+        }
+        val actions = listOf(
+            move,
+            button(if (view.post.isFavorite) STAR_ON else STAR_OFF, CardAction.FAVORITE),
+            button(TRASH, CardAction.DELETE_ASK),
+            button(MORE, CardAction.MORE, if (view.expanded) "0" else "1"),
+        )
+
+        val rows = mutableListOf(actions)
+        if (view.expanded) {
+            rows += listOf(
+                button(i18nService.getMessage("command.feed.button.pdf", languageCode), CardAction.PDF),
+                button(i18nService.getMessage("command.feed.button.labels", languageCode), CardAction.LABELS),
+            ) + listOfNotNull(appButton(ref.list, languageCode))
+        }
+        if (ref.list == CardList.RANDOM) {
+            rows += listOf(button(i18nService.getMessage("card.button.random_more", languageCode), CardAction.RANDOM_NEXT))
+        }
+        if (ref.list in PAGED_LISTS) {
+            fun arrow(symbol: String, target: Int?) =
+                target?.let { InlineButton(symbol, callbackData = cardCallback(CardAction.NAV, ref.at(it))) }
+                    ?: button(INERT, CardAction.NOOP)
+            rows += listOf(
+                arrow(PREV, CardPaging.prevOffset(view)),
+                button("${ref.offset + 1} / ${CardPaging.shownTotal(view)}", CardAction.NOOP),
+                arrow(NEXT, CardPaging.nextOffset(view)),
+            )
+        }
+        return InlineKeyboard(rows)
     }
+
+    /**
+     * The inline keyboard under a widget card: what does not fit in 4 KB of compressed widget
+     * HTML — PDF, labels, the app — plus a link button for articles TelegramWidget.openLink
+     * refuses (longer than 256 characters, not https, or a Telegram link).
+     */
+    fun buildWidgetKeyboard(
+        view: CardView.Post,
+        languageCode: String,
+        linkButton: Boolean = !WidgetChatData.canOpen(view.post.url),
+    ): InlineKeyboard {
+        val ref = view.ref.copy(widget = true)
+        val rows = mutableListOf(
+            listOf(
+                InlineButton(i18nService.getMessage("command.feed.button.pdf", languageCode), callbackData = cardCallback(CardAction.PDF, ref)),
+                InlineButton(i18nService.getMessage("command.feed.button.labels", languageCode), callbackData = cardCallback(CardAction.LABELS, ref)),
+            ) + listOfNotNull(appButton(ref.list, languageCode))
+        )
+        if (linkButton) {
+            rows += listOf(InlineButton(i18nService.getMessage("card.button.open_article", languageCode), url = view.post.url))
+        }
+        return InlineKeyboard(rows)
+    }
+
+    /** "Open in the app" on the card's shelf; null without an https Mini App URL. */
+    private fun appButton(list: CardList, languageCode: String): InlineButton? =
+        miniAppLinks.url(list)?.let { InlineButton(i18nService.getMessage("card.button.app", languageCode), webApp = WebAppRef(it)) }
+
+    /** The app button under the /start greeting; null without an https Mini App URL. */
+    fun buildStartKeyboard(languageCode: String): InlineKeyboardMarkup? =
+        miniAppLinks.url()?.let { url ->
+            InlineKeyboardMarkup.create(
+                listOf(InlineKeyboardButton.WebApp(i18nService.getMessage("card.button.app", languageCode), WebAppInfo(url)))
+            )
+        }
 
     /**
      * The label picker that replaces a post card's buttons:
      * [ ✅ kotlin ] [ ⬜ вечером ] … [ ➕ Новая метка ] [ ◀️ Назад ]
      */
     fun buildPostLabelsKeyboard(
-        ctx: LabelCallbackContext,
+        ref: CardRef,
         labels: List<LabelData>,
         attachedIds: Set<Long>,
         languageCode: String,
-    ): InlineKeyboardMarkup {
+    ): InlineKeyboard {
         val rows = labels.map { label ->
             val mark = if (label.id in attachedIds) "✅" else "⬜"
-            listOf(
-                InlineKeyboardButton.CallbackData(
-                    text = "$mark ${label.name}",
-                    callbackData = "$CALLBACK_POST_LABEL_TOGGLE|${ctx.encode()}:${label.id}"
-                )
-            )
+            listOf(InlineButton("$mark ${label.name}", callbackData = cardCallback(CardAction.LABEL_TOGGLE, ref, label.id.toString())))
         }
-
         val footer = listOf(
-            InlineKeyboardButton.CallbackData(
-                text = i18nService.getMessage("command.labels.button.new", languageCode),
-                callbackData = "$CALLBACK_POST_LABEL_NEW|${ctx.encode()}"
+            InlineButton(
+                i18nService.getMessage("command.labels.button.new", languageCode),
+                callbackData = cardCallback(CardAction.LABEL_NEW, ref),
             ),
-            InlineKeyboardButton.CallbackData(
-                text = i18nService.getMessage("command.profile.language.back", languageCode),
-                callbackData = "$CALLBACK_POST_LABELS_BACK|${ctx.encode()}"
+            InlineButton(
+                i18nService.getMessage("command.profile.language.back", languageCode),
+                callbackData = cardCallback(CardAction.LABELS_BACK, ref),
             ),
         )
-
-        return InlineKeyboardMarkup.create(rows + listOf(footer))
+        return InlineKeyboard(rows + listOf(footer))
     }
 
     /**
@@ -155,35 +196,6 @@ class TelegramKeyboard(private val i18nService: I18nService) {
     }
 
     /**
-     * Feed settings keyboard:
-     *
-     * [ 1 ][ 2 ][ 3 ][ 4 ][ 5 ]
-     */
-    fun buildSettingsFeedKeyboard(feedEntriesNumber: Int, languageCode: String): InlineKeyboardMarkup {
-        val countPostButtons = (1..5).map {
-            val (text, value) = if (it == feedEntriesNumber) {
-                Pair("$it ✔\uFE0F", it)
-            } else {
-                Pair(it.toString(), it)
-            }
-            InlineKeyboardButton.CallbackData(
-                text = text,
-                callbackData = "$CALLBACK_PROFILE_FEED_SETTINGS_CHANGE|$value"
-            )
-        }
-
-        return InlineKeyboardMarkup.create(
-            countPostButtons,
-            listOf(
-                InlineKeyboardButton.CallbackData(
-                    text = i18nService.getMessage("command.profile.language.back", languageCode),
-                    callbackData = "$CALLBACK_PROFILE_BACK_SETTINGS|_"
-                )
-            )
-        )
-    }
-
-    /**
      * Keyboard Profile command:
      *
      * [ Feed settings ]
@@ -192,12 +204,6 @@ class TelegramKeyboard(private val i18nService: I18nService) {
     fun buildProfileSettingsKeyboard(languageCode: String): InlineKeyboardMarkup {
         return InlineKeyboardMarkup.create(
             listOf(
-                listOf(
-                    InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.profile.settings.feed", languageCode),
-                        callbackData = "$CALLBACK_PROFILE_FEED_SETTINGS|_"
-                    ),
-                ),
                 listOf(
                     InlineKeyboardButton.CallbackData(
                         text = i18nService.getMessage("command.profile.settings.language", languageCode),
@@ -221,256 +227,21 @@ class TelegramKeyboard(private val i18nService: I18nService) {
     }
 
     /**
-     * Keyboard for PDF engine selection:
-     *
-     * [ OpenHTML ] [ Playwright ]
+     * PDF engine choice in place of the card's buttons, when more than one engine is on:
+     * [ OpenHTML ] [ Playwright ] [ ◀️ Back ]
      */
-    fun buildPdfEngineKeyboard(
-        postId: Long,
-        postType: PostType,
-        availableEngines: List<String>,
-        languageCode: String
-    ): InlineKeyboardMarkup {
-        val postTypeCode = when (postType) {
-            PostType.UNREAD, PostType.FAVORITES -> "u"
-            PostType.ARCHIVE -> "a"
-            PostType.ALL -> error("ALL is not supported in Telegram bot")
-        }
-
-        val buttons = availableEngines.map { engine ->
-            val label = i18nService.getMessage("command.pdf.engine.$engine", languageCode)
-            InlineKeyboardButton.CallbackData(
-                text = label,
-                callbackData = "$CALLBACK_PDF_ENGINE|${postId}_${postTypeCode}_$engine"
+    fun buildPdfEngineKeyboard(ref: CardRef, engines: List<String>, languageCode: String): InlineKeyboard {
+        val choices = engines.map { engine ->
+            InlineButton(
+                i18nService.getMessage("command.pdf.engine.$engine", languageCode),
+                callbackData = cardCallback(CardAction.PDF_ENGINE, ref, engine),
             )
         }
-
-        return InlineKeyboardMarkup.create(listOf(buttons))
-    }
-
-    /**
-     * Keyboard for random post:
-     *
-     * [ Archive ] [ Delete ]
-     * [ ⭐ Favorite / ★ Unfavorite ] [ 📄 PDF ]
-     * [  Next Random Post  ]
-     */
-    fun buildRandomPostInlineKeyboard(postId: Long, isFavorite: Boolean, languageCode: String): InlineKeyboardMarkup {
-        val favoriteText = if (isFavorite) {
-            i18nService.getMessage("command.feed.button.unfavorite", languageCode)
-        } else {
-            i18nService.getMessage("command.feed.button.favorite", languageCode)
-        }
-
-        return InlineKeyboardMarkup.create(
-            listOf(
-                listOf(
-                    InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.feed.button.archive", languageCode),
-                        callbackData = "$CALLBACK_RANDOM_POST_ARCHIVE|$postId"
-                    ),
-                    InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.feed.button.delete.unread", languageCode),
-                        callbackData = "$CALLBACK_RANDOM_POST_DELETE|$postId"
-                    )
-                ),
-                listOf(
-                    InlineKeyboardButton.CallbackData(
-                        text = favoriteText,
-                        callbackData = "$CALLBACK_TOGGLE_RANDOM_FAVORITE|$postId"
-                    ),
-                    InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.feed.button.pdf", languageCode),
-                        callbackData = "$CALLBACK_PDF_UNREAD_POST|$postId"
-                    ),
-                ),
-                listOf(
-                    InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.random_post.button.next_random_post", languageCode),
-                        callbackData = "$CALLBACK_NEXT_RANDOM_POST|_"
-                    ),
-                )
-            )
+        val back = InlineButton(
+            i18nService.getMessage("command.profile.language.back", languageCode),
+            callbackData = cardCallback(CardAction.MORE, ref, "0"),
         )
+        return InlineKeyboard(listOf(choices + back))
     }
 
-    /**
-     * Keyboard for item of UNREAD, ARCHIVE, and FAVORITES posts:
-     *
-     * [ Archive / Unread ] [ Delete ]
-     * [ ⭐ Favorite / ★ Unfavorite ] [ 📄 PDF ]
-     */
-    fun buildFeedPostInlineKeyboard(
-        postId: Long,
-        postType: PostType,
-        isFavorite: Boolean,
-        languageCode: String,
-        isArchived: Boolean = false
-    ): InlineKeyboardMarkup {
-        val (unreadOrArchive, delete) = when {
-            postType == PostType.FAVORITES && !isArchived -> {
-                Pair(
-                    Pair(i18nService.getMessage("command.feed.button.archive", languageCode), CALLBACK_FAVORITES_TO_ARCHIVE),
-                    Pair(i18nService.getMessage("command.feed.button.delete.unread", languageCode), CALLBACK_DELETE_POST)
-                )
-            }
-            postType == PostType.FAVORITES && isArchived -> {
-                Pair(
-                    Pair(i18nService.getMessage("command.feed.button.unread", languageCode), CALLBACK_FAVORITES_TO_UNREAD),
-                    Pair(i18nService.getMessage("command.feed.button.delete.archive", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
-                )
-            }
-            postType == PostType.UNREAD -> {
-                Pair(
-                    Pair(i18nService.getMessage("command.feed.button.archive", languageCode), CALLBACK_ARCHIVE_POST),
-                    Pair(i18nService.getMessage("command.feed.button.delete.unread", languageCode), CALLBACK_DELETE_POST)
-                )
-            }
-            else -> {
-                Pair(
-                    Pair(i18nService.getMessage("command.feed.button.unread", languageCode), CALLBACK_UNREAD_POST),
-                    Pair(i18nService.getMessage("command.feed.button.delete.archive", languageCode), CALLBACK_DELETE_ARCHIVE_POST)
-                )
-            }
-        }
-
-        val favoriteCallback = when {
-            postType == PostType.FAVORITES && isArchived -> CALLBACK_TOGGLE_FAVORITES_ARCHIVE_FAVORITE
-            postType == PostType.FAVORITES -> CALLBACK_TOGGLE_FAVORITES_UNREAD_FAVORITE
-            postType == PostType.ARCHIVE -> CALLBACK_TOGGLE_ARCHIVE_FAVORITE
-            else -> CALLBACK_TOGGLE_UNREAD_FAVORITE
-        }
-        val favoriteText = if (isFavorite) {
-            i18nService.getMessage("command.feed.button.unfavorite", languageCode)
-        } else {
-            i18nService.getMessage("command.feed.button.favorite", languageCode)
-        }
-
-        val pdfCallback = when {
-            postType == PostType.ARCHIVE || (postType == PostType.FAVORITES && isArchived) -> CALLBACK_PDF_ARCHIVE_POST
-            else -> CALLBACK_PDF_UNREAD_POST
-        }
-
-        return InlineKeyboardMarkup.create(
-            listOf(
-                listOf(
-                    InlineKeyboardButton.CallbackData(
-                        text = unreadOrArchive.first,
-                        callbackData = "${unreadOrArchive.second}|$postId"
-                    ),
-                    InlineKeyboardButton.CallbackData(
-                        text = delete.first,
-                        callbackData = "${delete.second}|$postId"
-                    )
-                ),
-                listOf(
-                    InlineKeyboardButton.CallbackData(
-                        text = favoriteText,
-                        callbackData = "$favoriteCallback|$postId"
-                    ),
-                    InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.feed.button.pdf", languageCode),
-                        callbackData = "$pdfCallback|$postId"
-                    ),
-                ),
-                listOf(
-                    InlineKeyboardButton.CallbackData(
-                        text = i18nService.getMessage("command.feed.button.labels", languageCode),
-                        callbackData = "$CALLBACK_POST_LABELS|" + LabelCallbackContext(
-                            postId = postId,
-                            target = if (postType == PostType.ARCHIVE || isArchived) {
-                                LabelTarget.ARCHIVE
-                            } else {
-                                LabelTarget.UNREAD
-                            },
-                            context = if (postType == PostType.FAVORITES) CONTEXT_FAVORITES else CONTEXT_FEED,
-                        ).encode()
-                    ),
-                ),
-            )
-        )
-    }
-
-    /**
-     * Build navigation InlineKeyboard.
-     *
-     * If offset=0, then print just "Next" button.
-     * If offset > 0 and (offset + postSize) > countOfPosts, then print "Next" and "Previous" button.
-     * if offset > 0 and (offset + postSize) = countOfPosts, then print just "Previous" button.
-     *
-     * [ Previous ][ Next ]
-     */
-    fun buildNavigationKeyboard(
-        postType: PostType,
-        postSize: Int,
-        offset: Int,
-        countOfPosts: Int,
-        languageCode: String,
-        postCount: Int,
-    ): ReplyMarkup? {
-        var previousCallbackAction: String
-        var nextCallbackAction: String
-
-        when (postType) {
-            PostType.UNREAD -> {
-                previousCallbackAction = CALLBACK_PREVIOUS_POSTS
-                nextCallbackAction = CALLBACK_NEXT_POSTS
-            }
-
-            PostType.ARCHIVE -> {
-                previousCallbackAction = CALLBACK_NEXT_ARCHIVE_POSTS
-                nextCallbackAction = CALLBACK_PREVIOUS_ARCHIVE_POSTS
-            }
-
-            PostType.FAVORITES -> {
-                previousCallbackAction = CALLBACK_PREVIOUS_FAVORITES
-                nextCallbackAction = CALLBACK_NEXT_FAVORITES
-            }
-
-            PostType.ALL -> error("ALL is not supported in Telegram bot")
-        }
-
-        val navigationKeyboard = if (offset == 0 && postSize < countOfPosts) {
-            InlineKeyboardMarkup.create(
-                listOf(
-                    listOf(
-                        InlineKeyboardButton.CallbackData(
-                            text = i18nService.getMessage("command.feed.button.next", languageCode),
-                            callbackData = "${nextCallbackAction}|${postCount}"
-                        ),
-                    ),
-                )
-            )
-        } else if (offset > 0 && ((offset + postSize) < countOfPosts)) {
-            InlineKeyboardMarkup.create(
-                listOf(
-                    listOf(
-                        InlineKeyboardButton.CallbackData(
-                            text = i18nService.getMessage("command.feed.button.previous", languageCode),
-                            callbackData = "${previousCallbackAction}|${offset - postCount}"
-                        ),
-                        InlineKeyboardButton.CallbackData(
-                            text = i18nService.getMessage("command.feed.button.next", languageCode),
-                            callbackData = "${nextCallbackAction}|${offset + postCount}"
-                        ),
-                    ),
-                )
-            )
-        } else if (offset > 0 && ((offset + postSize) == countOfPosts)) {
-            InlineKeyboardMarkup.create(
-                listOf(
-                    listOf(
-                        InlineKeyboardButton.CallbackData(
-                            text = i18nService.getMessage("command.feed.button.previous", languageCode),
-                            callbackData = "${previousCallbackAction}|${offset - postCount}"
-                        ),
-                    ),
-                )
-            )
-        } else {
-            null
-        }
-
-        return navigationKeyboard
-    }
 }

@@ -3,3 +3,4 @@ telegram:
   token: test_token
   token-name: test_token_name
   base-url: http://localhost:8080
+  mini-app-url: https://app.test/tg

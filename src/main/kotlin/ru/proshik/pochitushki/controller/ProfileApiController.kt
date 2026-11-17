@@ -9,13 +9,11 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
-import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserSettingsLimits
 import ru.proshik.pochitushki.service.UserService
 
 data class SettingsPatchRequest(
     val languageCode: String? = null,
-    val tgFeedEntriesNumber: Int? = null,
     val showOgCovers: Boolean? = null,
 )
 
@@ -33,26 +31,16 @@ class ProfileApiController(private val userService: UserService) {
         } catch (e: EmptyResultDataAccessException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
         }
-        // Both values are rendered back into bot keyboards and drive how many messages /feed
-        // sends, so they are validated here rather than trusted: tgFeedEntriesNumber=100000
-        // would have the bot spend hours on one user's feed, and a negative value breaks the query.
+        // The language picks the resource bundle for the bot and the site, so it is checked
+        // against what exists rather than trusted.
         patch.languageCode?.let {
             if (it !in UserSettingsLimits.SUPPORTED_LANGUAGES) {
                 throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported language")
             }
         }
-        patch.tgFeedEntriesNumber?.let {
-            if (it !in UserSettingsLimits.FEED_ENTRIES_RANGE) {
-                throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "feed entries must be within ${UserSettingsLimits.FEED_ENTRIES_RANGE}",
-                )
-            }
-        }
-
-        val updated = UserSettingsData(
+        // copy(), not a new object: the legacy tgFeedEntriesNumber keeps its stored value.
+        val updated = current.copy(
             languageCode = patch.languageCode ?: current.languageCode,
-            tgFeedEntriesNumber = patch.tgFeedEntriesNumber ?: current.tgFeedEntriesNumber,
             showOgCovers = patch.showOgCovers ?: current.showOgCovers,
         )
 

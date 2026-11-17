@@ -1,0 +1,4 @@
+telegram:
+  webhook-secret: test-secret
+  widgets:
+    enabled: true

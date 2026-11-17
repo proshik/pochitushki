@@ -20,7 +20,8 @@ telegram:
   token: some_token
   token-name: test_token_name
   base-url: some_base_url
-  webhook-url: ${telegram.base-url}/${telegram.token}
+  # Tests run the bot in polling; a webhook test class sets its own URL.
+  webhook-url: ""
   oauth:
     base-url: http://localhost:0        # overridden by DynamicPropertySource in BaseIntegrationTest
     expected-issuer: http://localhost:0 # likewise

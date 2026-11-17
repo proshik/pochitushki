@@ -13,25 +13,25 @@ class I18nServiceTest : BaseIntegrationTest() {
 
     @Test
     fun `getMessage returns English message`() {
-        val message = i18nService.getMessage("command.feed.button.archive", "en")
-        assertEquals("To Archive 🗄", message)
+        val message = i18nService.getMessage("card.button.archive", "en")
+        assertEquals("✓ Archive", message)
     }
 
     @Test
     fun `getMessage returns Russian message`() {
-        val message = i18nService.getMessage("command.feed.button.archive", "ru")
-        assertEquals("В архив 🗄", message)
+        val message = i18nService.getMessage("card.button.archive", "ru")
+        assertEquals("✓ В архив", message)
     }
 
     @Test
     fun `getMessage falls back to English for unknown locale`() {
-        val message = i18nService.getMessage("command.feed.button.archive", "fr")
-        assertEquals("To Archive 🗄", message)
+        val message = i18nService.getMessage("card.button.archive", "fr")
+        assertEquals("✓ Archive", message)
     }
 
     @Test
     fun `getMessage with args interpolates correctly`() {
-        val message = i18nService.getMessage("command.feed.unread_message", "en", arrayOf(42))
+        val message = i18nService.getMessage("command.labels.attached", "en", arrayOf(42))
         assertTrue(message.contains("42"))
     }
 }

@@ -28,7 +28,12 @@ data class UserStoreData(
 
 data class UserSettingsData(
     val languageCode: String,
-    val tgFeedEntriesNumber: Int,
+    /**
+     * Legacy: how many cards /feed used to send. The bot now shows one card edited in place and
+     * nothing reads this. It stays so old rows keep their value on write; the default keeps
+     * rows written without it readable.
+     */
+    val tgFeedEntriesNumber: Int = 5,
     /**
      * Show scraped og:image photos on covers. Defaults to true so rows written
      * before this key existed keep the look they had (Jackson's KotlinModule

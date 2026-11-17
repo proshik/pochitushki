@@ -3,29 +3,23 @@ package ru.proshik.pochitushki.controller
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseCookie
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 import feign.FeignException
-import org.springframework.boot.context.properties.EnableConfigurationProperties
-import ru.proshik.pochitushki.configuration.properties.CookieProperties
-import ru.proshik.pochitushki.configuration.properties.JwtProperties
 import ru.proshik.pochitushki.service.JwtService
 import ru.proshik.pochitushki.service.TelegramOidcService
 import ru.proshik.pochitushki.service.UserService
 import java.util.UUID
 
 @Controller
-@EnableConfigurationProperties(CookieProperties::class)
 class AuthController(
     private val telegramOidcService: TelegramOidcService,
     private val jwtService: JwtService,
     private val userService: UserService,
-    private val jwtProperties: JwtProperties,
-    private val cookieProperties: CookieProperties,
+    private val cookies: AuthCookies,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -107,27 +101,12 @@ class AuthController(
         return "redirect:/login"
     }
 
-    // SameSite=Lax is the CSRF defense for cookie-based auth: the browser won't attach
-    // these cookies to cross-site state-changing requests (e.g. an attacker's auto-submitted form).
-    private fun baseCookie(name: String, value: String, maxAgeSeconds: Long): ResponseCookie =
-        ResponseCookie.from(name, value)
-            .httpOnly(true)
-            .secure(cookieProperties.secure)
-            .path("/")
-            .maxAge(maxAgeSeconds)
-            .sameSite("Lax")
-            .build()
-
     private fun shortLivedCookie(name: String, value: String, maxAgeSeconds: Int) =
-        baseCookie(name, value, maxAgeSeconds.toLong())
+        cookies.base(name, value, maxAgeSeconds.toLong())
 
-    // Keep the cookie lifetime in sync with the JWT's own TTL so they never drift apart.
-    private fun authCookie(jwt: String) =
-        baseCookie("auth_token", jwt, jwtProperties.ttlDays * 24 * 60 * 60)
+    private fun authCookie(jwt: String) = cookies.auth(jwt)
 
-    private fun addCookie(response: HttpServletResponse, cookie: ResponseCookie) =
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString())
+    private fun addCookie(response: HttpServletResponse, cookie: ResponseCookie) = cookies.add(response, cookie)
 
-    private fun clearCookie(response: HttpServletResponse, name: String) =
-        addCookie(response, baseCookie(name, "", 0))
+    private fun clearCookie(response: HttpServletResponse, name: String) = cookies.clear(response, name)
 }

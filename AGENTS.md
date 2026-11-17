@@ -30,11 +30,12 @@ telegram-login-broker); само приложение запускается н�
 | Переменная | Назначение |
 |------------|-----------|
 | `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` | Telegram OAuth-приложение |
-| `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка |
+| `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка и адреса Mini App `${APP_BASE_URL}/tg` (`telegram.mini-app-url`). Его же прописать в BotFather как адрес главной Mini App. Кнопки «Открыть в приложении» и кнопка меню бота появляются только для https |
 | `JWT_SECRET` | Подпись JWT (≥32 байт base64). Дефолта нет — без переменной приложение падает на старте (осознанный fail-fast) |
 | `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`: `TelegramController` объявляет `@PostMapping("/\${telegram.token}")`, и плейсхолдер должен разрешиться на старте. Ключа `telegram.token` в `application.yml` нет — значение приходит relaxed binding'ом прямо в `TelegramProperties` |
 | `TELEGRAM_ENABLED` | Опц. Запуск бота (polling/webhook). `false` — стартовать без бота, bot-токен не нужен (логин через Telegram работает независимо). По умолчанию `true` |
 | `TELEGRAM_WEBHOOK_SECRET` | Обязателен в режиме webhook (`telegram.webhook-url` задан) — без него приложение не стартует. Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token` через `MessageDigest.isEqual` |
+| `TELEGRAM_WIDGETS_ENABLED` | Опц. Карточка ленты HTML-виджетом (Bot API 10.4), по умолчанию `false`. Действует только в режиме webhook: в polling — предупреждение на старте и текстовая карточка; любой отказ `sendWidget` — тоже текстовая карточка |
 | `APP_LOG_LEVEL` | Опц. Уровень логов приложения, дефолт `INFO`. На `DEBUG` в лог уезжают URL ссылок и тела апдейтов |
 | `app.security.ssrf.allowed-hosts` | Опц. Список хостов, исключённых из SSRF-проверок `UrlSecurityValidator` (в тестах — `localhost`) |
 
@@ -42,7 +43,8 @@ telegram-login-broker); само приложение запускается н�
 
 **Слои**: Controller → Service → Repository (DAO) → PostgreSQL
 **БД**: PostgreSQL 16, Spring JDBC + NamedParameterJdbcTemplate (без ORM), миграции Liquibase
-**Telegram**: поддержка polling и webhook, через kotlin-telegram-bot;
+**Telegram**: поддержка polling и webhook, через kotlin-telegram-bot 10.0.0 (диспетчер апдейтов
+и простые вызовы) плюс Feign-клиент `TelegramBotApiClient` (карточка поста, см. ниже);
 бот включается флагом `telegram.enabled` (см. `TelegramBotConfiguration`) — независим от входа через Telegram
 **Web**: Thymeleaf-страницы (`feed/all/archive/favorites/random/profile/login`) + HTML-фрагменты;
 дизайн «Обложки»: генеративные обложки постов (`CoverService`), все стили в
@@ -51,7 +53,9 @@ telegram-login-broker); само приложение запускается н�
 кладёт `userId` в request-атрибут и защищает `/`, `/all`, `/archive`,
 `/favorites`, `/random`, `/profile`, `/api/v1/**` (см. `WebConfig`). Выход —
 `POST /logout`: отзывает токены через `users.tokens_valid_after` (миграция 9),
-интерцептор сверяет с ним `iat` токена
+интерцептор сверяет с ним `iat` токена. Внутри Telegram сайт открывается как Mini App
+(`/tg`): вход по `initData` (`POST /auth/telegram/webapp`, HMAC `WebAppData`), токен с
+claim `tma` включает режим Mini App (см. `.claude/rules/security.md`, раздел «Mini App»)
 **Эксплуатация**: ровно одна реплика (бот + in-memory состояние), probes
 `/actuator/health/{liveness,readiness}`, метрики Prometheus — только по
 `MANAGEMENT_SERVER_PORT` + `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE`,
@@ -72,6 +76,9 @@ ru.proshik.pochitushki/
 ├── service/telegram/    # CommandHandler, CallbackQueryHandler, TelegramKeyboard,
 │                        #   TelegramUpdateHandler (интерфейс обработчика),
 │                        #   BotTaskExecutor (пул для PDF/импорта/экспорта)
+├── service/telegram/card/  # Карточка поста: CardRef (формат callback_data),
+│                        #   PostCardService, CardPresenter, PostCardRenderer, PostPdfSender
+├── service/telegram/api/   # TelegramBotApiClient (Feign) + TelegramBotApi (ошибки/логи)
 ├── configuration/       # TelegramBotConfiguration, BotProvider, JwtAuthInterceptor,
 │                        #   WebConfig, PdfConfiguration, MessageConfiguration,
 │                        #   SecurityHeadersFilter, CsrfOriginFilter, RequestIdFilter
@@ -89,8 +96,9 @@ ru.proshik.pochitushki/
 
 - Таблица `post` — непрочитанные ссылки, `archive_post` — архив (та же структура)
 - Флаг `is_favorite` в обеих таблицах (миграция `3_add_favorites`)
-- JSONB-колонка `settings` в таблице `users` (`languageCode`, `tgFeedEntriesNumber`,
-  `showOgCovers`). Миграции под новые ключи нет и не нужно: Jackson KotlinModule
+- JSONB-колонка `settings` в таблице `users` (`languageCode`, `showOgCovers` и legacy
+  `tgFeedEntriesNumber` — его больше никто не читает: бот показывает одну карточку; поле
+  оставлено в `UserSettingsData` с дефолтом, чтобы старые строки читались и не теряли значение). Миграции под новые ключи нет и не нужно: Jackson KotlinModule
   подставляет дефолт из конструктора, поэтому старые строки без ключа читаются как
   `showOgCovers = true`. Новый ключ обязан иметь дефолт, иначе чтение старых строк упадёт
 - `PostType`: `UNREAD` / `ARCHIVE` / `FAVORITES` / `ALL`. Маппинг из строки
@@ -114,6 +122,10 @@ ru.proshik.pochitushki/
 - `LabelService` нормализует имя (trim, срез ведущего `#`, схлопывание пробелов,
   лимит `MAX_NAME_LENGTH`), поэтому «Kotlin», «kotlin » и «#kotlin» — одна метка.
   Повторное создание возвращает существующую (`ON CONFLICT DO UPDATE ... RETURNING`)
+- Страница `/labels` — по 50 меток (`LabelPaging`), номер в `?page=N`: вне диапазона —
+  последняя страница, мусор — первая (параметр принимается строкой, без 400). `?label=ID`
+  редиректит на страницу с этой меткой — так страница открывает только что созданную.
+  Счётчик в шапке общий. Пейджер — обычные ссылки, без скриптов
 - `PostData.tags` (колонка `TEXT[]`) — **legacy**. Метки и теги слиты: миграция 6
   перелила старые `tags[]` в `label`/`post_label`, импорт пишет метки, экспорт отдаёт
   метки, шаблоны `tags` больше не рендерят. Колонка намеренно оставлена и хранит
@@ -145,7 +157,7 @@ Webhook висит на `POST /${telegram.token}`, то есть путь энд
 ### Frontend и CSP (важно при правке шаблонов)
 
 `SecurityHeadersFilter` отдаёт `script-src 'self'` без `'unsafe-inline'` и `'unsafe-eval'`.
-Три правила, которые это поддерживают — нарушение любого тихо ломает страницу
+Три правила, которые это поддерживают, и одно исключение — нарушение любого тихо ломает страницу
 в браузере, но **не** ломает тесты:
 
 1. Никаких инлайновых `<script>` и атрибутов `on*=""`. Вешать `data-*`-хук и
@@ -162,6 +174,12 @@ Webhook висит на `POST /${telegram.token}`, то есть путь энд
    `img-src 'self'` — единственный источник картинок теперь сам сервис:
    OG-обложки идут через `OgImageProxyService` (`GET /api/v1/posts/{id}/cover-image`),
    а не хотлинком. Не возвращать `https:` в `img-src`, не сняв прокси.
+4. Режим Mini App — единственное исключение, и узкое: на `/tg` и для сессии, чей JWT несёт
+   claim `tma`, `script-src` дополняется `https://telegram.org` (telegram-web-app.js), а
+   `frame-ancestors` — `https://web.telegram.org`, без `X-Frame-Options`. Скрипт Telegram
+   подключает `layout.html` только при атрибуте `miniApp`; адаптация (тема по `colorScheme`,
+   `BackButton`, `openLink` для статей) — `initMiniApp()` в `app.js`, которая в обычном
+   браузере ничего не делает. Не расширять исключение на другие пути
 
 Шрифты — Onest (400/600/800) и JetBrains Mono (400/600), самохостятся
 подмножествами (latin, latin-ext, cyrillic, cyrillic-ext — кириллица
@@ -205,6 +223,55 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   поэтому фрагмент всегда отдаётся с `hasMore=false` — сентинел бесконечной
   прокрутки на этой странице появиться не должен
 
+### Telegram-бот: карточка поста
+
+- `/feed`, `/archive`, `/favorites`, `/random_post` и ответ на присланную ссылку — **одно**
+  сообщение-карточка (`PostCardService`). Все кнопки правят его же (`editMessageText` /
+  `editMessageReplyMarkup`), новых сообщений на действия с постом нет. Анти-цель — снова
+  разрастающийся чат
+- Текст — HTML parse mode (`PostCardRenderer`, `escapeHtml`), превью — `link_preview_options`
+  с URL поста. Рисует карточку **Feign-клиент** `TelegramBotApiClient` на `telegram.api-url`,
+  а не библиотека: в kotlin-telegram-bot 10.0.0 у `editMessageText` нет `link_preview_options`
+  (документация библиотеки утверждает обратное). Клавиатура — своя модель `InlineKeyboard`:
+  Gson-модели библиотеки Jackson сериализует неверно
+- Webhook тоже регистрирует `TelegramBotApi.setWebhook`, а не библиотека: она шлёт
+  `allowed_updates` повторяющимися полями формы, и Telegram молча оставляет прежний фильтр
+- `TelegramBotApi` ничего не бросает; `400 message is not modified` — успех. В лог идут только
+  статус и `description`: в URL запроса и в `FeignException.message` лежит токен бота
+- `callback_data` — только `CardRef` (≤ 64 байт): `<действие>|<список>:<offset>:<id>:<таблица>[:extra]`.
+  Кнопка несёт и место карточки (список, offset), и пост (id, таблица): поэтому старая карточка
+  действует на свой пост, а не на тот, что сейчас на этом offset. Пост, которого уже нет, →
+  тост «Пост уже убран» и перерисовка на том же offset. Кнопки карточек старых версий → тост
+  «устарела»
+- На **каждый** `callback_query` — ровно один `answerCallbackQuery`. Поэтому
+  `CallbackQueryHandler` — свой `Handler`, а не DSL `callbackQuery { }` библиотеки: тот отвечает
+  сам после обработчика и без текста, и тост стал бы вторым ответом
+- В избранном «В архив»/«В непрочитанное» меняют только кнопку: пост остаётся на карточке
+  под новым id. Ответ на ссылку (`CardList.SAVED`) без листания; после архива/удаления его
+  текст становится итогом
+
+### Telegram-бот: виджеты (Bot API 10.4, под флагом)
+
+- `telegram.widgets.enabled` (`TELEGRAM_WIDGETS_ENABLED`, дефолт `false`) **и** режим webhook
+  (`WidgetMode.active`) — тогда команды ленты шлют карточку HTML-виджетом
+  (`WidgetCardPresenter`). Любой отказ `sendWidget` → `warn` и та же текстовая карточка
+- Нажатия внутри виджета приходят как `widget_query`; библиотека их не знает, поэтому
+  `TelegramController` вынимает их из тела webhook **до** `processUpdate` и отдаёт
+  `WidgetQueryHandler`. Данные — тот же `CardRef`-формат, что `callback_data` (список
+  заглавной буквой = виджет). На каждый запрос — ровно один `answerWidgetQuery` (≤ 15 с)
+- Шаблон один: `src/main/resources/telegram/widget/post-card.html` (не Thymeleaf и не
+  раздаётся сайтом). Лимиты Telegram: ≤ 32768 байт и ≤ 4096 байт после zlib 9 — держит
+  `WidgetTemplateTest`; он же сверяет палитру `cv-*` с `app.css` — менять обе вместе.
+  `chat_data` ≤ 1024 байт (`WidgetChatData`); без OG-фото — внешние картинки виджет не грузит
+- Перерисовка виджета — три шага: снять старую клавиатуру, сменить `chat_data`, поставить
+  новую. У двух частей сообщения нет общего отката, а кнопки называют пост: при любом отказе
+  под виджетом не остаётся кнопок чужого поста. Отказ перерисовки отвечает тостом, а ★ при
+  отказе откатывается
+- PDF, метки и «Открыть в приложении» — обычная inline-клавиатура под виджетом
+  (`buildWidgetKeyboard`), плюс кнопка-ссылка для статей, которые `TelegramWidget.openLink`
+  не откроет (`WidgetChatData.canOpen`: только https, ≤ 256 символов, без логина в URL и не
+  Telegram) или чей URL не уместился в `chat_data`
+
 ### PDF generation
 
 Две реализации `PdfGenerator`. `OpenhtmlPdfGenerator` регистрируется всегда и
@@ -220,11 +287,11 @@ TTL 30 дней. Ключ — **(user_id, sha256(url), engine)**, а не post_i
 `user_id` в ключе, чтобы чужой рендер не отдавался. Протухшие строки чистятся при
 записи, отдельного шедулера нет.
 
-Выбор движка — **рантаймовый, а не конфигурационный**: `TelegramService` инжектит
+Выбор движка — **рантаймовый, а не конфигурационный**: `PostPdfSender` инжектит
 `Map<String, PdfGenerator>` и ищет бин по имени `"${engine}PdfGenerator"`, а движок
-выбирает пользователь inline-кнопкой (когда доступен больше одного). Отсюда
+выбирает пользователь кнопкой в карточке (когда доступен больше одного). Отсюда
 следует, что **имена бинов в `PdfConfiguration` нельзя менять свободно** — они
-часть контракта с `getAvailablePdfEngines()`/`sendPostPdf()`.
+часть контракта с `PostPdfSender.engines()`/`start()`.
 
 ## Code Conventions
 
@@ -268,3 +335,5 @@ TTL 30 дней. Ключ — **(user_id, sha256(url), engine)**, а не post_i
 | `src/main/resources/liquibase/` | Миграции БД |
 | `service/telegram/CommandHandler.kt` | Обработчик Telegram-команд |
 | `service/telegram/CallbackQueryHandler.kt` | Обработчик inline-кнопок |
+| `service/telegram/card/PostCardService.kt` | Карточка поста: показ, листание, действия |
+| `service/telegram/card/CardRef.kt` | Формат `callback_data` карточки |

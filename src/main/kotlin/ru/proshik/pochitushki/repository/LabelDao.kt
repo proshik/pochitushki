@@ -36,7 +36,34 @@ class LabelDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplat
      * label with no posts still comes back — the /labels page has to show it to let the
      * reader delete it.
      */
-    fun getLabelsWithCounts(userId: Long): List<LabelWithCount> {
+    fun getLabelsWithCounts(userId: Long): List<LabelWithCount> = labelsWithCounts(userId, limit = null, offset = 0)
+
+    /** One page of [getLabelsWithCounts], same order (name; names are unique per user). */
+    fun getLabelsWithCountsPage(userId: Long, limit: Int, offset: Int): List<LabelWithCount> =
+        labelsWithCounts(userId, limit, offset)
+
+    fun countLabels(userId: Long): Int =
+        namedParameterJdbcTemplate.queryForObject(
+            "SELECT count(*) FROM label WHERE user_id = :user_id",
+            MapSqlParameterSource().addValue("user_id", userId),
+            Int::class.java,
+        ) ?: 0
+
+    /**
+     * Zero-based index of the label in the name order of the /labels pages, or null when the
+     * user has no such label. Compared with the same collation the ORDER BY uses.
+     */
+    fun positionOf(labelId: Long, userId: Long): Int? {
+        val sql = """
+            SELECT (SELECT count(*) FROM label l WHERE l.user_id = :user_id AND l.name < t.name)
+            FROM label t
+            WHERE t.id = :label_id AND t.user_id = :user_id
+        """.trimIndent()
+        val params = MapSqlParameterSource().addValue("user_id", userId).addValue("label_id", labelId)
+        return namedParameterJdbcTemplate.query(sql, params) { rs, _ -> rs.getInt(1) }.firstOrNull()
+    }
+
+    private fun labelsWithCounts(userId: Long, limit: Int?, offset: Int): List<LabelWithCount> {
         val sql = """
             SELECT l.id, l.name,
                    (SELECT count(*) FROM post_label WHERE label_id = l.id)
@@ -44,12 +71,11 @@ class LabelDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplat
             FROM label l
             WHERE l.user_id = :user_id
             ORDER BY l.name
-        """.trimIndent()
+        """.trimIndent() + (if (limit != null) " LIMIT :limit OFFSET :offset" else "")
 
-        return namedParameterJdbcTemplate.query(
-            sql,
-            MapSqlParameterSource().addValue("user_id", userId)
-        ) { rs, _ ->
+        val params = MapSqlParameterSource().addValue("user_id", userId)
+            .addValue("limit", limit).addValue("offset", offset)
+        return namedParameterJdbcTemplate.query(sql, params) { rs, _ ->
             LabelWithCount(
                 id = rs.getLong("id"),
                 name = rs.getString("name"),

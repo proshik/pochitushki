@@ -4,7 +4,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import org.springframework.stereotype.Component
-import ru.proshik.pochitushki.model.LabelTarget
+import ru.proshik.pochitushki.service.telegram.card.CardRef
 
 /**
  * Remembers that a chat was asked to type a label name, so the next plain message is
@@ -17,17 +17,16 @@ import ru.proshik.pochitushki.model.LabelTarget
 @Component
 class PendingLabelInput {
 
+    /** [ref] is the card the prompt came from: which post gets the label. */
     data class Pending(
-        val postId: Long,
-        val target: LabelTarget,
-        val context: String,
+        val ref: CardRef,
         val askedAt: Instant,
     )
 
     private val pending = ConcurrentHashMap<Long, Pending>()
 
-    fun await(chatId: Long, postId: Long, target: LabelTarget, context: String) {
-        pending[chatId] = Pending(postId, target, context, Instant.now())
+    fun await(chatId: Long, ref: CardRef) {
+        pending[chatId] = Pending(ref, Instant.now())
     }
 
     /** Returns and clears the prompt, or null if there is none or it went stale. */

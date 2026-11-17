@@ -35,6 +35,18 @@ class LabelService(private val labelDao: LabelDao) {
 
     fun getLabelsWithCounts(userId: Long): List<LabelWithCount> = labelDao.getLabelsWithCounts(userId)
 
+    /** A /labels page; [rawPage] is the query parameter as typed (see LabelPaging.resolve). */
+    fun labelsPage(userId: Long, rawPage: String?): LabelsPage {
+        val total = labelDao.countLabels(userId)
+        val page = LabelPaging.resolve(rawPage, total)
+        val pages = LabelPaging.pages(total)
+        val labels = labelDao.getLabelsWithCountsPage(userId, LabelPaging.SIZE, LabelPaging.offset(page))
+        return LabelsPage(labels, page, pages, total, LabelPaging.items(page, pages))
+    }
+
+    /** The /labels page holding the label, or null when the user has no such label. */
+    fun pageOf(labelId: Long, userId: Long): Int? = labelDao.positionOf(labelId, userId)?.let(LabelPaging::pageOf)
+
     /**
      * Renaming onto a name the user already has is refused rather than silently merging
      * the two labels — merging is not undoable and nobody asked for it.

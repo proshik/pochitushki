@@ -34,4 +34,16 @@ data class TelegramProperties(
      * Если задан — webhook-запросы без совпадающего заголовка отклоняются. Пусто => проверка выключена.
      */
     val webhookSecret: String? = null,
-)
+    /**
+     * Адрес Mini App (`${APP_BASE_URL}/tg`) для кнопок «Открыть в приложении» и кнопки меню.
+     * Кнопки ставятся только для https: web_app с http Telegram отвергает вместе со всем сообщением.
+     */
+    val miniAppUrl: String? = null,
+    /** HTML-виджеты Bot API 10.4 вместо текстовой карточки (см. WidgetMode). */
+    val widgets: Widgets = Widgets(),
+) {
+    data class Widgets(
+        /** `TELEGRAM_WIDGETS_ENABLED`. Действует только в режиме webhook. По умолчанию выключено. */
+        val enabled: Boolean = false,
+    )
+}

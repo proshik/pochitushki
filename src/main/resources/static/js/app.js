@@ -351,8 +351,11 @@ function initLabelsPage() {
     }
 
     if (e.target.closest('[data-action="label-delete-yes"]')) {
+      /* Reload rather than drop the row: the next label moves up from the following page,
+         and the total in the head and the pager stay right. The server clamps ?page when
+         this was the last label of the last page. */
       fetch('/api/v1/labels/' + row.dataset.labelId, { method: 'DELETE' })
-        .then(function (r) { if (r.ok) row.remove(); });
+        .then(function (r) { if (r.ok) location.reload(); });
     }
   });
 
@@ -437,7 +440,8 @@ function initLabelsPage() {
         body: JSON.stringify({ name: name })
       })
         .then(function (r) { if (!r.ok) throw new Error('create failed'); return r.json(); })
-        .then(function () { location.reload(); })
+        /* To the page the new label landed on in name order (the server redirects to ?page=N). */
+        .then(function (label) { location.href = '/labels?label=' + encodeURIComponent(label.id); })
         .catch(function () { input.disabled = false; });
     });
   }
@@ -588,7 +592,54 @@ function showActionError(kind) {
   setTimeout(function () { toast.remove(); }, 4000);
 }
 
+/* ── Mini App: the same site inside Telegram ──
+   Only when telegram-web-app.js is on the page (layout.html loads it in Mini App mode)
+   and Telegram handed over launch data. In a normal browser this does nothing. */
+function initMiniApp() {
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (!tg || !tg.initData) return;
+
+  tg.ready();
+  tg.expand();
+
+  /* Telegram's colour scheme wins over the saved site theme inside the app. */
+  function applyScheme() {
+    document.documentElement.classList.toggle('dark', tg.colorScheme === 'dark');
+  }
+  applyScheme();
+  tg.onEvent('themeChanged', applyScheme);
+
+  /* Telegram's own back button instead of browser navigation on inner pages. The button
+     is native and keeps its state across page loads, so the feed hides it explicitly —
+     otherwise a button shown on /archive stays on / with nothing listening, and pressing it
+     no longer closes the app. pageshow re-syncs a page restored from the history cache,
+     where DOMContentLoaded does not run again. */
+  function syncBackButton() {
+    if (location.pathname === '/') tg.BackButton.hide();
+    else tg.BackButton.show();
+  }
+  tg.BackButton.onClick(function () {
+    if (history.length > 1) history.back();
+    else location.href = '/';
+  });
+  syncBackButton();
+  window.addEventListener('pageshow', syncBackButton);
+
+  /* Articles open outside the app: a plain link would navigate the Mini App itself away.
+     openLink must run inside the user's tap, which a click listener is. */
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest && e.target.closest('a[href]');
+    if (!link) return;
+    var url;
+    try { url = new URL(link.href, location.href); } catch (ex) { return; }
+    if (url.origin === location.origin || !/^https?:$/.test(url.protocol)) return;
+    e.preventDefault();
+    tg.openLink(url.href);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+  initMiniApp();
   /* Fail loudly if an hx-on / js: expression sneaks back in, rather than
      quietly needing 'unsafe-eval' again. */
   if (typeof htmx !== 'undefined') htmx.config.allowEval = false;

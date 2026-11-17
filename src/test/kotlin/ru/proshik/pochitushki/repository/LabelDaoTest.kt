@@ -53,6 +53,35 @@ class LabelDaoTest : BaseIntegrationTest() {
         )!!
 
     @Test
+    fun `labels page in name order with counts`() {
+        for (name in listOf("c", "a", "b")) labelDao.createLabel(userId, name)
+        labelDao.createLabel(otherUserId, "aa")
+
+        assertEquals(listOf("a", "b"), labelDao.getLabelsWithCountsPage(userId, limit = 2, offset = 0).map { it.name })
+        assertEquals(listOf("c"), labelDao.getLabelsWithCountsPage(userId, limit = 2, offset = 2).map { it.name })
+        assertEquals(emptyList<String>(), labelDao.getLabelsWithCountsPage(userId, limit = 2, offset = 4).map { it.name })
+    }
+
+    @Test
+    fun `countLabels counts only the user's labels`() {
+        for (name in listOf("a", "b", "c")) labelDao.createLabel(userId, name)
+        labelDao.createLabel(otherUserId, "z")
+
+        assertEquals(3, labelDao.countLabels(userId))
+    }
+
+    @Test
+    fun `positionOf is the label's index in name order`() {
+        val c = labelDao.createLabel(userId, "c")
+        labelDao.createLabel(userId, "a")
+        labelDao.createLabel(userId, "b")
+        val theirs = labelDao.createLabel(otherUserId, "b")
+
+        assertEquals(2, labelDao.positionOf(c.id, userId))
+        assertEquals(null, labelDao.positionOf(theirs.id, userId))
+    }
+
+    @Test
     fun `createLabel returns the label with an id`() {
         val label = labelDao.createLabel(userId, "kotlin")
 

@@ -21,17 +21,18 @@ paths:
 
 ## Labels
 
-- Кнопка «🏷 Метки» на карточке поста подменяет клавиатуру пикером; «◀️ Назад»
-  собирает исходную обратно, поэтому в callback_data едет ещё и контекст
-  (feed или favorites) — иначе кнопка вернёт не ту клавиатуру
-- callback_data у Telegram ограничен 64 байтами, поэтому таблица кодируется одним
-  символом (`u`/`a`), контекст — вторым. Формат разбирает
-  `TelegramKeyboard.LabelCallbackContext`; свободной строки туда не класть
+- «🏷 Метки» под «⋯» на карточке подменяет клавиатуру пикером; «◀️ Назад»
+  (`lb`) собирает клавиатуру карточки обратно на тот же offset — поэтому кнопки
+  пикера несут весь `CardRef` карточки, а не только id поста
+- callback_data у Telegram ограничен 64 байтами. Единственный формат —
+  `CardRef` (`service/telegram/card/CardRef.kt`): `<действие>|<список>:<offset>:<id>:<таблица>[:extra]`,
+  действие — два символа (`CardAction`), список и таблица — по одному. Свободной строки
+  туда не класть; разбор — только `parseCardCallback`
 - «➕ Новая метка» ждёт следующее текстовое сообщение через `PendingLabelInput` —
   это **in-memory** состояние с TTL 5 минут. После рестарта подсказка теряется и
   текст снова читается как ссылка. Это осознанно: таблица ради состояния на
   десять секунд хуже проблемы
-- `CommandHandler.handleCommonText` обязан спрашивать `consumeLabelName` **до**
+- `CommandHandler.handleCommonText` обязан спрашивать `PostCardService.consumeLabelName` **до**
   `addPost`, иначе имя метки уедет в посты как URL
 
 ## Bot Modes
@@ -39,12 +40,20 @@ paths:
 - Polling для локальной разработки, webhook для продакшна
 - Конфигурация через `TelegramBotConfiguration` и `TelegramProperties`
 - В тестах Telegram отключён (профиль `test`)
-- `allowedUpdates` в webhook-режиме обязан включать `callback_query`: без него
+- `allowedUpdates` (`TelegramBotConfiguration.allowedUpdates`) в webhook-режиме обязан
+  включать `callback_query`, а при активных виджетах ещё `widget_query` и
+  `shared_widget_query`: без них
   Telegram не присылает нажатия inline-кнопок, и в проде отваливается всё, что
   на кнопках. В polling такого фильтра нет, поэтому тесты это не ловят
 - `telegram.webhook-secret` обязателен в webhook-режиме, иначе приложение не стартует
-- Результат `startWebhook()` проверяется: при `false` библиотека не поднимает
-  dispatcher, и каждый входящий запрос навсегда повисает на отправке в канал
+- `widget_query`/`shared_widget_query` библиотека не разбирает: их перехватывает
+  `TelegramController` до `processUpdate` (только при `WidgetMode.active`). Виджеты
+  работают только в webhook; в polling — текстовая карточка
+- Webhook регистрирует **не библиотека**, а `TelegramBotApi.setWebhook` (Feign, JSON):
+  kotlin-telegram-bot шлёт `allowed_updates` повторяющимися полями формы, Telegram такое не
+  разбирает и молча оставляет прежний фильтр. Поэтому в `webhook { }` стоит
+  `createOnStart = false`, а `startWebhook()` только запускает диспетчер. Оба результата
+  проверяются: без них каждый входящий webhook-запрос навсегда повиснет на отправке в канал
 
 ## Долгие операции
 

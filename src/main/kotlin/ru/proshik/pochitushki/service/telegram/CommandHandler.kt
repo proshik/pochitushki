@@ -10,11 +10,12 @@ import com.github.kotlintelegrambot.entities.Update
 import com.github.kotlintelegrambot.errors.TelegramError
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_EN_CODE
 import ru.proshik.pochitushki.service.TelegramService.Companion.supportedLanguages
+import ru.proshik.pochitushki.service.telegram.card.CardList
+import ru.proshik.pochitushki.service.telegram.card.PostCardService
 
 /**
  * Handler for Telegram commands and text messages.
@@ -25,6 +26,8 @@ import ru.proshik.pochitushki.service.TelegramService.Companion.supportedLanguag
 class CommandHandler(
     private val i18nService: I18nService,
     private val telegramService: TelegramService,
+    private val postCardService: PostCardService,
+    private val telegramKeyboard: TelegramKeyboard,
 ) : TelegramUpdateHandler {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -108,19 +111,19 @@ class CommandHandler(
     }
 
     private fun handleFeedOperation(message: Message) {
-        telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.UNREAD)
+        postCardService.sendCard(message.chat.id, CardList.UNREAD)
     }
 
     private fun handleArchivePostOperation(message: Message) {
-        telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.ARCHIVE)
+        postCardService.sendCard(message.chat.id, CardList.ARCHIVE)
     }
 
     private fun handleFavoritesOperation(message: Message) {
-        telegramService.getFeed(message.chat.id, message.messageId, postType = PostType.FAVORITES)
+        postCardService.sendCard(message.chat.id, CardList.FAVORITES)
     }
 
     private fun handleRandomPostOperation(message: Message) {
-        telegramService.getRandomPost(message.chat.id, message.messageId)
+        postCardService.sendCard(message.chat.id, CardList.RANDOM)
     }
 
     /**
@@ -165,7 +168,7 @@ class CommandHandler(
         if (message.text != null) {
             // A pending "type the label name" prompt wins over the default reading of a
             // message as a URL to save.
-            if (telegramService.consumeLabelName(message.chat.id, message.text!!)) {
+            if (postCardService.consumeLabelName(message.chat.id, message.text!!)) {
                 return
             }
             try {
@@ -183,7 +186,8 @@ class CommandHandler(
     private fun startWelcomeMessage(chatId: Long, languageCode: String) {
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,
-            text = i18nService.getMessage("command.start.message", languageCode)
+            text = i18nService.getMessage("command.start.message", languageCode),
+            replyMarkup = telegramKeyboard.buildStartKeyboard(languageCode),
         )
         telegramService.sendMessageWithReplayKeyboard(
             chatId = chatId,

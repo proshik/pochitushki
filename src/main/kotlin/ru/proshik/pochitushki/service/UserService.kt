@@ -55,7 +55,7 @@ class UserService(private val userDao: UserDao) {
                     username = username,
                     firstName = firstName,
                     lastName = null,
-                    settings = UserSettingsData(languageCode = resolvedLang, tgFeedEntriesNumber = 5),
+                    settings = UserSettingsData(languageCode = resolvedLang),
                 )
             )
             userDao.getUserByChatId(telegramId)

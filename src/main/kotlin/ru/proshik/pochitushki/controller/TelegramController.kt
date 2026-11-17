@@ -1,5 +1,6 @@
 package ru.proshik.pochitushki.controller
 
+import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 import ru.proshik.pochitushki.configuration.BotProvider
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
+import ru.proshik.pochitushki.service.telegram.widget.WidgetMode
+import ru.proshik.pochitushki.service.telegram.widget.WidgetQueryHandler
 
 /**
  * Controller for handling Telegram webhook requests.
@@ -31,6 +34,8 @@ import ru.proshik.pochitushki.configuration.properties.TelegramProperties
 class TelegramController(
     private val botProvider: BotProvider,
     private val telegramProperties: TelegramProperties,
+    private val widgetMode: WidgetMode,
+    private val widgetQueryHandler: WidgetQueryHandler,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -68,13 +73,22 @@ class TelegramController(
             }
         }
 
-        val updateId = extractUpdateId(data)
+        val update = parse(data)
+        val updateId = update?.path("update_id")?.takeIf { it.isNumber }?.asLong()
         if (updateId != null && seenUpdateIds.getIfPresent(updateId) != null) {
             logger.info("Skipping redelivered Telegram update: updateId={}", updateId)
             return
         }
 
-        botProvider.getBot().processUpdate(data)
+        // Widget taps (Bot API 10.4) are not an update type the library knows; picked out here,
+        // before it would parse them into an empty Update and drop them.
+        val widgetQuery = update?.get("widget_query")
+        val sharedWidgetQuery = update?.get("shared_widget_query")
+        when {
+            widgetMode.active && widgetQuery != null -> widgetQueryHandler.handle(widgetQuery)
+            widgetMode.active && sharedWidgetQuery != null -> widgetQueryHandler.handleShared(sharedWidgetQuery)
+            else -> botProvider.getBot().processUpdate(data)
+        }
         updateId?.let { seenUpdateIds.put(it, true) }
 
         // The update body carries message text, names and file ids — logging it would put user
@@ -82,9 +96,9 @@ class TelegramController(
         logger.debug("Processed Telegram update: updateId={}", updateId)
     }
 
-    /** null when the body is not JSON or carries no update_id — such a body is not deduplicated. */
-    private fun extractUpdateId(data: String): Long? = try {
-        objectMapper.readTree(data).path("update_id").takeIf { it.isNumber }?.asLong()
+    /** null when the body is not JSON — such a body is not deduplicated, and goes to the library as is. */
+    private fun parse(data: String): JsonNode? = try {
+        objectMapper.readTree(data)
     } catch (e: Exception) {
         null
     }
