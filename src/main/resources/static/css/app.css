@@ -387,7 +387,11 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 .cell-meta {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10.5px; color: var(--muted); margin-top: 4px;
+  /* Date and label tags follow each other with no space to break at: let each tag wrap as
+     a whole, or a narrow cell pushes them past the page edge (horizontal scroll on phones). */
+  display: flex; flex-wrap: wrap; min-width: 0;
 }
+.cell-meta > * { min-width: 0; overflow-wrap: anywhere; }
 .cell-actions {
   position: relative; display: flex; align-items: center; gap: 2px; margin-top: 4px;
   min-height: 28px;
@@ -398,7 +402,8 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 @media (hover: none) { .shelf .card-actions { opacity: 1; } }
 
 /* ── List (rows with mini spines) ── */
-#post-list.list-rows { display: block; max-width: 860px; }
+/* Full .page-main width, so the rows end where the page head and its view toggle end. */
+#post-list.list-rows { display: block; }
 #post-list.list-rows > div:not(.post-card),
 #post-list.list-rows > div:not(.post-card) > div:not(.load-more-sentinel) { display: contents; }
 
@@ -432,11 +437,31 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 }
 .row-title:hover { text-decoration: underline; }
 .row-sub {
+  /* A <span>: without display: block the ellipsis below does nothing, and the labels run
+     past the page edge on a phone. */
+  display: block;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 11.5px; color: var(--muted); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.row-side { position: relative; display: flex; align-items: center; gap: 8px; }
+/* The status chip and the action buttons share one cell at the row's right edge: the chip
+   rests there, and on hover or focus the buttons take its place — no shift, nothing
+   floating in the middle of empty space. Without hover (touch) both stay visible side by
+   side, as before. */
+.row-side { position: relative; display: grid; align-items: center; justify-items: end; }
+.row-side > .status-chip, .row-side > .card-actions { grid-area: 1 / 1; }
+.row-side > .status-chip { transition: opacity 0.15s; }
+.list-rows .post-card:hover .row-side > .status-chip,
+.list-rows .post-card:focus-within .row-side > .status-chip,
+.list-rows .post-card.confirming .row-side > .status-chip,
+.list-rows .post-card.labelling .row-side > .status-chip { opacity: 0; }
+@media (hover: none) {
+  .row-side { display: flex; gap: 8px; }
+  .list-rows .post-card .row-side > .status-chip { opacity: 1; }
+}
+/* The cell is only as wide as the buttons now: the delete confirmation grows leftwards from
+   the right edge instead of spilling past its own background. */
+.row-side .delete-confirm { left: auto; min-width: 100%; }
 .status-chip {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase;
