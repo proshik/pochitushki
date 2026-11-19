@@ -50,7 +50,7 @@ class TelegramWebhookSecretTest : BaseIntegrationTest() {
     @Test
     fun `webhook without secret token is rejected with 403`() {
         val headers = HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }
-        val response = restTemplate.postForEntity("/test_token", HttpEntity(updateJson, headers), String::class.java)
+        val response = restTemplate.postForEntity("/telegram/webhook", HttpEntity(updateJson, headers), String::class.java)
 
         assert(response.statusCode == HttpStatus.FORBIDDEN) { "Expected 403 but got ${response.statusCode}" }
     }
@@ -61,7 +61,7 @@ class TelegramWebhookSecretTest : BaseIntegrationTest() {
             contentType = MediaType.APPLICATION_JSON
             set("X-Telegram-Bot-Api-Secret-Token", "wrong")
         }
-        val response = restTemplate.postForEntity("/test_token", HttpEntity(updateJson, headers), String::class.java)
+        val response = restTemplate.postForEntity("/telegram/webhook", HttpEntity(updateJson, headers), String::class.java)
 
         assert(response.statusCode == HttpStatus.FORBIDDEN) { "Expected 403 but got ${response.statusCode}" }
     }
@@ -72,7 +72,7 @@ class TelegramWebhookSecretTest : BaseIntegrationTest() {
             contentType = MediaType.APPLICATION_JSON
             set("X-Telegram-Bot-Api-Secret-Token", "topsecret")
         }
-        val response = restTemplate.postForEntity("/test_token", HttpEntity(updateJson, headers), String::class.java)
+        val response = restTemplate.postForEntity("/telegram/webhook", HttpEntity(updateJson, headers), String::class.java)
 
         assert(response.statusCode == HttpStatus.OK) { "Expected 200 but got ${response.statusCode}" }
     }

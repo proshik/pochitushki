@@ -4,3 +4,5 @@ telegram:
   token-name: test_token_name
   base-url: http://localhost:8080
   mini-app-url: https://app.test/tg
+  # The webhook endpoint refuses every call without a configured secret, polling or not.
+  webhook-secret: test-secret

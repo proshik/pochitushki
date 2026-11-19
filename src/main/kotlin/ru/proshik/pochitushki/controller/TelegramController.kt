@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import jakarta.servlet.http.HttpServletRequest
 import java.security.MessageDigest
 import java.time.Duration
 import org.slf4j.LoggerFactory
@@ -11,7 +12,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
@@ -27,9 +27,8 @@ import ru.proshik.pochitushki.service.telegram.widget.WidgetQueryHandler
  */
 @RestController
 @EnableConfigurationProperties(value = [TelegramProperties::class])
-// Webhook-эндпоинт нужен только когда бот включён. При enabled=false бин не создаётся,
-// поэтому маппинг "/${telegram.token}" не регистрируется (и не схлопывается в "POST /"),
-// а обращение к botProvider.getBot() отсюда исключено.
+// Webhook-эндпоинт нужен только когда бот включён: при enabled=false бин не создаётся, и
+// обращение к botProvider.getBot() отсюда исключено.
 @ConditionalOnProperty(prefix = "telegram", name = ["enabled"], havingValue = "true")
 class TelegramController(
     private val botProvider: BotProvider,
@@ -55,23 +54,32 @@ class TelegramController(
     /**
      * Process webhook updates from Telegram.
      */
-    @PostMapping("/\${telegram.token}")
+    @PostMapping(WEBHOOK_PATH)
     suspend fun processUpdate(
-        @RequestBody data: String,
+        request: HttpServletRequest,
         @RequestHeader(value = SECRET_TOKEN_HEADER, required = false) secretToken: String?,
     ) {
         // Authenticate the caller: only Telegram, which echoes the configured secret back in
-        // this header, may post updates. The secret URL path is not sufficient — it is the bot
-        // token, and tokens end up in proxy logs. The comparison is constant-time so the header
-        // cannot be guessed byte by byte from response timings.
+        // this header, may post updates. The path is public and fixed — the header is the only
+        // check, so without a configured secret (polling) every call is refused: otherwise anyone
+        // could post an update in another user's name. The comparison is constant-time so the
+        // header cannot be guessed byte by byte from response timings.
+        //
+        // The body is read by hand, after this check and with a cap: a @RequestBody would be read
+        // whole, before the method runs, for anyone who knows the public path. Refusals are not
+        // logged above debug for the same reason; they show in http_server_requests{status="403"}.
         val expected = telegramProperties.webhookSecret
-        if (!expected.isNullOrBlank()) {
-            val provided = secretToken.orEmpty()
-            if (!MessageDigest.isEqual(provided.toByteArray(), expected.toByteArray())) {
-                logger.warn("Rejected webhook call with missing/invalid secret token")
-                throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid webhook secret")
-            }
+        val provided = secretToken.orEmpty()
+        if (expected.isNullOrBlank() || !MessageDigest.isEqual(provided.toByteArray(), expected.toByteArray())) {
+            logger.debug("Rejected webhook call with missing/invalid secret token")
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid webhook secret")
         }
+        val bytes = request.inputStream.readNBytes(MAX_BODY_BYTES + 1)
+        if (bytes.size > MAX_BODY_BYTES) {
+            logger.warn("Rejected webhook call with a body over {} bytes", MAX_BODY_BYTES)
+            throw ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE, "Update too large")
+        }
+        val data = String(bytes, Charsets.UTF_8)
 
         val update = parse(data)
         val updateId = update?.path("update_id")?.takeIf { it.isNumber }?.asLong()
@@ -104,6 +112,14 @@ class TelegramController(
     }
 
     companion object {
+        /**
+         * A fixed path, not the bot token: a token in the path ends up in the `uri` label of
+         * `http_server_requests`, in proxy access logs and in `getWebhookInfo`.
+         */
+        const val WEBHOOK_PATH = "/telegram/webhook"
+
+        /** An update is a few kilobytes; a message at Telegram's 4096-character limit is far below this. */
+        private const val MAX_BODY_BYTES = 1024 * 1024
         const val SECRET_TOKEN_HEADER = "X-Telegram-Bot-Api-Secret-Token"
     }
 }

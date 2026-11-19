@@ -62,16 +62,22 @@ class TelegramControllerTest : BaseIntegrationTest() {
             }
         """.trimIndent()
 
-        val headers = HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }
-        val response = restTemplate.postForEntity("/test_token", HttpEntity(json, headers), String::class.java)
+        val headers = HttpHeaders().apply {
+            contentType = MediaType.APPLICATION_JSON
+            set("X-Telegram-Bot-Api-Secret-Token", "test-secret")
+        }
+        val response = restTemplate.postForEntity("/telegram/webhook", HttpEntity(json, headers), String::class.java)
 
         assertEquals(HttpStatus.OK, response.statusCode)
     }
 
     @Test
     fun `webhook endpoint handles invalid JSON gracefully`() {
-        val headers = HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }
-        val response = restTemplate.postForEntity("/test_token", HttpEntity("not a json", headers), String::class.java)
+        val headers = HttpHeaders().apply {
+            contentType = MediaType.APPLICATION_JSON
+            set("X-Telegram-Bot-Api-Secret-Token", "test-secret")
+        }
+        val response = restTemplate.postForEntity("/telegram/webhook", HttpEntity("not a json", headers), String::class.java)
 
         // Should not return 200 OK for invalid JSON - expect 4xx or 5xx
         val status = response.statusCode.value()

@@ -13,6 +13,8 @@ import ru.proshik.pochitushki.service.PdfCacheService
 import ru.proshik.pochitushki.service.PdfGenerator
 import ru.proshik.pochitushki.service.RateLimitService
 import ru.proshik.pochitushki.service.telegram.BotTaskExecutor
+import ru.proshik.pochitushki.service.telegram.api.delivered
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 
 /**
  * PDF of a post from the card's ⋯ row. The press is answered with a toast at once; the file
@@ -29,6 +31,7 @@ class PostPdfSender(
     private val botTaskExecutor: BotTaskExecutor,
     private val rateLimitService: RateLimitService,
     private val i18n: I18nService,
+    private val metrics: AppMetrics,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -49,6 +52,7 @@ class PostPdfSender(
         val accepted = botTaskExecutor.submit("pdf postId=${post.id} engine=$engine") {
             generateAndSend(chatId, user, post, engine, generator)
         }
+        if (!accepted) metrics.operationFailed(AppMetrics.Operation.PDF, AppMetrics.Reason.BUSY)
         return if (accepted) "card.toast.pdf_started" else "command.busy"
     }
 
@@ -58,13 +62,17 @@ class PostPdfSender(
             val pdfBytes = pdfCacheService.getOrGenerate(user.id, post.url, engine) {
                 generator.generatePdf(post.url)
             }
-            botProvider.getBot().sendDocument(
+            val sent = botProvider.getBot().sendDocument(
                 chatId = ChatId.fromId(chatId),
                 document = TelegramFile.ByByteArray(pdfBytes, filename(post.title, post.url)),
                 caption = post.title ?: post.url,
             )
+            // A refusal (413 for a file too large) does not throw; without this the user got neither
+            // the file nor the error message.
+            check(sent.delivered()) { "telegram refused the pdf" }
             logger.info("pdf success: chatId={}, postId={}, engine={}", chatId, post.id, engine)
         } catch (e: Exception) {
+            metrics.operationFailed(AppMetrics.Operation.PDF)
             logger.warn("pdf error: postId={}, engine={}", post.id, engine, e)
             botProvider.getBot().sendMessage(
                 chatId = ChatId.fromId(chatId),

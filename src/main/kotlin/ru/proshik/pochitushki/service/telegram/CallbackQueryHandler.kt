@@ -11,6 +11,7 @@ import ru.proshik.pochitushki.model.UserSettingsLimits
 import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService
 import ru.proshik.pochitushki.service.UserService
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 import ru.proshik.pochitushki.service.telegram.card.CallbackAnswer
 import ru.proshik.pochitushki.service.telegram.card.CardAction
 import ru.proshik.pochitushki.service.telegram.card.PostCardService
@@ -25,6 +26,7 @@ class CallbackQueryHandler(
     private val postCardService: PostCardService,
     private val userService: UserService,
     private val i18nService: I18nService,
+    private val metrics: AppMetrics,
 ) : TelegramUpdateHandler {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -46,6 +48,7 @@ class CallbackQueryHandler(
                     answer = handleCallbacks(callbackQuery)
                 } catch (e: Exception) {
                     // A malformed/forged callback must not crash the dispatcher coroutine.
+                    metrics.operationFailed(AppMetrics.Operation.CARD_ACTION)
                     logger.warn("callback handling failed: data={}", callbackQuery.data, e)
                 } finally {
                     try {

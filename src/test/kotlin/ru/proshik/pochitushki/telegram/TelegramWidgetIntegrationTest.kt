@@ -45,7 +45,7 @@ class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
         @JvmStatic
         @DynamicPropertySource
         fun webhook(registry: DynamicPropertyRegistry) {
-            registry.add("telegram.webhook-url") { "https://example.test/test_token" }
+            registry.add("telegram.webhook-url") { "https://example.test/telegram/webhook" }
             // Runs right before this context starts, i.e. after other classes' resetAll():
             // startWebhook() calls setWebhook at startup and refuses to start without "ok".
             wireMockTelegramApi.stubFor(post(urlEqualTo("/bottest_token/setWebhook")).willReturn(ok("""{"ok":true,"result":true}""")))
@@ -83,7 +83,7 @@ class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
             contentType = MediaType.APPLICATION_JSON
             set("X-Telegram-Bot-Api-Secret-Token", "test-secret")
         }
-        restTemplate.postForEntity("/test_token", HttpEntity(json, headers), String::class.java)
+        restTemplate.postForEntity("/telegram/webhook", HttpEntity(json, headers), String::class.java)
     }
 
     private fun bodies(method: String): List<String> =
@@ -123,7 +123,7 @@ class TelegramWidgetIntegrationTest : BaseIntegrationTest() {
             body.contains("\"allowed_updates\":[\"message\",\"callback_query\",\"widget_query\",\"shared_widget_query\"]"),
             body,
         )
-        assertTrue(body.contains("\"secret_token\":\"test-secret\"") && body.contains("\"url\":\"https://example.test/test_token\""), body)
+        assertTrue(body.contains("\"secret_token\":\"test-secret\"") && body.contains("\"url\":\"https://example.test/telegram/webhook\""), body)
     }
 
     @Test

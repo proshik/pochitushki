@@ -6,14 +6,18 @@ import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.telegramError
 import com.github.kotlintelegrambot.logging.LogLevel
 import com.github.kotlintelegrambot.webhook
+import java.net.URI
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import ru.proshik.pochitushki.configuration.properties.TelegramProperties
+import ru.proshik.pochitushki.controller.TelegramController
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 import ru.proshik.pochitushki.service.telegram.MiniAppLinks
 import ru.proshik.pochitushki.service.telegram.TelegramUpdateHandler
 import ru.proshik.pochitushki.service.telegram.api.TelegramBotApi
+import ru.proshik.pochitushki.service.telegram.api.TelegramErrorInterceptor
 import ru.proshik.pochitushki.service.telegram.widget.WidgetMode
 
 
@@ -26,11 +30,22 @@ class TelegramBotConfiguration(
     private val miniAppLinks: MiniAppLinks,
     private val widgetMode: WidgetMode,
     private val telegramBotApi: TelegramBotApi,
+    private val metrics: AppMetrics,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    @Bean
+    /**
+     * `destroyMethod = ""`: Spring would otherwise infer one — `Bot` has a public `close()`, and
+     * that is the Bot API `close` method, sent to Telegram on every shutdown. Under Krill's
+     * `start-first` it would land on the bot the new container has just set up.
+     *
+     * Nothing else stops the bot either, on purpose. `stopWebhook()` sends `deleteWebhook` and
+     * would unset the new container's webhook; `stopPolling()` in 10.0.0 dies with
+     * NoSuchMethodError (`Job.cancel$default`) against the coroutines version we run. Shutdown
+     * is followed by process exit, and that ends polling and the dispatcher.
+     */
+    @Bean(destroyMethod = "")
     fun telegramBot(): Bot {
         if (!telegramProperties.enabled) {
             logger.info("telegram bot is disabled")
@@ -48,12 +63,20 @@ class TelegramBotConfiguration(
         check(!webhookMode || !telegramProperties.webhookSecret.isNullOrBlank()) {
             "telegram.webhook-secret is required in webhook mode (set TELEGRAM_WEBHOOK_SECRET)"
         }
+        // A URL that does not end in the controller's path leaves the bot deaf with a healthy
+        // container: Telegram gets 404s and the old container is already gone. Refuse instead,
+        // and the start-first rollout keeps the old one. Not echoed: an old-style URL carries the token.
+        check(!webhookMode || isWebhookUrl(telegramProperties.webhookUrl!!)) {
+            "telegram.webhook-url must be https://<host>${TelegramController.WEBHOOK_PATH} (set TELEGRAM_WEBHOOK_URL)"
+        }
 
         logger.info("initializing telegram bot")
         val bot = bot {
             token = telegramProperties.token
             apiUrl = telegramProperties.apiUrl
             logLevel = LogLevel.Error
+            // Most library calls drop their error result; the HTTP client sees every one of them.
+            httpClientInterceptors = listOf(TelegramErrorInterceptor(metrics))
             dispatch {
                 // Register all handlers
                 telegramUpdateHandlers.forEach { handler ->
@@ -105,6 +128,17 @@ class TelegramBotConfiguration(
     }
 
     companion object {
+        /**
+         * Exactly `https://<host>/telegram/webhook`: Spring matches the path strictly, so a trailing
+         * slash or an encoded slash (`%2F`, which `URI.path` would decode) would get Telegram a 404.
+         */
+        private fun isWebhookUrl(url: String): Boolean = try {
+            val uri = URI(url)
+            uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.rawPath == TelegramController.WEBHOOK_PATH
+        } catch (_: Exception) {
+            false
+        }
+
         /**
          * Without "callback_query" Telegram delivers only messages, and every inline button on
          * a card goes nowhere; without the two widget types widget taps never arrive. Polling

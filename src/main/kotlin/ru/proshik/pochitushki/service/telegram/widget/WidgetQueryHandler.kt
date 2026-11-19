@@ -3,6 +3,7 @@ package ru.proshik.pochitushki.service.telegram.widget
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import ru.proshik.pochitushki.service.telegram.api.TelegramBotApi
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 import ru.proshik.pochitushki.service.telegram.card.CallbackAnswer
 import ru.proshik.pochitushki.service.telegram.card.CardAction
 import ru.proshik.pochitushki.service.telegram.card.PostCardService
@@ -21,6 +22,7 @@ import tools.jackson.databind.JsonNode
 class WidgetQueryHandler(
     private val postCardService: PostCardService,
     private val api: TelegramBotApi,
+    private val metrics: AppMetrics,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -31,6 +33,7 @@ class WidgetQueryHandler(
         try {
             answer = act(query)
         } catch (e: Exception) {
+            metrics.operationFailed(AppMetrics.Operation.CARD_ACTION)
             logger.warn("widget query handling failed: {}", e.javaClass.simpleName, e)
         } finally {
             api.answerWidgetQuery(id, answer.text)

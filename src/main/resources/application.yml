@@ -93,9 +93,15 @@ telegram:
   # Управляет подключением бота на старте. false => бот не запускается (ни polling, ни webhook),
   # bot-токен не требуется. Вход через Telegram (telegram.oauth.*) работает независимо от этого флага.
   enabled: ${TELEGRAM_ENABLED:true}
-  # Optional shared secret validated against the X-Telegram-Bot-Api-Secret-Token header on the
-  # webhook. When blank the check is skipped (e.g. polling/dev). Set in production.
+  # Задан — режим webhook, пусто — polling. Ровно https://<домен>/telegram/webhook: с другим
+  # путём приложение не стартует. Токена бота в адресе нет.
+  webhook-url: ${TELEGRAM_WEBHOOK_URL:}
+  # Секрет, который Telegram присылает в заголовке X-Telegram-Bot-Api-Secret-Token. Обязателен
+  # в режиме webhook; без него webhook-эндпоинт отклоняет любой запрос (и в polling тоже).
   webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+  # Как часто спрашивать getWebhookInfo для метрик pochitushki_telegram_webhook_*.
+  webhook-check:
+    interval: ${TELEGRAM_WEBHOOK_CHECK_INTERVAL:PT5M}
   # Адрес главной Mini App (он же — в BotFather). Кнопки «Открыть в приложении» появляются
   # только для https; локально по http их просто нет.
   mini-app-url: ${APP_BASE_URL:}/tg
