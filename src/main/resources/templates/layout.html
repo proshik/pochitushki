@@ -61,10 +61,8 @@
      th:text="${userInfo.firstName != null ? #strings.substring(userInfo.firstName, 0, 1) : '?'}"
      th:attr="aria-label=#{web.nav.profile}" th:title="#{web.nav.profile}">П</a>
 
-  <a th:if="${userInfo == null}" href="/auth/telegram" class="login-link">
-    <span class="tg-dot" aria-hidden="true"></span>
-    <span th:text="#{web.nav.login}">Войти</span>
-  </a>
+  <a th:if="${userInfo == null}" href="/auth/telegram" class="login-link"
+     th:text="#{web.nav.login}">Войти</a>
 </header>
 
 <!-- ══ View mode toggle (list pages) ══ -->

@@ -199,7 +199,7 @@ webhook). Бин `Bot` объявлен с `destroyMethod = ""` — иначе S
    `BackButton`, `openLink` для статей) — `initMiniApp()` в `app.js`, которая в обычном
    браузере ничего не делает. Не расширять исключение на другие пути
 
-Шрифты — Onest (400/600/800) и JetBrains Mono (400/600), самохостятся
+Шрифты — Onest (400/600) и JetBrains Mono (400/600), самохостятся
 подмножествами (latin, latin-ext, cyrillic, cyrillic-ext — кириллица
 обязательна). Обновлять: скачать CSS с fonts.googleapis.com с браузерным
 User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` и переписать
