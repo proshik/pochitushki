@@ -13,6 +13,7 @@ import ru.proshik.pochitushki.service.PdfCacheService
 import ru.proshik.pochitushki.service.PdfGenerator
 import ru.proshik.pochitushki.service.RateLimitService
 import ru.proshik.pochitushki.service.telegram.BotTaskExecutor
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 
 /**
  * PDF of a post from the card's ⋯ row. The press is answered with a toast at once; the file
@@ -29,6 +30,7 @@ class PostPdfSender(
     private val botTaskExecutor: BotTaskExecutor,
     private val rateLimitService: RateLimitService,
     private val i18n: I18nService,
+    private val metrics: AppMetrics,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -49,6 +51,7 @@ class PostPdfSender(
         val accepted = botTaskExecutor.submit("pdf postId=${post.id} engine=$engine") {
             generateAndSend(chatId, user, post, engine, generator)
         }
+        if (!accepted) metrics.operationFailed(AppMetrics.Operation.PDF, AppMetrics.Reason.BUSY)
         return if (accepted) "card.toast.pdf_started" else "command.busy"
     }
 
@@ -65,6 +68,7 @@ class PostPdfSender(
             )
             logger.info("pdf success: chatId={}, postId={}, engine={}", chatId, post.id, engine)
         } catch (e: Exception) {
+            metrics.operationFailed(AppMetrics.Operation.PDF)
             logger.warn("pdf error: postId={}, engine={}", post.id, engine, e)
             botProvider.getBot().sendMessage(
                 chatId = ChatId.fromId(chatId),

@@ -132,11 +132,14 @@ Authorization Code + PKCE** (не Login Widget). Внутри Telegram (Mini App
 - `SecurityHeadersFilter` — `X-Frame-Options: DENY`, `X-Content-Type-Options`,
   `Referrer-Policy`, CSP `frame-ancestors 'none'`, `img-src 'self'` (картинки только
   свои, обложки — через прокси)
-- Webhook: путь эндпоинта — сам токен бота, плюс сверка заголовка
-  `X-Telegram-Bot-Api-Secret-Token` с `telegram.webhook-secret`. Секретного пути
-  недостаточно, header-проверку не убирать. Секрет **обязателен** в режиме webhook
-  (`TelegramBotConfiguration` не даст стартовать без него), сравнение — через
-  `MessageDigest.isEqual`, а не `!=`. Повторные доставки отсекаются по `update_id`
+- Webhook: постоянный путь `/telegram/webhook`, подлинность — **только** сверка заголовка
+  `X-Telegram-Bot-Api-Secret-Token` с `telegram.webhook-secret`; header-проверку не убирать.
+  Без настроенного секрета эндпоинт отклоняет всё (polling тоже: путь публичный). Секрет
+  **обязателен** в режиме webhook (`TelegramBotConfiguration` не даст стартовать без него),
+  сравнение — через `MessageDigest.isEqual`, а не `!=`. Повторные доставки отсекаются по
+  `update_id`. Токен бота в путь не возвращать: путь уходит в метку `uri` метрик и в логи прокси
+- Метрики: значения меток — только фиксированные словари (`AppMetrics`). Ни URL, ни chat id,
+  ни токена; URL запроса к Bot API содержит токен — брать из него только имя метода
 - `UrlSecurityValidator` для IPv6 работает как **аллоулист** (только глобальный
   unicast `2000::/3`), а не блоклист: JDK-предикаты не знают про `fc00::/7`, и
   перечисление диапазонов раз за разом оказывалось неполным

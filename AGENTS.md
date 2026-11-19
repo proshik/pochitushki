@@ -32,9 +32,11 @@ telegram-login-broker); само приложение запускается н�
 | `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` | Telegram OAuth-приложение |
 | `APP_BASE_URL` | Базовый URL для redirect-uri OAuth-колбэка и адреса Mini App `${APP_BASE_URL}/tg` (`telegram.mini-app-url`). Его же прописать в BotFather как адрес главной Mini App. Кнопки «Открыть в приложении» и кнопка меню бота появляются только для https |
 | `JWT_SECRET` | Подпись JWT (≥32 байт base64). Дефолта нет — без переменной приложение падает на старте (осознанный fail-fast) |
-| `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`: `TelegramController` объявляет `@PostMapping("/\${telegram.token}")`, и плейсхолдер должен разрешиться на старте. Ключа `telegram.token` в `application.yml` нет — значение приходит relaxed binding'ом прямо в `TelegramProperties` |
+| `TELEGRAM_TOKEN` | Токен бота. Обязателен, пока `TELEGRAM_ENABLED` не выставлен в `false`. Ключа `telegram.token` в `application.yml` нет — значение приходит relaxed binding'ом прямо в `TelegramProperties` |
 | `TELEGRAM_ENABLED` | Опц. Запуск бота (polling/webhook). `false` — стартовать без бота, bot-токен не нужен (логин через Telegram работает независимо). По умолчанию `true` |
-| `TELEGRAM_WEBHOOK_SECRET` | Обязателен в режиме webhook (`telegram.webhook-url` задан) — без него приложение не стартует. Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token` через `MessageDigest.isEqual` |
+| `TELEGRAM_WEBHOOK_URL` | Опц. Включает webhook вместо polling. Ровно `https://<домен>/telegram/webhook` (`TelegramController.WEBHOOK_PATH`), иначе приложение не стартует |
+| `TELEGRAM_WEBHOOK_SECRET` | Обязателен в режиме webhook (`telegram.webhook-url` задан) — без него приложение не стартует. Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token` через `MessageDigest.isEqual`; без секрета эндпоинт отклоняет всё |
+| `TELEGRAM_WEBHOOK_CHECK_INTERVAL` | Опц. Период `getWebhookInfo` для метрик webhook, ISO-8601, дефолт `PT5M` |
 | `TELEGRAM_WIDGETS_ENABLED` | Опц. Карточка ленты HTML-виджетом (Bot API 10.4), по умолчанию `false`. Действует только в режиме webhook: в polling — предупреждение на старте и текстовая карточка; любой отказ `sendWidget` — тоже текстовая карточка |
 | `APP_LOG_LEVEL` | Опц. Уровень логов приложения, дефолт `INFO`. На `DEBUG` в лог уезжают URL ссылок и тела апдейтов |
 | `app.security.ssrf.allowed-hosts` | Опц. Список хостов, исключённых из SSRF-проверок `UrlSecurityValidator` (в тестах — `localhost`) |
@@ -59,7 +61,11 @@ claim `tma` включает режим Mini App (см. `.claude/rules/security.
 **Эксплуатация**: ровно одна реплика (бот + in-memory состояние), probes
 `/actuator/health/{liveness,readiness}`, метрики Prometheus — только по
 `MANAGEMENT_SERVER_PORT` + `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE`,
-`requestId` в логах и в `X-Request-Id`, страница ошибки — `templates/error.html`
+`requestId` в логах и в `X-Request-Id`, страница ошибки — `templates/error.html`.
+Продуктовые метрики (алерты строятся только по метрикам, не по логам) — `AppMetrics`
+(`pochitushki_telegram_errors_total`, `pochitushki_operation_errors_total`) и
+`WebhookHealthCheck` (`pochitushki_telegram_webhook_*`), список — в README, раздел «Эксплуатация».
+Метки — только фиксированные словари: ни URL, ни chat id, ни токена
 
 ### Key packages
 
@@ -79,6 +85,7 @@ ru.proshik.pochitushki/
 ├── service/telegram/card/  # Карточка поста: CardRef (формат callback_data),
 │                        #   PostCardService, CardPresenter, PostCardRenderer, PostPdfSender
 ├── service/telegram/api/   # TelegramBotApiClient (Feign) + TelegramBotApi (ошибки/логи)
+├── service/metrics/     # AppMetrics — продуктовые счётчики для алертов
 ├── configuration/       # TelegramBotConfiguration, BotProvider, JwtAuthInterceptor,
 │                        #   WebConfig, PdfConfiguration, MessageConfiguration,
 │                        #   SecurityHeadersFilter, CsrfOriginFilter, RequestIdFilter
@@ -150,9 +157,17 @@ ru.proshik.pochitushki/
 Экспорт/импорт (Pocket CSV) по HTTP **не выставлен** — доступен только через бота
 (`TelegramService` инжектит `ExportService`/`ImportService`).
 
-Webhook висит на `POST /${telegram.token}`, то есть путь эндпоинта — это сам токен
-бота. Поэтому `TelegramController` помечен `@ConditionalOnProperty(telegram.enabled=true)`:
-иначе при пустом токене маппинг схлопнулся бы в `POST /`.
+Webhook висит на постоянном `POST /telegram/webhook`, подлинность — только заголовок
+`X-Telegram-Bot-Api-Secret-Token`. Путь-токен убран намеренно: он попадал в метку `uri`
+метрики `http_server_requests` (то есть в Grafana Cloud), в логи прокси и в `getWebhookInfo`.
+Без настроенного секрета (polling) эндпоинт отвечает 403 на всё — иначе любой прислал бы
+апдейт от чужого chat id. `TelegramController` создаётся только при `telegram.enabled=true`.
+
+Остановка контейнера ничего не шлёт в Telegram (Krill катит `start-first`: новый уже поставил
+webhook). Бин `Bot` объявлен с `destroyMethod = ""` — иначе Spring сам позвал бы его публичный
+`close()`, а это метод Bot API `close`. `stopWebhook()` не звать: он шлёт `deleteWebhook`;
+`stopPolling()` в 10.0.0 падает с `NoSuchMethodError` на нашей версии coroutines. Регрессия —
+`TelegramWebhookModeTest`.
 
 ### Frontend и CSP (важно при правке шаблонов)
 

@@ -108,7 +108,8 @@ HTML-виджеты из Bot API 10.4 — сообщение со своей в�
 | `JWT_SECRET` | да | Ключ подписи JWT: base64, минимум 32 байта. Дефолта нет — без него приложение не стартует |
 | `TELEGRAM_TOKEN` | да, если бот включён | Токен бота. При `TELEGRAM_ENABLED=false` не нужен |
 | `TELEGRAM_ENABLED` | нет | Запускать ли бота (polling/webhook). По умолчанию `true`. Вход в веб через Telegram работает независимо от этого флага |
-| `TELEGRAM_WEBHOOK_SECRET` | да, в режиме webhook | Сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token`. Без него приложение не стартует в режиме webhook: путь эндпоинта — это сам токен бота, а токен утекает в логи прокси |
+| `TELEGRAM_WEBHOOK_URL` | нет | Включает режим webhook вместо polling. Ровно `https://<домен>/telegram/webhook` — с другим путём приложение не стартует. Токена в адресе нет |
+| `TELEGRAM_WEBHOOK_SECRET` | да, в режиме webhook | Случайная строка (`A-Z`, `a-z`, `0-9`, `_`, `-`, до 256 символов), сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token`. Это единственная проверка webhook-эндпоинта: без секрета приложение не стартует в режиме webhook, а в polling эндпоинт отклоняет всё |
 | `TELEGRAM_WIDGETS_ENABLED` | нет | Карточка ленты HTML-виджетом, по умолчанию `false`. Действует только в режиме webhook; в polling и при отказе Telegram — текстовая карточка |
 | `APP_LOG_LEVEL` | нет | Уровень логов приложения, по умолчанию `INFO`. На `DEBUG` в лог попадают URL сохранённых ссылок и тела апдейтов Telegram |
 | `TELEGRAM_OAUTH_BASE_URL` | нет | База OIDC-провайдера, по умолчанию `https://oauth.telegram.org`. Меняется на брокер входа для локальной разработки |
@@ -241,6 +242,21 @@ readiness включает базу, и падение Postgres иначе пр�
 ```
 
 Порт 8081 наружу не публиковать — только для сборщика метрик.
+
+Помимо JVM/HTTP/Hikari сервис отдаёт свои метрики — по ним строятся алерты:
+
+| Метрика | Тип | Смысл |
+|---|---|---|
+| `pochitushki_telegram_webhook_mode` | gauge | 1 — режим webhook, 0 — polling |
+| `pochitushki_telegram_webhook_ours` | gauge | 1 — Telegram доставляет апдейты туда, куда ждёт этот экземпляр (в webhook — на его URL, в polling — webhook не задан). `NaN` до первой проверки |
+| `pochitushki_telegram_webhook_pending_updates` | gauge | Апдейты, которые Telegram ещё не доставил |
+| `pochitushki_telegram_webhook_last_error_timestamp_seconds` | gauge | Unix-время последней неудачной доставки webhook, 0 — не было |
+| `pochitushki_telegram_webhook_check_failures_total` | counter | Проверки `getWebhookInfo` без ответа Telegram |
+| `pochitushki_telegram_errors_total{method,code}` | counter | Неудачные вызовы Bot API: `code` — HTTP-статус Telegram, `io` (нет ответа) или `decode` (ответ не разобран). `403` — обычно пользователь заблокировал бота |
+| `pochitushki_operation_errors_total{operation,reason}` | counter | Пользовательская операция сломалась на нашей стороне: `save_post`, `bot_command`, `card_action`, `pdf`, `import`, `export`; `reason` — `error` или `busy` (пул фоновых задач полон) |
+
+Проверка webhook — `getWebhookInfo` раз в 5 минут (`TELEGRAM_WEBHOOK_CHECK_INTERVAL`, ISO-8601,
+например `PT5M`). Токен бота не попадает ни в метки, ни в логи.
 
 **Логи.** Уровень по умолчанию `INFO`; в каждой строке есть `requestId`, он же
 приходит и уходит в заголовке `X-Request-Id`. На `DEBUG` в лог попадают URL

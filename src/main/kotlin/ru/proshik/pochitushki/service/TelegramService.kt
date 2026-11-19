@@ -19,6 +19,7 @@ import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserSettingsData
 import ru.proshik.pochitushki.model.UserStoreData
 import ru.proshik.pochitushki.service.telegram.BotTaskExecutor
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
 import ru.proshik.pochitushki.service.telegram.card.PostCardService
 
@@ -35,6 +36,7 @@ class TelegramService(
     private val postCardService: PostCardService,
     private val botTaskExecutor: BotTaskExecutor,
     private val rateLimitService: RateLimitService,
+    private val metrics: AppMetrics,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -174,6 +176,7 @@ class TelegramService(
 
             val saved = postService.getPost(storedPostId, user.id, PostType.UNREAD) ?: run {
                 logger.warn("addPost: just saved post {} not found", storedPostId)
+                metrics.operationFailed(AppMetrics.Operation.SAVE_POST)
                 return
             }
             postCardService.sendSaved(chatId, saved, alreadySaved = false, replyTo = messageId)
@@ -241,6 +244,7 @@ class TelegramService(
                 importService.importZipArchive(userId, file)
                 sendMessage(chatId, i18nService.getMessage("command.import.success", languageCode))
             } catch (ex: Exception) {
+                metrics.operationFailed(AppMetrics.Operation.IMPORT)
                 logger.warn("import file error: userId={}", userId, ex)
                 sendMessage(chatId, i18nService.getMessage("command.import.error", languageCode))
             } finally {
@@ -248,6 +252,7 @@ class TelegramService(
             }
         }
         if (!accepted) {
+            metrics.operationFailed(AppMetrics.Operation.IMPORT, AppMetrics.Reason.BUSY)
             FileUtils.delete(file)
             sendMessage(chatId, i18nService.getMessage("command.busy", languageCode))
         }
@@ -277,7 +282,16 @@ class TelegramService(
 
         // Export reads every post the user owns and zips it — same reason as import.
         val accepted = botTaskExecutor.submit("export userId=$userId") {
-            val file = exportService.export(userId)
+            // Inside a catch like the send below: otherwise a failed export reached only
+            // BotTaskExecutor's log, and the user waited for a file that never came.
+            val file = try {
+                exportService.export(userId)
+            } catch (e: Exception) {
+                metrics.operationFailed(AppMetrics.Operation.EXPORT)
+                logger.warn("export error: chatId={}", chatId, e)
+                sendMessage(chatId, i18nService.getMessage("command.export.error", languageCode))
+                return@submit
+            }
             if (file == null) {
                 sendMessage(chatId, i18nService.getMessage("command.export.nothing_to_export", languageCode))
                 return@submit
@@ -291,6 +305,7 @@ class TelegramService(
                 )
                 logger.info("export success: chatId={}", chatId)
             } catch (e: Exception) {
+                metrics.operationFailed(AppMetrics.Operation.EXPORT)
                 logger.warn("export send error: chatId={}", chatId, e)
                 sendMessage(chatId, i18nService.getMessage("command.export.error", languageCode))
             } finally {
@@ -298,6 +313,7 @@ class TelegramService(
             }
         }
         if (!accepted) {
+            metrics.operationFailed(AppMetrics.Operation.EXPORT, AppMetrics.Reason.BUSY)
             sendMessage(chatId, i18nService.getMessage("command.busy", languageCode))
         }
     }

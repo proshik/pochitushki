@@ -28,6 +28,7 @@ import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.RateLimitService
 import ru.proshik.pochitushki.service.SsrfValidationException
 import ru.proshik.pochitushki.service.UrlSecurityValidator
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 
 @Controller
 @RequestMapping("/api/v1/posts")
@@ -37,6 +38,7 @@ class PostApiController(
     private val coverService: CoverService,
     private val ogImageProxyService: OgImageProxyService,
     private val rateLimitService: RateLimitService,
+    private val metrics: AppMetrics,
 ) {
 
     @GetMapping("/fragment")
@@ -135,13 +137,21 @@ class PostApiController(
         } catch (e: MalformedURLException) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid URL")
         }
-        val (postId, _) = try {
-            postService.addPost(parsedUrl, userId)
-        } catch (e: SsrfValidationException) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "URL not allowed")
+        val post = try {
+            val (postId, _) = try {
+                postService.addPost(parsedUrl, userId)
+            } catch (e: SsrfValidationException) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "URL not allowed")
+            }
+            postService.getPost(postId, userId, PostType.UNREAD)
+                ?: throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Post not found after insert")
+        } catch (e: Exception) {
+            // The same failure as in the bot: the user's link is not saved. A refused URL is not one.
+            if (e !is ResponseStatusException || e.statusCode.is5xxServerError) {
+                metrics.operationFailed(AppMetrics.Operation.SAVE_POST)
+            }
+            throw e
         }
-        val post = postService.getPost(postId, userId, PostType.UNREAD)
-            ?: throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Post not found after insert")
         model.addAttribute("cv", coverService.decorate(post, showOgCovers))
         model.addAttribute("type", PostType.UNREAD.value)
         // The submitting page reports its current mode so the returned card matches it.

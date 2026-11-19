@@ -27,9 +27,8 @@ import ru.proshik.pochitushki.service.telegram.widget.WidgetQueryHandler
  */
 @RestController
 @EnableConfigurationProperties(value = [TelegramProperties::class])
-// Webhook-эндпоинт нужен только когда бот включён. При enabled=false бин не создаётся,
-// поэтому маппинг "/${telegram.token}" не регистрируется (и не схлопывается в "POST /"),
-// а обращение к botProvider.getBot() отсюда исключено.
+// Webhook-эндпоинт нужен только когда бот включён: при enabled=false бин не создаётся, и
+// обращение к botProvider.getBot() отсюда исключено.
 @ConditionalOnProperty(prefix = "telegram", name = ["enabled"], havingValue = "true")
 class TelegramController(
     private val botProvider: BotProvider,
@@ -55,22 +54,21 @@ class TelegramController(
     /**
      * Process webhook updates from Telegram.
      */
-    @PostMapping("/\${telegram.token}")
+    @PostMapping(WEBHOOK_PATH)
     suspend fun processUpdate(
         @RequestBody data: String,
         @RequestHeader(value = SECRET_TOKEN_HEADER, required = false) secretToken: String?,
     ) {
         // Authenticate the caller: only Telegram, which echoes the configured secret back in
-        // this header, may post updates. The secret URL path is not sufficient — it is the bot
-        // token, and tokens end up in proxy logs. The comparison is constant-time so the header
-        // cannot be guessed byte by byte from response timings.
+        // this header, may post updates. The path is public and fixed — the header is the only
+        // check, so without a configured secret (polling) every call is refused: otherwise anyone
+        // could post an update in another user's name. The comparison is constant-time so the
+        // header cannot be guessed byte by byte from response timings.
         val expected = telegramProperties.webhookSecret
-        if (!expected.isNullOrBlank()) {
-            val provided = secretToken.orEmpty()
-            if (!MessageDigest.isEqual(provided.toByteArray(), expected.toByteArray())) {
-                logger.warn("Rejected webhook call with missing/invalid secret token")
-                throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid webhook secret")
-            }
+        val provided = secretToken.orEmpty()
+        if (expected.isNullOrBlank() || !MessageDigest.isEqual(provided.toByteArray(), expected.toByteArray())) {
+            logger.warn("Rejected webhook call with missing/invalid secret token")
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid webhook secret")
         }
 
         val update = parse(data)
@@ -104,6 +102,11 @@ class TelegramController(
     }
 
     companion object {
+        /**
+         * A fixed path, not the bot token: a token in the path ends up in the `uri` label of
+         * `http_server_requests`, in proxy access logs and in `getWebhookInfo`.
+         */
+        const val WEBHOOK_PATH = "/telegram/webhook"
         const val SECRET_TOKEN_HEADER = "X-Telegram-Bot-Api-Secret-Token"
     }
 }

@@ -60,6 +60,9 @@ dependencies {
     // library declares retrofit as `implementation` (runtime-only). Pin it to the version the
     // bot resolves transitively (see runtimeClasspath) so nothing changes at runtime.
     implementation("com.squareup.retrofit2:retrofit:2.12.0")
+    // The bot's OkHttp client takes our interceptor (TelegramErrorInterceptor) — same pinning
+    // reason as retrofit: compile against exactly what the bot resolves at runtime.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     implementation("org.apache.commons:commons-csv:1.14.1")
 

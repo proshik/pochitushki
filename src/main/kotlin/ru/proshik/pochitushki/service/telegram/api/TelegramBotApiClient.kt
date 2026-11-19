@@ -3,6 +3,7 @@ package ru.proshik.pochitushki.service.telegram.api
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.cloud.openfeign.FeignClient
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import tools.jackson.databind.JsonNode
@@ -35,6 +36,10 @@ interface TelegramBotApiClient {
      */
     @PostMapping("/setWebhook", consumes = ["application/json"])
     fun setWebhook(@RequestBody request: SetWebhookRequest): TgResponse<JsonNode>
+
+    /** Polled by WebhookHealthCheck for the webhook metrics. */
+    @GetMapping("/getWebhookInfo")
+    fun getWebhookInfo(): TgResponse<WebhookInfo>
 
     // HTML widgets, Bot API 10.4 — not in the library at all.
 
@@ -112,4 +117,17 @@ data class SetWebhookRequest(
     val url: String,
     @JsonProperty("allowed_updates") val allowedUpdates: List<String>,
     @JsonProperty("secret_token") val secretToken: String?,
+)
+
+/**
+ * The fields of `getWebhookInfo` the health check reads. `url` carries the bot's webhook address:
+ * compare it, never log or label it.
+ */
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+data class WebhookInfo(
+    val url: String = "",
+    @JsonProperty("pending_update_count") val pendingUpdateCount: Long = 0,
+    /** Unix time of the latest failed delivery; absent when there has been none. */
+    @JsonProperty("last_error_date") val lastErrorDate: Long? = null,
+    @JsonProperty("last_error_message") val lastErrorMessage: String? = null,
 )

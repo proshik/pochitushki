@@ -22,7 +22,8 @@ data class TelegramProperties(
      */
     val baseUrl: String = "",
     /**
-     * Установка url до сервиса для режима webhook, одновременно и включает его. В url содержится ещё и token
+     * Адрес webhook, одновременно включает этот режим: `https://<домен>/telegram/webhook`
+     * (TelegramController.WEBHOOK_PATH). Токена в нём нет.
      */
     val webhookUrl: String? = null,
     /**
@@ -31,7 +32,8 @@ data class TelegramProperties(
     val apiUrl: String = "https://api.telegram.org/",
     /**
      * Секрет, который Telegram присылает в заголовке X-Telegram-Bot-Api-Secret-Token при вызове webhook.
-     * Если задан — webhook-запросы без совпадающего заголовка отклоняются. Пусто => проверка выключена.
+     * Единственная проверка эндпоинта: запросы без совпадающего заголовка отклоняются, а при пустом
+     * секрете — все. В режиме webhook обязателен (иначе приложение не стартует).
      */
     val webhookSecret: String? = null,
     /**

@@ -14,6 +14,7 @@ import ru.proshik.pochitushki.service.I18nService
 import ru.proshik.pochitushki.service.TelegramService
 import ru.proshik.pochitushki.service.TelegramService.Companion.LANGUAGE_EN_CODE
 import ru.proshik.pochitushki.service.TelegramService.Companion.supportedLanguages
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 import ru.proshik.pochitushki.service.telegram.card.CardList
 import ru.proshik.pochitushki.service.telegram.card.PostCardService
 
@@ -28,6 +29,7 @@ class CommandHandler(
     private val telegramService: TelegramService,
     private val postCardService: PostCardService,
     private val telegramKeyboard: TelegramKeyboard,
+    private val metrics: AppMetrics,
 ) : TelegramUpdateHandler {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -53,21 +55,34 @@ class CommandHandler(
     }
 
     override fun registerHandlers(dispatcher: Dispatcher) {
-        dispatcher.text { handleCommonText(message) }
+        dispatcher.text { guarded("text") { handleCommonText(message) } }
 
         // Register command handlers
-        dispatcher.command(COMMAND_START) { handleStartCommand(update) }
-        dispatcher.command(COMMAND_HELP) { handleHelpCommand(update) }
+        dispatcher.command(COMMAND_START) { guarded(COMMAND_START) { handleStartCommand(update) } }
+        dispatcher.command(COMMAND_HELP) { guarded(COMMAND_HELP) { handleHelpCommand(update) } }
 
-        dispatcher.command(COMMAND_FEED) { handleFeedOperation(message) }
-        dispatcher.command(COMMAND_RANDOM_POST) { handleRandomPostOperation(message) }
-        dispatcher.command(COMMAND_ARCHIVE) { handleArchivePostOperation(message) }
-        dispatcher.command(COMMAND_PROFILE) { handleProfileOperations(message) }
-        dispatcher.command(COMMAND_FAVORITES) { handleFavoritesOperation(message) }
+        dispatcher.command(COMMAND_FEED) { guarded(COMMAND_FEED) { handleFeedOperation(message) } }
+        dispatcher.command(COMMAND_RANDOM_POST) { guarded(COMMAND_RANDOM_POST) { handleRandomPostOperation(message) } }
+        dispatcher.command(COMMAND_ARCHIVE) { guarded(COMMAND_ARCHIVE) { handleArchivePostOperation(message) } }
+        dispatcher.command(COMMAND_PROFILE) { guarded(COMMAND_PROFILE) { handleProfileOperations(message) } }
+        dispatcher.command(COMMAND_FAVORITES) { guarded(COMMAND_FAVORITES) { handleFavoritesOperation(message) } }
 
-        dispatcher.message { handleFileUpload(message) }
+        dispatcher.message { guarded("message") { handleFileUpload(message) } }
 
         dispatcher.telegramError { handleError(error) }
+    }
+
+    /**
+     * The library catches what a handler throws and only prints it to stderr — past the log
+     * and past every metric. Counted and logged here; the user's answer is unchanged.
+     */
+    private inline fun guarded(handler: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            metrics.operationFailed(AppMetrics.Operation.BOT_COMMAND)
+            logger.warn("bot handler failed: handler={}", handler, e)
+        }
     }
 
     private fun handleError(error: TelegramError) {
@@ -174,6 +189,7 @@ class CommandHandler(
             try {
                 telegramService.addPost(message.chat.id, message.messageId, message.text!!)
             } catch (ex: Exception) {
+                metrics.operationFailed(AppMetrics.Operation.SAVE_POST)
                 logger.warn("error adding post message=${message.chat.id}", ex)
                 telegramService.showErrorMessage(message.chat.id)
             }

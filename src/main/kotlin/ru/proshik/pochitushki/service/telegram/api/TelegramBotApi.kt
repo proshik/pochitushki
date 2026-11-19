@@ -3,6 +3,7 @@ package ru.proshik.pochitushki.service.telegram.api
 import feign.FeignException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import ru.proshik.pochitushki.service.metrics.AppMetrics
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 
@@ -12,10 +13,11 @@ import tools.jackson.databind.json.JsonMapper
  *
  * Logging is deliberately narrow. A FeignException's message carries the request URL, and
  * the URL carries the bot token (`…/bot<token>/sendMessage`), so only the HTTP status and
- * Telegram's own `description` go to the log, never the exception.
+ * Telegram's own `description` go to the log, never the exception. Every failure is also
+ * counted in [AppMetrics.TELEGRAM_ERRORS], with the same status as its `code`.
  */
 @Service
-class TelegramBotApi(private val client: TelegramBotApiClient) {
+class TelegramBotApi(private val client: TelegramBotApiClient, private val metrics: AppMetrics) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
     private val mapper = JsonMapper.builder().build()
@@ -53,6 +55,12 @@ class TelegramBotApi(private val client: TelegramBotApiClient) {
             client.setWebhook(SetWebhookRequest(url, allowedUpdates, secretToken)).ok
         } ?: false
 
+    /** @return null when Telegram refused or could not be reached. */
+    fun getWebhookInfo(): WebhookInfo? =
+        call("getWebhookInfo", onNotModified = null) {
+            client.getWebhookInfo().takeIf { it.ok }?.result
+        }
+
     /** @return the widget message's id, or null on any refusal — the caller falls back to text. */
     fun sendWidget(chatId: Long, html: String, chatData: String, keyboard: InlineKeyboard?, replyTo: Long? = null): Long? =
         call("sendWidget", onNotModified = null) {
@@ -89,12 +97,21 @@ class TelegramBotApi(private val client: TelegramBotApiClient) {
             onNotModified
         } else {
             logger.warn("telegram {} failed: status={}, description={}", method, e.status(), description)
+            metrics.telegramError(method, codeOf(e))
             null
         }
     } catch (e: Exception) {
         // Connection errors carry the URL (and so the token) in their message as well.
         logger.warn("telegram {} failed: {}", method, e.javaClass.simpleName)
+        metrics.telegramError(method, AppMetrics.CODE_IO)
         null
+    }
+
+    /** Telegram's status; a 2xx here means the answer could not be read. */
+    private fun codeOf(e: FeignException): String = when {
+        e.status() <= 0 -> AppMetrics.CODE_IO // no response at all: connect/read timeout
+        e.status() in 200..299 -> AppMetrics.CODE_DECODE
+        else -> e.status().toString()
     }
 
     private fun description(e: FeignException): String? = try {

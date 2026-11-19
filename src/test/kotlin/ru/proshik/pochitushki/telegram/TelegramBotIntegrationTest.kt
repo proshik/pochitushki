@@ -921,8 +921,11 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     }
 
     private fun postUpdate(json: String) {
-        val headers = HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }
-        restTemplate.postForEntity("/test_token", HttpEntity(json, headers), String::class.java)
+        val headers = HttpHeaders().apply {
+            contentType = MediaType.APPLICATION_JSON
+            set("X-Telegram-Bot-Api-Secret-Token", "test-secret")
+        }
+        restTemplate.postForEntity("/telegram/webhook", HttpEntity(json, headers), String::class.java)
     }
 
     private fun awaitSendMessage() {
