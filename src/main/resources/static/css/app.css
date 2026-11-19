@@ -51,7 +51,7 @@ body {
   color: var(--ink);
   font-family: 'Onest', system-ui, -apple-system, sans-serif;
   line-height: 1.55;
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
 }
 a { color: inherit; }
 .mono { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }
@@ -69,7 +69,7 @@ a { color: inherit; }
 
 /* ── Top bar ── */
 .top-bar {
-  display: flex; align-items: center; gap: 22px;
+  display: flex; align-items: center; gap: 24px;
   padding: 14px 32px;
   border-bottom: 1px solid var(--hair);
   position: sticky; top: 0; z-index: 20;
@@ -78,11 +78,11 @@ a { color: inherit; }
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
-.logo { font-weight: 800; font-size: 17px; letter-spacing: 0.01em; text-decoration: none; }
-.nav-links { display: flex; gap: 18px; font-size: 13.5px; }
-.nav-links a { color: var(--muted); text-decoration: none; padding-bottom: 3px; }
+.logo { font-weight: 600; font-size: 17px; letter-spacing: 0.01em; text-decoration: none; }
+.nav-links { display: flex; gap: 16px; font-size: 13.5px; }
+.nav-links a { color: var(--muted); text-decoration: none; padding-bottom: 4px; }
 .nav-links a:hover { color: var(--ink); }
-.nav-links a.on { color: var(--ink); font-weight: 650; box-shadow: inset 0 -2px 0 var(--ink); }
+.nav-links a.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
 
 .add-form {
   margin-left: auto;
@@ -99,7 +99,7 @@ a { color: inherit; }
 .add-form input::placeholder { color: var(--muted); }
 .add-form button[type="submit"] {
   background: var(--btn); color: var(--btn-ink); border-radius: 999px;
-  font-size: 12.5px; font-weight: 650; padding: 7px 14px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; padding: 8px 14px; white-space: nowrap;
 }
 .add-error {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px;
@@ -108,8 +108,8 @@ a { color: inherit; }
 }
 
 /* Страница ошибки (templates/error.html) — вместо Whitelabel Error Page. */
-.error-page { text-align: center; padding-block: 80px; }
-.error-code { font-size: 64px; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.02em; }
+.error-page { text-align: center; padding-block: 64px; }
+.error-code { font-size: 64px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.02em; }
 .error-text { margin: 0 0 24px; color: var(--muted); }
 
 /* Undo toast — inverted ink so it reads as chrome, not as another card. */
@@ -119,10 +119,10 @@ a { color: inherit; }
   background: var(--btn); color: var(--btn-ink); border-radius: 9px;
   padding: 10px 12px 10px 16px; font-size: 13px;
   box-shadow: var(--shadow-s); z-index: 40;
-  animation: fadeIn 0.18s ease;
+  animation: fadeIn 0.18s ease-out;
 }
 .toast-action {
-  color: inherit; font-size: 13px; font-weight: 700;
+  color: inherit; font-size: 13px; font-weight: 600;
   padding: 4px 10px; border-radius: 999px;
   border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
 }
@@ -132,7 +132,7 @@ a { color: inherit; }
 .icon-btn {
   width: 36px; height: 36px; border-radius: 999px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: var(--muted); transition: background 0.12s, color 0.12s;
+  color: var(--muted); transition: background-color 150ms ease-out, color 150ms ease-out;
 }
 .icon-btn:hover { background: var(--surface); color: var(--ink); }
 .icon-btn svg { width: 18px; height: 18px; }
@@ -143,25 +143,24 @@ html:not(.dark) .icon-moon { display: none; }
   width: 32px; height: 32px; border-radius: 999px; flex-shrink: 0;
   background: var(--surface); border: 1px solid var(--hair);
   display: flex; align-items: center; justify-content: center;
-  font-size: 12.5px; font-weight: 700; text-decoration: none;
+  font-size: 12.5px; font-weight: 600; text-decoration: none;
 }
 .login-link {
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-block;
   background: var(--btn); color: var(--btn-ink); border-radius: 999px;
-  padding: 8px 16px; font-size: 13px; font-weight: 650; text-decoration: none;
+  padding: 8px 16px; font-size: 13px; font-weight: 600; text-decoration: none;
   white-space: nowrap;
 }
-.tg-dot { width: 14px; height: 14px; border-radius: 999px; background: #2AABEE; flex-shrink: 0; }
 
 /* ── Page body ── */
-.page-main { max-width: 1120px; margin: 0 auto; padding: 30px 32px 60px; }
+.page-main { max-width: 1120px; margin: 0 auto; padding: 32px 32px 64px; }
 .eyebrow {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11px; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--muted);
 }
-.page-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
-.page-head h1 { flex: 1; display: flex; align-items: center; gap: 18px; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.page-head h1 { flex: 1; display: flex; align-items: center; gap: 16px; }
 .page-head h1::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
 .view-toggle { display: flex; gap: 4px; }
 .view-btn {
@@ -175,7 +174,7 @@ html:not(.dark) .icon-moon { display: none; }
 
 /* Labels read a shade stronger than the surrounding meta, and are links into the
    filtered view. */
-.label-tag { color: var(--ink); font-weight: 600; margin-left: 7px; text-decoration: none; }
+.label-tag { color: var(--ink); font-weight: 600; margin-left: 8px; text-decoration: none; }
 .label-tag:hover { text-decoration: underline; }
 
 /* ── Label picker on a card ──
@@ -205,7 +204,7 @@ html:not(.dark) .icon-moon { display: none; }
   color: var(--muted); text-align: left; width: 100%;
 }
 .label-opt:hover { background: var(--surface); color: var(--ink); }
-.label-opt.on { color: var(--ink); font-weight: 650; }
+.label-opt.on { color: var(--ink); font-weight: 600; }
 .label-opt-box {
   width: 13px; height: 13px; flex-shrink: 0;
   border: 1.5px solid var(--muted); border-radius: 4px;
@@ -224,19 +223,19 @@ html:not(.dark) .icon-moon { display: none; }
 .settings-link {
   display: block; text-decoration: none; max-width: 640px; margin-top: 20px;
   background: var(--surface); border: 1px solid var(--hair); border-radius: 12px;
-  padding: 14px 18px;
+  padding: 16px 20px;
 }
 .settings-link:hover { border-color: var(--muted); }
 .labels-box {
   background: var(--surface); border: 1px solid var(--hair); border-radius: 12px;
-  padding: 6px 18px 14px;
+  padding: 6px 20px 14px;
 }
 .labels-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 0; border-bottom: 1px solid var(--hair);
 }
 .labels-row:last-of-type { border-bottom: none; }
-.labels-name { flex: 1; text-decoration: none; font-weight: 650; min-width: 0; }
+.labels-name { flex: 1; text-decoration: none; font-weight: 600; min-width: 0; }
 .labels-name:hover { text-decoration: underline; }
 .labels-count {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -245,7 +244,7 @@ html:not(.dark) .icon-moon { display: none; }
 .labels-rename { flex: 1; }
 .labels-rename input {
   width: 100%; background: var(--bg); color: var(--ink);
-  border: 1px solid var(--hair); border-radius: 7px; padding: 5px 10px; font-size: 13.5px;
+  border: 1px solid var(--hair); border-radius: 7px; padding: 6px 10px; font-size: 13.5px;
 }
 /* Its own line: the row is a flex strip and the input eats every spare pixel,
    so an inline message would be squeezed to nothing. */
@@ -260,17 +259,17 @@ html:not(.dark) .icon-moon { display: none; }
 }
 .labels-add input {
   flex: 1; background: var(--bg); color: var(--ink);
-  border: 1px solid var(--hair); border-radius: 999px; padding: 7px 14px;
+  border: 1px solid var(--hair); border-radius: 999px; padding: 8px 14px;
   font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; outline: none;
 }
 .labels-add button[type="submit"] {
   background: var(--btn); color: var(--btn-ink); border-radius: 999px;
-  font-size: 12.5px; font-weight: 650; padding: 7px 16px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; padding: 8px 16px; white-space: nowrap;
 }
 /* /labels pager: ‹ 1 2 … 9 › */
 .pager {
   display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px;
-  margin-top: 18px;
+  margin-top: 16px;
   font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px;
 }
 .pager-num, .pager-step {
@@ -279,7 +278,7 @@ html:not(.dark) .icon-moon { display: none; }
   color: var(--muted); text-decoration: none; border: 1px solid transparent;
 }
 a.pager-num:hover, a.pager-step:hover { color: var(--ink); border-color: var(--hair); }
-.pager-num.on { background: var(--btn); color: var(--btn-ink); font-weight: 650; }
+.pager-num.on { background: var(--btn); color: var(--btn-ink); font-weight: 600; }
 .pager-step.off { opacity: 0.35; }
 .pager-gap { color: var(--muted); padding: 0 2px; }
 .crumb { color: var(--muted); text-decoration: none; }
@@ -287,9 +286,8 @@ a.pager-num:hover, a.pager-step:hover { color: var(--ink); border-color: var(--h
 
 /* Page-head cluster for pages that carry an action next to the view toggle (/random). */
 .page-head-tools { display: flex; align-items: center; gap: 10px; }
-.reshuffle-btn { padding: 7px 14px; font-size: 12.5px; border-color: var(--hair); }
-.reshuffle-btn svg { width: 15px; height: 15px; transition: transform 0.3s ease; }
-.reshuffle-btn:hover svg { transform: rotate(90deg); }
+.reshuffle-btn { padding: 6px 14px; font-size: 12.5px; border-color: var(--hair); }
+.reshuffle-btn svg { width: 15px; height: 15px; }
 
 /* ── Covers ──
    The book feel is two background-image layers over the palette colour:
@@ -307,13 +305,13 @@ a.pager-num:hover, a.pager-step:hover { color: var(--ink); border-color: var(--h
       rgba(255, 255, 255, 0.16) 6.5px, rgba(255, 255, 255, 0.05) 9px,
       transparent 13px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.10), transparent 32%);
-  transition: transform 0.16s, box-shadow 0.16s;
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
   text-decoration: none;
 }
-a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--shadow); }
+a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
 .cover-dom {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
   line-height: 1.35;
   /* one line, ellipsised — never wrap; keep clear of the favourite badge */
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -340,14 +338,14 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 
 /* Composition: mono — a big abbreviation. */
 .co-mono .cover-big {
-  font-weight: 800; letter-spacing: -0.02em; line-height: 0.98;
+  font-weight: 600; letter-spacing: -0.02em; line-height: 0.98;
   font-size: 2.3rem; margin: auto 0; overflow-wrap: anywhere;
 }
 /* Composition: band — an inverted stripe carries the title. */
 .co-band .cover-band {
-  margin: auto -14px; padding: 9px 14px;
+  margin: auto -14px; padding: 8px 14px;
   background: var(--cv-fg); color: var(--cv-bg);
-  font-weight: 800; font-size: 0.95rem; line-height: 1.25; letter-spacing: -0.01em;
+  font-weight: 600; font-size: 0.95rem; line-height: 1.25; letter-spacing: -0.01em;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 /* Composition: frame — thin inner border, centred title. */
@@ -357,16 +355,16 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 }
 .co-frame .cover-mid {
   margin: auto 0; text-align: center; padding: 0 6px;
-  font-weight: 700; font-size: 0.9rem; line-height: 1.35;
+  font-weight: 600; font-size: 0.9rem; line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
 }
 /* Composition: og — the page's own image inside a domain-coloured jacket. */
 .co-og { padding: 0; justify-content: space-between; }
-.co-og .cover-dom { padding: 9px 34px 8px 16px; }
+.co-og .cover-dom { padding: 8px 32px 8px 16px; }
 .co-og .cover-img { flex: 1; width: 100%; object-fit: cover; min-height: 0; }
-.co-og .cover-strip { padding: 7px 12px 9px; }
+.co-og .cover-strip { padding: 8px 12px; }
 .co-og .cover-strip .cover-t {
-  font-size: 0.72rem; font-weight: 650; line-height: 1.3;
+  font-size: 0.72rem; font-weight: 600; line-height: 1.3;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 /* Broken og image: hide it, the jacket degrades to a typographic cover. */
@@ -382,7 +380,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 
 /* ── Shelf (grid of covers) ── */
 #post-list.shelf {
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 28px 22px;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px 24px;
 }
 #post-list.shelf > div:not(.post-card),
 #post-list.shelf > div:not(.post-card) > div:not(.load-more-sentinel) { display: contents; }
@@ -394,7 +392,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   animation-delay: calc(var(--card-index, 0) * 40ms);
 }
 .cell-title {
-  margin-top: 11px; font-size: 13.5px; font-weight: 650; line-height: 1.35;
+  margin-top: 12px; font-size: 13.5px; font-weight: 600; line-height: 1.35;
   color: var(--ink); text-decoration: none;
   /* A post without a title shows its URL: one long unbreakable word. Wrap it inside the
      box instead of cutting it mid-word at the edge (here, .row-title and .hero-title). */
@@ -414,7 +412,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   position: relative; display: flex; align-items: center; gap: 2px; margin-top: 4px;
   min-height: 28px;
 }
-.shelf .card-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+.shelf .card-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 150ms ease-out; }
 .shelf .post-card:hover .card-actions,
 .shelf .post-card:focus-within .card-actions { opacity: 1; }
 @media (hover: none) { .shelf .card-actions { opacity: 1; } }
@@ -427,13 +425,13 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 
 .list-rows .post-card {
   display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 16px;
-  align-items: center; padding: 13px 14px;
+  align-items: center; padding: 12px 14px;
   margin: 0 -14px;
   border-radius: 10px;
   border-bottom: 1px solid var(--hair);
   animation: fadeIn 0.3s ease-out both;
   animation-delay: calc(var(--card-index, 0) * 40ms);
-  transition: background 0.12s;
+  transition: background-color 150ms ease-out;
 }
 .list-rows .post-card:hover { background: var(--surface); }
 .mini-cover {
@@ -444,12 +442,12 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
     rgba(255, 255, 255, 0.16) 4.5px, transparent 7px);
   border: 1px solid var(--cover-edge); box-shadow: var(--shadow-s);
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 800; overflow: hidden; text-align: center;
+  font-size: 11px; font-weight: 600; overflow: hidden; text-align: center;
   padding-left: 5px;
   flex-shrink: 0;
 }
 .row-title {
-  font-size: 16px; font-weight: 650; line-height: 1.35; color: var(--ink);
+  font-size: 16px; font-weight: 600; line-height: 1.35; color: var(--ink);
   text-decoration: none; display: block; overflow-wrap: anywhere;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -468,7 +466,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
    side, as before. */
 .row-side { position: relative; display: grid; align-items: center; justify-items: end; }
 .row-side > .status-chip, .row-side > .card-actions { grid-area: 1 / 1; }
-.row-side > .status-chip { transition: opacity 0.15s; }
+.row-side > .status-chip { transition: opacity 150ms ease-out; }
 .list-rows .post-card:hover .row-side > .status-chip,
 .list-rows .post-card:focus-within .row-side > .status-chip,
 .list-rows .post-card.confirming .row-side > .status-chip,
@@ -482,12 +480,12 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 .row-side .delete-confirm { left: auto; min-width: 100%; }
 .status-chip {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase;
-  border: 1px solid var(--hair); border-radius: 999px; padding: 5px 10px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  border: 1px solid var(--hair); border-radius: 999px; padding: 6px 10px;
   color: var(--muted); white-space: nowrap;
 }
 .status-chip.on-shelf { color: var(--ink); border-color: var(--muted); }
-.list-rows .card-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+.list-rows .card-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 150ms ease-out; }
 .list-rows .post-card:hover .card-actions,
 .list-rows .post-card:focus-within .card-actions { opacity: 1; }
 @media (hover: none) { .list-rows .card-actions { opacity: 1; } }
@@ -496,7 +494,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 .card-action-btn {
   width: 30px; height: 30px; border-radius: 7px; color: var(--muted);
   display: flex; align-items: center; justify-content: center;
-  transition: background 0.12s, color 0.12s;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
 }
 .card-action-btn svg { width: 15px; height: 15px; }
 .card-action-btn:hover { background: var(--surface); color: var(--ink); }
@@ -507,7 +505,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 /* ── Delete confirm overlay ── */
 .delete-confirm {
   position: absolute; inset: 0; z-index: 2;
-  display: flex; opacity: 0; pointer-events: none; transition: opacity 0.15s;
+  display: flex; opacity: 0; pointer-events: none; transition: opacity 150ms ease-out;
   align-items: center; justify-content: flex-end; gap: 6px;
   background: var(--bg); font-size: 12px; color: var(--muted); white-space: nowrap;
 }
@@ -515,7 +513,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 .post-card.confirming .delete-confirm { opacity: 1; pointer-events: auto; }
 .confirm-yes {
   background: var(--danger); color: #fff; border-radius: 6px;
-  padding: 4px 10px; font-size: 12px; font-weight: 650;
+  padding: 4px 10px; font-size: 12px; font-weight: 600;
 }
 .confirm-no {
   border: 1px solid var(--hair); border-radius: 6px;
@@ -524,10 +522,10 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 
 /* ── Hero (next to read) ── */
 .hero {
-  display: grid; grid-template-columns: 235px minmax(0, 1fr); gap: 36px;
-  align-items: center; margin: 6px 0 42px;
+  display: grid; grid-template-columns: 235px minmax(0, 1fr); gap: 40px;
+  align-items: center; margin: 8px 0 40px;
   background: var(--surface); border: 1px solid var(--hair);
-  border-radius: 16px; padding: 30px 36px 34px;
+  border-radius: 16px; padding: 32px 40px;
 }
 /* The rest of the queue peeks out from behind the next-to-read cover. */
 .hero-stack { position: relative; }
@@ -539,7 +537,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 .hero-stack::after  { transform: translate(6px, 4px) rotate(0.8deg); opacity: 0.30; }
 .hero-stack .cover { position: relative; z-index: 1; box-shadow: var(--shadow); }
 .hero-title {
-  display: block; font-size: 30px; font-weight: 800; letter-spacing: -0.02em;
+  display: block; font-size: 30px; font-weight: 600; letter-spacing: -0.02em;
   line-height: 1.12; margin-top: 10px; color: var(--ink); text-decoration: none;
   text-wrap: balance; overflow-wrap: anywhere;
 }
@@ -548,12 +546,12 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 12.5px; color: var(--muted); margin-top: 10px;
 }
-.hero-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.hero-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 
 .btn {
   display: inline-flex; align-items: center; gap: 8px;
-  border-radius: 999px; padding: 9px 20px;
-  font-size: 13.5px; font-weight: 650; text-decoration: none;
+  border-radius: 999px; padding: 10px 20px;
+  font-size: 13.5px; font-weight: 600; text-decoration: none;
   border: 1.5px solid var(--btn);
 }
 .btn-solid { background: var(--btn); color: var(--btn-ink); }
@@ -566,12 +564,12 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
 /* ── Sentinel / empty state ── */
 .load-more-sentinel {
   grid-column: 1 / -1;
-  padding: 18px; text-align: center; color: var(--muted); font-size: 13px;
+  padding: 16px; text-align: center; color: var(--muted); font-size: 13px;
 }
 .empty-state {
   grid-column: 1 / -1;
   display: grid; justify-items: center; text-align: center;
-  padding: 48px 20px 56px;
+  padding: 48px 20px;
 }
 .empty-cover {
   width: 120px; aspect-ratio: 3 / 4.15; border-radius: 7px;
@@ -579,42 +577,42 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   display: flex; align-items: center; justify-content: center;
   color: var(--muted); font-size: 26px; font-weight: 300;
 }
-.empty-state h2 { margin-top: 16px; font-size: 16.5px; font-weight: 700; }
-.empty-state p { color: var(--muted); font-size: 13px; margin-top: 5px; max-width: 340px; }
+.empty-state h2 { margin-top: 16px; font-size: 16.5px; font-weight: 600; }
+.empty-state p { color: var(--muted); font-size: 13px; margin-top: 4px; max-width: 340px; }
 
 /* ── Profile ── */
-.profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; flex-wrap: wrap; }
-.profile-name { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+.profile-name { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
 .profile-sub {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
 }
-.profile-head .btn { margin-left: auto; padding: 7px 16px; font-size: 12.5px; }
+.profile-head .btn { margin-left: auto; padding: 8px 16px; font-size: 12.5px; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 640px; }
 .stat {
   background: var(--surface); border: 1px solid var(--hair); border-radius: 10px;
-  padding: 16px 18px;
+  padding: 16px 20px;
 }
 .stat-n {
-  font-size: 32px; font-weight: 800; letter-spacing: -0.02em;
+  font-size: 32px; font-weight: 600; letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums; line-height: 1.1;
 }
-.stat-l { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+.stat-l { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
 .settings-box {
   margin-top: 20px; max-width: 640px;
   background: var(--surface); border: 1px solid var(--hair); border-radius: 10px;
-  padding: 16px 18px; display: grid; gap: 14px;
+  padding: 16px 20px; display: grid; gap: 14px;
 }
 .settings-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
 .settings-label { font-size: 13.5px; font-weight: 600; }
-.settings-hint { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+.settings-hint { color: var(--muted); font-size: 11.5px; }
 .pills { display: flex; gap: 6px; }
 .pill {
-  border: 1px solid var(--hair); border-radius: 999px; padding: 5px 14px;
+  border: 1px solid var(--hair); border-radius: 999px; padding: 6px 14px;
   font-size: 12.5px; color: var(--muted);
 }
 .pill:hover { color: var(--ink); }
-.pill.on { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); font-weight: 650; }
+.pill.on { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); font-weight: 600; }
 
 /* ── Login ── */
 .login-wrap {
@@ -625,9 +623,9 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   width: 170px; transform: rotate(-2deg); box-shadow: var(--shadow);
   background: var(--btn); color: var(--btn-ink);
 }
-.login-card h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-top: 26px; }
+.login-card h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-top: 24px; }
 .login-card .login-sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
-.login-card .btn { margin-top: 22px; }
+.login-card .btn { margin-top: 24px; }
 .login-error {
   margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 13px;
   background: var(--surface); border: 1px solid var(--danger); color: var(--danger);
@@ -640,16 +638,16 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   background: var(--bg); border-top: 1px solid var(--hair);
 }
 .bottom-tabs a {
-  flex: 1; text-align: center; padding: 9px 0 11px;
+  flex: 1; text-align: center; padding: 8px 0 12px;
   font-size: 10px; color: var(--muted); text-decoration: none;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 .bottom-tabs a svg { width: 18px; height: 18px; }
-.bottom-tabs a.on { color: var(--ink); font-weight: 700; }
+.bottom-tabs a.on { color: var(--ink); font-weight: 600; }
 
 /* ── Mobile ── */
 @media (max-width: 767px) {
-  body { padding-bottom: 60px; }
+  body { padding-bottom: 64px; }
   .top-bar { padding: 10px 14px; gap: 12px; flex-wrap: wrap; }
   .nav-links, .top-bar .avatar { display: none; }
   .add-form { flex: 1 1 100%; order: 10; margin-left: 0; }
@@ -658,7 +656,7 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   .page-head { margin-bottom: 14px; }
   #post-list.shelf, #post-list.shelf.vitrine { grid-template-columns: repeat(2, 1fr); gap: 16px 14px; }
   .hero { grid-template-columns: 96px minmax(0, 1fr); gap: 16px; align-items: start;
-          margin-bottom: 26px; padding: 16px; border-radius: 12px; }
+          margin-bottom: 24px; padding: 16px; border-radius: 12px; }
   .hero-stack::before { transform: translate(7px, 5px) rotate(1.4deg); }
   .hero-stack::after { transform: translate(3.5px, 2.5px) rotate(0.7deg); }
   .hero .cover { padding: 8px 8px 8px 11px; }
@@ -670,12 +668,13 @@ a.cover:hover { transform: translateY(-5px) rotate(-0.6deg); box-shadow: var(--s
   .hero-title { font-size: 18px; margin-top: 4px; }
   .hero-meta { font-size: 10.5px; margin-top: 6px; }
   .hero-actions { margin-top: 10px; gap: 8px; }
-  .hero-actions .btn { padding: 7px 14px; font-size: 12px; }
+  .hero-actions .btn { padding: 8px 14px; font-size: 12px; }
   .stats { grid-template-columns: 1fr 1fr; }
+  .stat:last-child { grid-column: 1 / -1; }
   .row-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .status-chip { display: none; }
   /* The dice alone carries the meaning once the head runs out of room. */
-  .reshuffle-btn { padding: 7px 10px; }
+  .reshuffle-btn { padding: 8px 10px; }
   .reshuffle-btn span { display: none; }
   /* Clear the bottom tab bar. */
   .toast, .add-error { bottom: 72px; left: 14px; right: 14px; transform: none; }
