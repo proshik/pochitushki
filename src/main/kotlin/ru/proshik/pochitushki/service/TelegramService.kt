@@ -8,6 +8,7 @@ import com.github.kotlintelegrambot.entities.ReplyParameters
 import com.github.kotlintelegrambot.entities.TelegramFile
 import com.github.kotlintelegrambot.types.TelegramBotResult
 import java.io.File
+import java.net.MalformedURLException
 import java.net.URI
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
@@ -21,6 +22,7 @@ import ru.proshik.pochitushki.model.UserStoreData
 import ru.proshik.pochitushki.service.telegram.BotTaskExecutor
 import ru.proshik.pochitushki.service.metrics.AppMetrics
 import ru.proshik.pochitushki.service.telegram.TelegramKeyboard
+import ru.proshik.pochitushki.service.telegram.api.delivered
 import ru.proshik.pochitushki.service.telegram.card.PostCardService
 
 @Service
@@ -146,7 +148,11 @@ class TelegramService(
 
         val url = try {
             URI.create(rawUrl).toURL()
-        } catch (e: IllegalArgumentException) {
+        } catch (e: Exception) {
+            // IllegalArgumentException for text that is no URI at all, MalformedURLException for a
+            // URI of a scheme Java has no URL handler for (doi:, tg://, magnet:). Both are the
+            // user's text, not our failure.
+            if (e !is IllegalArgumentException && e !is MalformedURLException) throw e
             logger.debug("could not parse rawUrl={}, message={}", rawUrl, e.message)
 
             val result = botProvider.getBot().sendMessage(
@@ -228,6 +234,7 @@ class TelegramService(
 
         val byteArray = botProvider.getBot().downloadFileBytes(fileId)
         if (byteArray == null) {
+            metrics.operationFailed(AppMetrics.Operation.IMPORT)
             sendMessage(chatId, i18nService.getMessage("command.import.download_error", user.settings.languageCode))
             return
         }
@@ -299,10 +306,11 @@ class TelegramService(
 
             try {
                 val bytes = file.readBytes()
-                botProvider.getBot().sendDocument(
+                val sent = botProvider.getBot().sendDocument(
                     chatId = ChatId.fromId(chatId),
                     document = TelegramFile.ByByteArray(bytes, file.name),
                 )
+                check(sent.delivered()) { "telegram refused the export file" }
                 logger.info("export success: chatId={}", chatId)
             } catch (e: Exception) {
                 metrics.operationFailed(AppMetrics.Operation.EXPORT)

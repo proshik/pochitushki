@@ -13,6 +13,7 @@ import ru.proshik.pochitushki.service.PdfCacheService
 import ru.proshik.pochitushki.service.PdfGenerator
 import ru.proshik.pochitushki.service.RateLimitService
 import ru.proshik.pochitushki.service.telegram.BotTaskExecutor
+import ru.proshik.pochitushki.service.telegram.api.delivered
 import ru.proshik.pochitushki.service.metrics.AppMetrics
 
 /**
@@ -61,11 +62,14 @@ class PostPdfSender(
             val pdfBytes = pdfCacheService.getOrGenerate(user.id, post.url, engine) {
                 generator.generatePdf(post.url)
             }
-            botProvider.getBot().sendDocument(
+            val sent = botProvider.getBot().sendDocument(
                 chatId = ChatId.fromId(chatId),
                 document = TelegramFile.ByByteArray(pdfBytes, filename(post.title, post.url)),
                 caption = post.title ?: post.url,
             )
+            // A refusal (413 for a file too large) does not throw; without this the user got neither
+            // the file nor the error message.
+            check(sent.delivered()) { "telegram refused the pdf" }
             logger.info("pdf success: chatId={}, postId={}, engine={}", chatId, post.id, engine)
         } catch (e: Exception) {
             metrics.operationFailed(AppMetrics.Operation.PDF)

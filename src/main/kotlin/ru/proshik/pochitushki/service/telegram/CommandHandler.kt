@@ -191,7 +191,13 @@ class CommandHandler(
             } catch (ex: Exception) {
                 metrics.operationFailed(AppMetrics.Operation.SAVE_POST)
                 logger.warn("error adding post message=${message.chat.id}", ex)
-                telegramService.showErrorMessage(message.chat.id)
+                // Usually fails for the same reason (database, no user row): that is still the one
+                // failure counted above, not a second one.
+                try {
+                    telegramService.showErrorMessage(message.chat.id)
+                } catch (e: Exception) {
+                    logger.warn("error reply failed: chatId={}: {}", message.chat.id, e.javaClass.simpleName)
+                }
             }
             return
         }

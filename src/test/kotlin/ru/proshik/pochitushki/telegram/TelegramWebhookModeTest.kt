@@ -10,7 +10,10 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.ByteBuffer
 import java.time.Duration
+import java.util.concurrent.Flow
+import java.util.concurrent.atomic.AtomicLong
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -182,6 +185,109 @@ class TelegramWebhookModeTest {
         }
     }
 
+    /** A body of [size] bytes that counts how much of it the server has actually pulled. */
+    private class CountingBody(private val size: Long, val sent: AtomicLong = AtomicLong()) : HttpRequest.BodyPublisher {
+        override fun contentLength() = size
+        override fun subscribe(subscriber: Flow.Subscriber<in ByteBuffer>) {
+            subscriber.onSubscribe(object : Flow.Subscription {
+                @Volatile var done = false
+                override fun request(n: Long) {
+                    var left = n
+                    while (left-- > 0 && !done) {
+                        val chunk = minOf(64L * 1024, size - sent.get()).toInt()
+                        if (chunk <= 0) { done = true; subscriber.onComplete(); return }
+                        sent.addAndGet(chunk.toLong())
+                        subscriber.onNext(ByteBuffer.wrap(ByteArray(chunk) { 'a'.code.toByte() }))
+                    }
+                }
+                override fun cancel() { done = true }
+            })
+        }
+    }
+
+    private fun postLarge(ctx: ConfigurableApplicationContext, secret: String?, body: CountingBody): Int {
+        val request = HttpRequest.newBuilder(URI.create("http://localhost:${port(ctx)}/telegram/webhook"))
+            .header("Content-Type", "application/json")
+            .apply { secret?.let { header("X-Telegram-Bot-Api-Secret-Token", it) } }
+            .expectContinue(true)
+            .POST(body)
+            .build()
+        return try {
+            http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()
+        } catch (e: java.io.IOException) {
+            -1 // the server may close the connection on an unread body; the status is not the point then
+        }
+    }
+
+    @Test
+    fun `the public webhook path does not take a body before the secret is checked`() {
+        startWebhook().use { ctx ->
+            // With "Expect: 100-continue" the client uploads only once the server starts reading.
+            // Tomcat answers 403 and may drop the connection over the unread body: either is a refusal.
+            val unauthenticated = CountingBody(50L * 1024 * 1024)
+            val refused = postLarge(ctx, secret = null, unauthenticated)
+            assertTrue(refused == 403 || refused == -1) { "unauthenticated upload got $refused" }
+            assertTrue(unauthenticated.sent.get() < 1024 * 1024) { "server read ${unauthenticated.sent.get()} bytes of an unauthenticated body" }
+
+            // Telegram's updates are kilobytes; a huge body is refused even with the secret.
+            val huge = CountingBody(5L * 1024 * 1024)
+            val status = postLarge(ctx, secret = SECRET, huge)
+            assertTrue(status == 413 || status == -1) { "oversized update got $status" }
+        }
+    }
+
+    @Test
+    fun `webhook URL with a trailing slash, an encoded slash or plain http refuses to start`() {
+        for (url in listOf(
+            "https://example.test/telegram/webhook/",
+            "https://example.test/telegram%2Fwebhook",
+            "http://example.test/telegram/webhook",
+        )) {
+            assertThrows(Exception::class.java, { start("telegram.webhook-url=$url", "telegram.webhook-secret=$SECRET").close() }, url)
+        }
+        assertTrue(calls("setWebhook").isEmpty())
+    }
+
+    @Test
+    fun `a non-web link is a refusal, not a failure`() {
+        startWebhook().use { ctx ->
+            assertEquals(200, postUpdate(ctx, SECRET, text(300, "/start")))
+            await().atMost(Duration.ofSeconds(5)).until { calls("sendMessage").size >= 2 }
+            wireMock.resetRequests()
+            assertEquals(200, postUpdate(ctx, SECRET, text(300, "doi:10.1000/xyz")))
+            await().atMost(Duration.ofSeconds(5)).until { calls("sendMessage").isNotEmpty() }
+            assertEquals(0.0, value(ctx, """pochitushki_operation_errors_total{operation="save_post",reason="error"}"""))
+            assertEquals(0.0, value(ctx, """pochitushki_operation_errors_total{operation="bot_command",reason="error"}"""))
+        }
+    }
+
+    @Test
+    fun `an export Telegram refuses to take counts as a failed export`() {
+        wireMock.stubFor(
+            post(urlPathMatching("/bot[^/]+/sendDocument"))
+                .willReturn(json("""{"ok":false,"error_code":413,"description":"Request Entity Too Large"}""", status = 413))
+        )
+        startWebhook().use { ctx ->
+            val jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate::class.java)
+            val userId = jdbc.queryForObject(
+                """INSERT INTO users(telegram_id, username, first_name, settings)
+                   VALUES (301, 'exp', 'E', '{"languageCode":"en"}'::jsonb) RETURNING id""",
+                Long::class.java,
+            )!!
+            try {
+                jdbc.update("INSERT INTO post (title, url, user_id) VALUES ('E', 'https://example.com/e', ?)", userId)
+                ctx.getBean(ru.proshik.pochitushki.service.TelegramService::class.java).export(301, 1)
+
+                awaitValue(ctx, """pochitushki_operation_errors_total{operation="export",reason="error"}""", 1.0)
+                // The user is told, instead of waiting for a file that never comes.
+                await().atMost(Duration.ofSeconds(5)).until { calls("sendMessage").isNotEmpty() }
+            } finally {
+                jdbc.update("DELETE FROM post WHERE user_id = ?", userId)
+                jdbc.update("DELETE FROM users WHERE id = ?", userId)
+            }
+        }
+    }
+
     @Test
     fun `in polling mode the webhook endpoint refuses everything`() {
         // No secret configured: the fixed public path must not accept updates in anyone's name.
@@ -260,12 +366,15 @@ class TelegramWebhookModeTest {
             assertEquals(200, postUpdate(ctx, SECRET, text(424242, "https://example.com/a")))
             awaitValue(ctx, """pochitushki_operation_errors_total{operation="save_post",reason="error"}""", 1.0)
 
-            // Same chat, a command: the handler throws, the library would only print it to stderr.
-            // (The error reply to the link above fails too and already counts here: no user row.)
+            // One failure, one count: the error reply to it fails too (no user row), and that is not
+            // a second failed operation.
             val botCommand = """pochitushki_operation_errors_total{operation="bot_command",reason="error"}"""
-            await().atMost(Duration.ofSeconds(5)).until { value(ctx, botCommand) == 1.0 }
+            Thread.sleep(300)
+            assertEquals(0.0, value(ctx, botCommand))
+
+            // Same chat, a command: the handler throws, the library would only print it to stderr.
             assertEquals(200, postUpdate(ctx, SECRET, text(424242, "/help")))
-            awaitValue(ctx, botCommand, 2.0)
+            awaitValue(ctx, botCommand, 1.0)
         }
     }
 

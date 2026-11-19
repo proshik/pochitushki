@@ -161,7 +161,10 @@ Webhook висит на постоянном `POST /telegram/webhook`, подл�
 `X-Telegram-Bot-Api-Secret-Token`. Путь-токен убран намеренно: он попадал в метку `uri`
 метрики `http_server_requests` (то есть в Grafana Cloud), в логи прокси и в `getWebhookInfo`.
 Без настроенного секрета (polling) эндпоинт отвечает 403 на всё — иначе любой прислал бы
-апдейт от чужого chat id. `TelegramController` создаётся только при `telegram.enabled=true`.
+апдейт от чужого chat id. Тело читается вручную **после** проверки секрета и с потолком 1 МБ
+(413): `@RequestBody` вычитал бы его целиком для любого, кто знает публичный путь. Отказы — в
+`http_server_requests{uri="/telegram/webhook",status="403"}`, в лог только на DEBUG.
+`TelegramController` создаётся только при `telegram.enabled=true`.
 
 Остановка контейнера ничего не шлёт в Telegram (Krill катит `start-first`: новый уже поставил
 webhook). Бин `Bot` объявлен с `destroyMethod = ""` — иначе Spring сам позвал бы его публичный

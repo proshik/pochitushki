@@ -46,7 +46,10 @@ paths:
   Telegram не присылает нажатия inline-кнопок, и в проде отваливается всё, что
   на кнопках. В polling такого фильтра нет, поэтому тесты это не ловят
 - `telegram.webhook-secret` обязателен в webhook-режиме, иначе приложение не стартует;
-  `telegram.webhook-url` обязан кончаться на `/telegram/webhook` — тоже проверка на старте
+  `telegram.webhook-url` обязан быть ровно `https://<host>/telegram/webhook` (`rawPath`, без
+  слэша в конце: Spring матчит путь строго) — тоже проверка на старте
+- Вызовы библиотеки, отвечающие `Pair` (`sendDocument`), не бросают: отказ Telegram проверять
+  через `delivered()` (`service/telegram/api/LibraryResults.kt`), иначе в лог уходит «success»
 - Остановка не шлёт в Telegram ничего: у бина `Bot` `destroyMethod = ""` (его `close()` — это
   Bot API `close`), `stopWebhook()` снимает webhook (`deleteWebhook`), а `stopPolling()` в 10.0.0
   падает на нашей версии coroutines. Krill катит `start-first` — новый контейнер уже поставил webhook

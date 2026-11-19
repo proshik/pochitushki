@@ -66,7 +66,7 @@ class TelegramBotConfiguration(
         // A URL that does not end in the controller's path leaves the bot deaf with a healthy
         // container: Telegram gets 404s and the old container is already gone. Refuse instead,
         // and the start-first rollout keeps the old one. Not echoed: an old-style URL carries the token.
-        check(!webhookMode || webhookPath(telegramProperties.webhookUrl!!) == TelegramController.WEBHOOK_PATH) {
+        check(!webhookMode || isWebhookUrl(telegramProperties.webhookUrl!!)) {
             "telegram.webhook-url must be https://<host>${TelegramController.WEBHOOK_PATH} (set TELEGRAM_WEBHOOK_URL)"
         }
 
@@ -128,10 +128,15 @@ class TelegramBotConfiguration(
     }
 
     companion object {
-        private fun webhookPath(url: String): String? = try {
-            URI(url).path?.trimEnd('/')
+        /**
+         * Exactly `https://<host>/telegram/webhook`: Spring matches the path strictly, so a trailing
+         * slash or an encoded slash (`%2F`, which `URI.path` would decode) would get Telegram a 404.
+         */
+        private fun isWebhookUrl(url: String): Boolean = try {
+            val uri = URI(url)
+            uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.rawPath == TelegramController.WEBHOOK_PATH
         } catch (_: Exception) {
-            null
+            false
         }
 
         /**
