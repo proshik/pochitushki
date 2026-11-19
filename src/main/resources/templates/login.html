@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Войти — Почитушки</title>
+  <title th:text="#{web.login.title}">Войти — Почитушки</title>
   <link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
   <!-- Anti-flash: must run before any paint, so no defer. -->
   <script src="/js/theme-init.js"></script>
@@ -17,8 +17,8 @@
       <!-- The service's own cover: a poster for the shelf -->
       <div class="cover co-mono login-cover" aria-hidden="true">
         <span class="cover-dom">почитушки</span>
-        <span class="cover-big">Чи&shy;тать</span>
-        <span class="cover-cap">потом</span>
+        <span class="cover-big" th:text="#{web.login.cover.word}">Чи&shy;тать</span>
+        <span class="cover-cap" th:text="#{web.login.cover.caption}">потом</span>
       </div>
 
       <h1>Почитушки</h1>

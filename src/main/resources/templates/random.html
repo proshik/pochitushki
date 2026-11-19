@@ -11,7 +11,8 @@
       <button type="button" class="btn btn-ghost reshuffle-btn"
               hx-get="/api/v1/posts/random-fragment"
               hx-target="#post-list"
-              hx-swap="innerHTML">
+              hx-swap="innerHTML"
+              th:attr="aria-label=#{web.random.more}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="3" width="18" height="18" rx="3"/>
