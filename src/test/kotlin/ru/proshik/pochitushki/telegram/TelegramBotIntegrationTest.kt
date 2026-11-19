@@ -54,6 +54,9 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     @Autowired
     private lateinit var botProvider: BotProvider
 
+    @Autowired
+    private lateinit var meterRegistry: io.micrometer.core.instrument.MeterRegistry
+
     private lateinit var wireMockExternalUrl: WireMockServer
 
     // Общий на класс и монотонный. Контроллер отбрасывает повторный update_id (Telegram
@@ -487,6 +490,8 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
     fun `pdf from card answers with a toast`() {
         registerTestUser()
         val p = createPost(getUserId(), "Paper", "http://localhost:${wireMockExternalUrl.port()}/paper")
+        val pdfErrors = meterRegistry.counter("pochitushki.operation.errors", "operation", "pdf", "reason", "error")
+        val pdfErrorsBefore = pdfErrors.count()
 
         wireMockExternalUrl.stubFor(
             get(urlEqualTo("/paper")).willReturn(
@@ -506,6 +511,13 @@ class TelegramBotIntegrationTest : BaseIntegrationTest() {
         }
         val document = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendDocument"))).single()
         assertTrue(document.bodyAsString.contains("Paper.pdf") && document.bodyAsString.contains("%PDF"), "a PDF for the post")
+        // A delivered document is a success: no failure counted, no error message after it.
+        Thread.sleep(300)
+        assertEquals(pdfErrorsBefore, pdfErrors.count(), "a delivered PDF counted as a failure")
+        val errorText = i18nService.getMessage("command.pdf.error", "en")
+        val replies = wireMockTelegramApi.findAll(postRequestedFor(urlEqualTo("/bottest_token/sendMessage")))
+            .map { java.net.URLDecoder.decode(it.bodyAsString, Charsets.UTF_8) }
+        assertTrue(replies.none { it.contains(errorText) }, "an error message after a delivered PDF")
     }
 
     // ==================== Card: random post and the reply to a saved link ====================
