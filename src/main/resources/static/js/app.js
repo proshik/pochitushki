@@ -78,6 +78,12 @@ function initAddPostForm() {
       return r.text();
     })
     .then(function (html) {
+      /* The feed and "all" are ordered, grouped by date and maybe filtered by a label: where
+         the new link belongs (if anywhere) is the server's call, so the page is drawn again. */
+      if (postList && postList.matches('[data-reload-on-add]')) {
+        location.reload();
+        return;
+      }
       var temp = document.getElementById(tempId);
       if (!temp) return;
       var wrapper = document.createElement('div');
@@ -469,6 +475,151 @@ function setViewMode(mode) {
   location.reload();
 }
 
+/* ── Sort order (feed and "all") — kept in the user's settings, so it follows the reader
+   to other devices; the server renders the list in that order, so the page reloads. ── */
+function setFeedSort(btn) {
+  if (btn.classList.contains('active') || btn.disabled) return;
+  btn.disabled = true;
+  fetch('/api/v1/profile/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedSort: btn.dataset.feedSort })
+  })
+    .then(function (r) {
+      if (r.status === 401) { location.href = '/login'; return; }
+      if (!r.ok) throw new Error('sort failed');
+      location.reload();
+    })
+    .catch(function () {
+      btn.disabled = false;
+      showActionError('error');
+    });
+}
+
+/* ── Keyboard shortcuts on pages with a post list ──
+   J/K move between cards, Enter/A/F/L press the current card's own link and buttons — no
+   behaviour of their own, so the Mini App's openLink and the undo toast work as for a click.
+   Keys are matched by event.code (the physical key), so they work in any layout. */
+function initKeyboard() {
+  var list = document.getElementById('post-list');
+  if (!list) return;
+  var help = document.getElementById('kbd-help');
+  var helpBtn = document.querySelector('[data-kbd-toggle]');
+  var current = null;
+  var currentIndex = -1;
+
+  function cards() {
+    return Array.prototype.filter.call(list.querySelectorAll('.post-card'), function (c) {
+      return c.id.indexOf('card-optimistic-') !== 0;
+    });
+  }
+
+  function select(card, index) {
+    if (current && current !== card) current.classList.remove('kbd-current');
+    current = card;
+    currentIndex = index;
+    if (!card) return;
+    card.classList.add('kbd-current');
+    /* A link or button focused by Tab elsewhere would take the next Enter for itself. */
+    var focused = document.activeElement;
+    if (focused && focused !== document.body && !card.contains(focused) && focused.blur) focused.blur();
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    card.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  }
+
+  function move(step) {
+    var all = cards();
+    if (!all.length) return;
+    var i = current ? all.indexOf(current) : -1;
+    i = i === -1 ? 0 : Math.max(0, Math.min(all.length - 1, i + step));
+    select(all[i], i);
+  }
+
+  function press(el) {
+    if (el) el.click();
+  }
+
+  function setHelp(open) {
+    if (!help) return;
+    help.hidden = !open;
+    if (helpBtn) {
+      helpBtn.classList.toggle('active', open);
+      helpBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+  }
+
+  /* A heading whose cards have all gone (archived, deleted) goes too — unless it is the
+     last one and more pages may still bring its cards. */
+  function pruneEmptyGroups() {
+    var nodes = list.querySelectorAll('h2.date-group, .post-card');
+    var more = !!list.querySelector('.load-more-sentinel');
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (!n.matches('h2.date-group')) continue;
+      var next = nodes[i + 1];
+      if (next ? next.matches('h2.date-group') : !more) {
+        if (n.classList.contains('first') && next) next.classList.add('first');
+        n.remove();
+      }
+    }
+  }
+
+  /* The current card was archived or deleted: its neighbour takes over. */
+  new MutationObserver(function () {
+    pruneEmptyGroups();
+    if (!current || list.contains(current)) return;
+    var all = cards();
+    if (!all.length) { current = null; currentIndex = -1; return; }
+    var i = Math.min(currentIndex, all.length - 1);
+    select(all[i], i);
+  }).observe(list, { childList: true, subtree: true });
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-kbd-toggle]')) {
+      setHelp(help ? help.hidden : false);
+      return;
+    }
+    if (help && !help.hidden && !e.target.closest('.kbd-help')) setHelp(false);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    var t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+
+    var helpOpen = help && !help.hidden;
+    if (e.code === 'Escape') {
+      if (helpOpen) { setHelp(false); e.preventDefault(); }
+      return;
+    }
+    if (document.querySelector('.post-card.labelling, .post-card.confirming')) return;
+
+    if ((e.code === 'Slash' && e.shiftKey) || e.key === '?') {
+      if (help) { setHelp(!helpOpen); e.preventDefault(); }
+      return;
+    }
+    if (e.shiftKey) return;
+    /* Held down, only moving repeats: a held A or F would act on card after card. */
+    if (e.repeat && e.code !== 'KeyJ' && e.code !== 'KeyK') return;
+
+    switch (e.code) {
+      case 'KeyJ': move(1); break;
+      case 'KeyK': move(-1); break;
+      case 'Enter':
+      case 'NumpadEnter':
+        /* On a focused link or button Enter already does its own thing. */
+        if (!current || (t && t.closest && t.closest('a, button'))) return;
+        press(current.querySelector('.cell-title, .row-title'));
+        break;
+      case 'KeyA': press(current && current.querySelector('[data-kbd-archive]')); break;
+      case 'KeyF': press(current && current.querySelector('[data-fav-btn]')); break;
+      case 'KeyL': press(current && current.querySelector('[data-action="labels-show"]')); break;
+      default: return;
+    }
+    e.preventDefault();
+  });
+}
+
 /* ── Infinite scroll ── */
 function initScrollSentinel() {
   var sentinel = document.querySelector('.load-more-sentinel:not([data-sentinel-init])');
@@ -522,6 +673,12 @@ document.addEventListener('click', function (e) {
     return;
   }
 
+  var sortBtn = e.target.closest('[data-feed-sort]');
+  if (sortBtn) {
+    setFeedSort(sortBtn);
+    return;
+  }
+
   var action = e.target.closest('[data-action]');
   if (!action) return;
 
@@ -538,22 +695,29 @@ document.addEventListener('click', function (e) {
   }
 });
 
+/* ── Undo toast after an archive request ──
+   Read on beforeOnLoad, not afterRequest: a card's archive button goes away with its card
+   (hx-swap="delete"), and htmx then raises afterRequest on the nearest ancestor still on the
+   page, so the button could no longer be recognised. beforeOnLoad comes from the button
+   itself, before the swap. The hero button reloads the page afterwards (afterRequest below),
+   so its id is parked across the reload. */
+document.addEventListener('htmx:beforeOnLoad', function (e) {
+  var el = e.detail.elt;
+  var xhr = e.detail.xhr;
+  if (!el || !el.matches || !el.matches('[data-archive-undo]')) return;
+  if (!xhr || xhr.status < 200 || xhr.status >= 300) return;
+  var archivedId = archivedIdFrom(xhr);
+  if (!archivedId) return;
+  if (el.matches('[data-reload-on-success]')) stashUndo(archivedId);
+  else showUndoToast(archivedId);
+});
+
 /* ── Delegated htmx completions ──
    Replaces hx-on--after-request, which htmx evaluates via new Function(). */
 document.addEventListener('htmx:afterRequest', function (e) {
   if (!e.detail.successful) return;
   var el = e.detail.elt;
   if (!el || !el.matches) return;
-
-  /* Deliberately not part of the chain below: the hero button is both an
-     archive trigger and a reload trigger, and needs both to run. */
-  if (el.matches('[data-archive-undo]')) {
-    var archivedId = archivedIdFrom(e.detail.xhr);
-    if (archivedId) {
-      if (el.matches('[data-reload-on-success]')) stashUndo(archivedId);
-      else showUndoToast(archivedId);
-    }
-  }
 
   if (el.matches('[data-unfav-remove]')) {
     /* Favorites showcase: removing the star removes the card right away. */
@@ -656,6 +820,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initAddPostForm();
   initLabelPicker();
   initLabelsPage();
+  initKeyboard();
   /* The mode class is applied server-side from the cookie — only sync button states. */
   var postList = document.getElementById('post-list');
   var mode = postList && postList.classList.contains('shelf') ? 'grid' : 'list';

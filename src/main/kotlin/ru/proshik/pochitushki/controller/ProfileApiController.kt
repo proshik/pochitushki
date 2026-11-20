@@ -15,6 +15,7 @@ import ru.proshik.pochitushki.service.UserService
 data class SettingsPatchRequest(
     val languageCode: String? = null,
     val showOgCovers: Boolean? = null,
+    val feedSort: String? = null,
 )
 
 @RestController
@@ -38,10 +39,16 @@ class ProfileApiController(private val userService: UserService) {
                 throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported language")
             }
         }
+        patch.feedSort?.let {
+            if (it !in UserSettingsLimits.FEED_SORTS) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported feed sort")
+            }
+        }
         // copy(), not a new object: the legacy tgFeedEntriesNumber keeps its stored value.
         val updated = current.copy(
             languageCode = patch.languageCode ?: current.languageCode,
             showOgCovers = patch.showOgCovers ?: current.showOgCovers,
+            feedSort = patch.feedSort ?: current.feedSort,
         )
 
         userService.updateUserSettings(userId, updated)

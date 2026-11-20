@@ -22,7 +22,44 @@ data class CoverView(
     val domain: String,
     /** Домен для плашки обложки: длинные хосты укорочены до последних двух меток. */
     val coverDomain: String,
+    /**
+     * Заголовок для показа: сам заголовок, а без него — URL без схемы и завершающего `/`
+     * ([displayUrl]). Только отображение, в данных остаётся как было.
+     */
+    val title: String = post.title?.takeIf { it.isNotBlank() } ?: displayUrl(post.url),
+    /**
+     * [title] по кускам, между которыми шаблон ставит `<wbr>`: у URL — после каждого `/`,
+     * иначе длинный адрес переносится посреди слова. У настоящего заголовка кусок один.
+     */
+    val titleParts: List<String> = if (post.title.isNullOrBlank()) splitAfterSlashes(title) else listOf(title),
+    /** «лежит N дней» — только у непрочитанных; заполняет PostViewService. */
+    val age: AgeView? = null,
+    /** Заголовок группы по дате перед этой карточкой (`/` и `/all`); заполняет PostViewService. */
+    val group: DateGroupView? = null,
 )
+
+data class AgeView(val days: Long, val text: String, val title: String, val old: Boolean)
+
+data class DateGroupView(val title: String, val first: Boolean)
+
+/** `https://site.com/a/b/` → `site.com/a/b`: what a post without a title shows. */
+fun displayUrl(url: String): String =
+    url.trim().replaceFirst(SCHEME, "").trimEnd('/').ifEmpty { url }
+
+private val SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+private fun splitAfterSlashes(text: String): List<String> {
+    val parts = mutableListOf<String>()
+    var start = 0
+    text.forEachIndexed { i, c ->
+        if (c == '/' && i + 1 < text.length && text[i + 1] != '/') {
+            parts += text.substring(start, i + 1)
+            start = i + 1
+        }
+    }
+    parts += text.substring(start)
+    return parts
+}
 
 @Service
 class CoverService {

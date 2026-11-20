@@ -3,6 +3,7 @@ package ru.proshik.pochitushki.controller
 import java.io.IOException
 import java.net.MalformedURLException
 import java.net.URL
+import java.util.Locale
 import org.jsoup.Jsoup
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -19,10 +20,12 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.server.ResponseStatusException
 import ru.proshik.pochitushki.configuration.JwtAuthInterceptor
+import ru.proshik.pochitushki.model.FeedSort
 import ru.proshik.pochitushki.model.PostType
 import org.springframework.http.HttpHeaders
 import ru.proshik.pochitushki.service.ConcurrentPostMoveException
-import ru.proshik.pochitushki.service.CoverService
+import ru.proshik.pochitushki.service.CoverView
+import ru.proshik.pochitushki.service.PostViewService
 import ru.proshik.pochitushki.service.OgImageProxyService
 import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.RateLimitService
@@ -35,19 +38,30 @@ import ru.proshik.pochitushki.service.metrics.AppMetrics
 class PostApiController(
     private val postService: PostService,
     private val urlSecurityValidator: UrlSecurityValidator,
-    private val coverService: CoverService,
+    private val postViewService: PostViewService,
     private val ogImageProxyService: OgImageProxyService,
     private val rateLimitService: RateLimitService,
     private val metrics: AppMetrics,
 ) {
 
+    /**
+     * The next page of a list. The feed (`unread`) and "all" keep the order of the page they
+     * continue (`sort` from the sentinel; the reader's [FeedSort] without it), an optional `label`
+     * (the filter's sentinel carries it), and their date headings: a page after the first also
+     * reads the post just before it, so the heading of a group that continues across the seam
+     * is not printed again. `label` and `sort` are text and ignored where they do not apply.
+     */
     @GetMapping("/fragment")
     fun fragment(
         @RequestAttribute("userId") userId: Long,
         @RequestParam type: String,
         @RequestParam offset: Int,
+        @RequestParam(required = false) label: String?,
+        @RequestParam(required = false) sort: String?,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        @RequestAttribute(JwtAuthInterceptor.FEED_SORT) feedSort: FeedSort,
+        locale: Locale,
         model: Model
     ): String {
         val postType = PostType.entries.firstOrNull { it.value == type }
@@ -55,11 +69,33 @@ class PostApiController(
         if (offset < 0) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "offset must be >= 0")
         }
-        val posts = postService.getPosts(userId, postType, PAGE_SIZE, offset)
-        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        val shelf = postType in SHELVES
+        // Only the feed and "all" are filtered and sorted; the label cannot reach another
+        // user's posts either way — the query is scoped to the caller's rows.
+        val order = if (shelf) sort?.let(FeedSort::from) ?: feedSort else FeedSort.NEWEST
+        val labelId = if (shelf) label?.toLongOrNull() else null
+
+        val covers: List<CoverView>
+        val pageSize: Int
+        if (shelf) {
+            val from = if (offset > 0) offset - 1 else 0
+            val fetched = postService.getPosts(userId, postType, PAGE_SIZE + (offset - from), from, order, labelId)
+            val previous = if (offset > 0) fetched.firstOrNull() else null
+            val posts = if (offset > 0) fetched.drop(1) else fetched
+            covers = postViewService.groupedCards(posts, previous, showOgCovers, locale)
+            pageSize = posts.size
+        } else {
+            val posts = postService.getPosts(userId, postType, PAGE_SIZE, offset)
+            covers = postViewService.cards(posts, showOgCovers, locale)
+            pageSize = posts.size
+        }
+        model.addAttribute("covers", covers)
         model.addAttribute("pageType", type)
-        model.addAttribute("moreUrl", WebController.fragmentUrl(postType, offset + posts.size))
-        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute(
+            "moreUrl",
+            WebController.fragmentUrl(postType, offset + pageSize, labelId, order.takeIf { shelf }),
+        )
+        model.addAttribute("hasMore", pageSize == PAGE_SIZE)
         model.addAttribute("viewMode", WebController.resolveViewMode(viewCookie, postType))
         return "fragments/post-list :: posts"
     }
@@ -78,13 +114,14 @@ class PostApiController(
         @RequestParam(defaultValue = "0") offset: Int,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
         if (offset < 0) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "offset must be >= 0")
         }
         val posts = postService.getPostsByLabel(userId, labelId, PAGE_SIZE, offset)
-        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        model.addAttribute("covers", postViewService.cards(posts, showOgCovers, locale))
         model.addAttribute("pageType", PostType.ALL.value)
         model.addAttribute("moreUrl", WebController.labelFragmentUrl(labelId, offset + posts.size))
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
@@ -101,10 +138,11 @@ class PostApiController(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
         val posts = postService.getRandomPosts(userId, RANDOM_SIZE)
-        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        model.addAttribute("covers", postViewService.cards(posts, showOgCovers, locale))
         model.addAttribute("pageType", PostType.UNREAD.value)
         model.addAttribute("moreUrl", null)
         model.addAttribute("hasMore", false)
@@ -119,6 +157,7 @@ class PostApiController(
         @RequestParam(required = false) view: String?,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
         // Each save makes the server fetch a URL the caller chose, so it is budgeted: otherwise
@@ -152,7 +191,7 @@ class PostApiController(
             }
             throw e
         }
-        model.addAttribute("cv", coverService.decorate(post, showOgCovers))
+        model.addAttribute("cv", postViewService.card(post, showOgCovers, locale))
         model.addAttribute("type", PostType.UNREAD.value)
         // The submitting page reports its current mode so the returned card matches it.
         model.addAttribute(
@@ -205,6 +244,7 @@ class PostApiController(
         @PathVariable id: Long,
         @RequestParam type: String,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
         val postType = PostType.entries.firstOrNull { it.value == type }
@@ -214,7 +254,7 @@ class PostApiController(
         val post = postService.getPost(id, userId, postType)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found")
         // Rendered for API symmetry; the web client calls this with hx-swap="none".
-        model.addAttribute("cv", coverService.decorate(post, showOgCovers))
+        model.addAttribute("cv", postViewService.card(post, showOgCovers, locale))
         model.addAttribute("type", type)
         model.addAttribute("viewMode", "list")
         model.addAttribute("pageType", type)
@@ -297,5 +337,8 @@ class PostApiController(
 
         /** How many covers one shuffle of /random deals out. */
         const val RANDOM_SIZE = 8
+
+        /** Lists with the reader's order, the label filter and date headings. */
+        private val SHELVES = setOf(PostType.UNREAD, PostType.ALL)
     }
 }

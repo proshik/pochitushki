@@ -40,4 +40,20 @@ data class UserSettingsData(
      * fills the default in for a missing property).
      */
     val showOgCovers: Boolean = true,
+    /**
+     * Order of the web feed and of "all": [FeedSort.value]. A string rather than the enum so a
+     * value this build does not know cannot make the row unreadable; [FeedSort.from] falls back
+     * to newest. The default keeps rows written before this key readable.
+     */
+    val feedSort: String = FeedSort.NEWEST.value,
 )
+
+/** Order of the web feed (`/`) and of "all" (`/all`). The hero is always the oldest post. */
+enum class FeedSort(val value: String) {
+    NEWEST("newest"),
+    OLDEST("oldest");
+
+    companion object {
+        fun from(value: String?): FeedSort = entries.firstOrNull { it.value == value } ?: NEWEST
+    }
+}

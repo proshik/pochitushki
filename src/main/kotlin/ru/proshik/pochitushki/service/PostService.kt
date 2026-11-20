@@ -7,6 +7,7 @@ import org.jsoup.nodes.Document
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import ru.proshik.pochitushki.model.FeedSort
 import ru.proshik.pochitushki.model.LabelTarget
 import ru.proshik.pochitushki.model.PostData
 import ru.proshik.pochitushki.model.PostStoreData
@@ -44,8 +45,15 @@ class PostService(
         return Pair(addedPostId, meta.title)
     }
 
-    fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
-        return labelService.withLabels(postDao.getPosts(userId, postType, limit, offset))
+    fun getPosts(
+        userId: Long,
+        postType: PostType,
+        limit: Int,
+        offset: Int,
+        sort: FeedSort = FeedSort.NEWEST,
+        labelId: Long? = null,
+    ): List<PostData> {
+        return labelService.withLabels(postDao.getPosts(userId, postType, limit, offset, sort, labelId))
     }
 
     /** Every post carrying the label, on either shelf. */

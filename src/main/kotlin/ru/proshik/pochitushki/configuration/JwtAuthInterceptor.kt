@@ -7,6 +7,7 @@ import org.springframework.dao.DataAccessException
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.HandlerInterceptor
+import ru.proshik.pochitushki.model.FeedSort
 import ru.proshik.pochitushki.service.JwtService
 import ru.proshik.pochitushki.service.UserService
 import java.time.LocalDateTime
@@ -57,6 +58,7 @@ class JwtAuthInterceptor(
         val settings = user?.settings
         request.setAttribute("_userLocale", Locale(settings?.languageCode ?: "ru"))
         request.setAttribute(SHOW_OG_COVERS, settings?.showOgCovers ?: true)
+        request.setAttribute(FEED_SORT, FeedSort.from(settings?.feedSort))
         request.setAttribute(MINI_APP, tokenInfo.miniApp)
 
         return true
@@ -80,6 +82,9 @@ class JwtAuthInterceptor(
     companion object {
         /** Request attribute carrying UserSettingsData.showOgCovers to the controllers. */
         const val SHOW_OG_COVERS = "showOgCovers"
+
+        /** Request attribute carrying UserSettingsData.feedSort (as [FeedSort]) to the controllers. */
+        const val FEED_SORT = "feedSort"
 
         /** Request attribute: the session was opened inside Telegram (JWT claim `tma`). */
         const val MINI_APP = "miniApp"

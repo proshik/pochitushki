@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
 import ru.proshik.pochitushki.BaseIntegrationTest
+import ru.proshik.pochitushki.model.FeedSort
 import ru.proshik.pochitushki.model.PostStoreData
 import ru.proshik.pochitushki.model.PostType
 
@@ -36,6 +37,9 @@ class PostDaoTest : BaseIntegrationTest() {
 
     @AfterEach
     fun tearDown() {
+        jdbcTemplate.execute("DELETE FROM archive_post_label")
+        jdbcTemplate.execute("DELETE FROM post_label")
+        jdbcTemplate.execute("DELETE FROM label")
         jdbcTemplate.execute("DELETE FROM archive_post")
         jdbcTemplate.execute("DELETE FROM post")
         jdbcTemplate.execute("DELETE FROM users")
@@ -371,5 +375,70 @@ class PostDaoTest : BaseIntegrationTest() {
         val seen = (1..3).flatMap { postDao.getRandomPosts(userId, 8) }.map { it.id }.toSet()
 
         assertTrue(seen.size > 8, "expected more than 8 distinct posts across three draws, got ${seen.size}")
+    }
+
+    private fun insert(table: String, id: Long, url: String, daysAgo: Int) {
+        jdbcTemplate.update(
+            "INSERT INTO $table(id, title, url, user_id, created_date) VALUES (?, ?, ?, ?, now() - make_interval(days => ?))",
+            id, url, url, userId, daysAgo,
+        )
+    }
+
+    private fun label(name: String): Long = jdbcTemplate.queryForObject(
+        "INSERT INTO label(user_id, name) VALUES (?, ?) RETURNING id", Long::class.java, userId, name,
+    )!!
+
+    @Test
+    fun `getPosts oldest first pages through in ascending order`() {
+        (1..5).forEach { insert("post", 800_000L + it, "https://e.com/$it", daysAgo = it) }
+
+        val first = postDao.getPosts(userId, PostType.UNREAD, 2, 0, FeedSort.OLDEST).map { it.url }
+        val second = postDao.getPosts(userId, PostType.UNREAD, 2, 2, FeedSort.OLDEST).map { it.url }
+        val newest = postDao.getPosts(userId, PostType.UNREAD, 2, 0, FeedSort.NEWEST).map { it.url }
+
+        assertEquals(listOf("https://e.com/5", "https://e.com/4"), first)
+        assertEquals(listOf("https://e.com/3", "https://e.com/2"), second)
+        assertEquals(listOf("https://e.com/1", "https://e.com/2"), newest)
+    }
+
+    @Test
+    fun `getPosts sorts both shelves together on ALL`() {
+        insert("post", 800_001, "https://e.com/unread-new", daysAgo = 1)
+        insert("archive_post", 800_002, "https://e.com/archived-old", daysAgo = 9)
+        insert("post", 800_003, "https://e.com/unread-old", daysAgo = 5)
+
+        val oldest = postDao.getPosts(userId, PostType.ALL, 10, 0, FeedSort.OLDEST).map { it.url }
+
+        assertEquals(listOf("https://e.com/archived-old", "https://e.com/unread-old", "https://e.com/unread-new"), oldest)
+    }
+
+    @Test
+    fun `label filter checks each shelf against its own links when ids coincide`() {
+        // Same id in both tables, the label only on the archived one.
+        insert("post", 800_100, "https://e.com/unread-same-id", daysAgo = 1)
+        insert("archive_post", 800_100, "https://e.com/archived-same-id", daysAgo = 2)
+        insert("post", 800_101, "https://e.com/unread-labelled", daysAgo = 3)
+        val kotlin = label("kotlin")
+        jdbcTemplate.update("INSERT INTO archive_post_label(post_id, label_id) VALUES (?, ?)", 800_100L, kotlin)
+        jdbcTemplate.update("INSERT INTO post_label(post_id, label_id) VALUES (?, ?)", 800_101L, kotlin)
+
+        val all = postDao.getPosts(userId, PostType.ALL, 10, 0, labelId = kotlin).map { it.url }
+        val unread = postDao.getPosts(userId, PostType.UNREAD, 10, 0, labelId = kotlin).map { it.url }
+
+        assertEquals(listOf("https://e.com/archived-same-id", "https://e.com/unread-labelled"), all)
+        assertEquals(listOf("https://e.com/unread-labelled"), unread)
+    }
+
+    @Test
+    fun `label filter keeps the order and the offset`() {
+        val kotlin = label("kotlin")
+        (1..4).forEach {
+            insert("post", 800_200L + it, "https://e.com/l$it", daysAgo = it)
+            if (it != 2) jdbcTemplate.update("INSERT INTO post_label(post_id, label_id) VALUES (?, ?)", 800_200L + it, kotlin)
+        }
+
+        val page = postDao.getPosts(userId, PostType.UNREAD, 2, 1, FeedSort.OLDEST, kotlin).map { it.url }
+
+        assertEquals(listOf("https://e.com/l3", "https://e.com/l1"), page)
     }
 }

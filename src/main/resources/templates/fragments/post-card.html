@@ -3,6 +3,8 @@
 
   Fragments:
     cover(cv)                          — the cover artwork itself (also used by the feed hero)
+    title(cv)                          — CoverView.title, with <wbr> after each "/" of a URL
+    when(cv)                           — age of an unread post, saved date of an archived one
     card(cv, type, viewMode, pageType) — a full post card: shelf cell or list row
     actions(cv, type, pageType)        — hover/touch action cluster
     confirm(cv, type)                  — delete confirmation overlay
@@ -27,22 +29,22 @@
     <img class="cover-img" alt="" loading="lazy"
          th:src="@{/api/v1/posts/{id}/cover-image(id=${cv.post.id},type=${cv.post.isArchived} ? 'archive' : 'unread')}">
     <span class="cover-strip">
-      <span class="cover-t" th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</span>
+      <span class="cover-t"><th:block th:replace="~{fragments/post-card :: title(${cv})}">Title</th:block></span>
     </span>
   </th:block>
 
   <th:block th:if="${cv.comp == 'co-mono'}">
     <span class="cover-big" th:text="${cv.abbrev}">Aa</span>
-    <span class="cover-cap" th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</span>
+    <span class="cover-cap"><th:block th:replace="~{fragments/post-card :: title(${cv})}">Title</th:block></span>
   </th:block>
 
   <th:block th:if="${cv.comp == 'co-band'}">
-    <span class="cover-band" th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</span>
+    <span class="cover-band"><th:block th:replace="~{fragments/post-card :: title(${cv})}">Title</th:block></span>
     <span class="cover-cap" th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span>
   </th:block>
 
   <th:block th:if="${cv.comp == 'co-frame'}">
-    <span class="cover-mid" th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</span>
+    <span class="cover-mid"><th:block th:replace="~{fragments/post-card :: title(${cv})}">Title</th:block></span>
     <span class="cover-cap" th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span>
   </th:block>
 
@@ -53,6 +55,17 @@
   </span>
 </a>
 
+<!-- ══ Title ══
+     CoverView.title: the post's title, or its URL without the scheme and the trailing slash.
+     A URL comes in pieces split after each "/", so it wraps at a slash, not mid-word. -->
+<th:block th:fragment="title(cv)"><th:block th:each="part, it : ${cv.titleParts}"><wbr th:unless="${it.first}"><th:block th:text="${part}">Title</th:block></th:block></th:block>
+
+<!-- ══ When: the age of an unread post ("лежит 5 дней"), the saved date of an archived one ══ -->
+<th:block th:fragment="when(cv)"><span th:if="${cv.age != null}"
+      class="age" th:classappend="${cv.age.old} ? 'old'"
+      th:title="${cv.age.title}" th:text="${cv.age.text}">лежит 5 дней</span><span
+      th:if="${cv.age == null}" th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span></th:block>
+
 <!-- ══ Action cluster ══ -->
 <div th:fragment="actions(cv, type, pageType)" class="card-actions">
   <!-- Move actions are hidden on the favorites showcase: it is a collection, not a queue. -->
@@ -61,6 +74,7 @@
           th:attr="hx-post=@{/api/v1/posts/{id}/archive(id=${cv.post.id})},aria-label=#{web.action.toArchive}"
           th:title="#{web.action.toArchive}"
           data-archive-undo
+          data-kbd-archive
           hx-target="closest .post-card"
           hx-swap="delete">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
@@ -71,6 +85,7 @@
           type="button" class="card-action-btn"
           th:attr="hx-post=@{/api/v1/posts/{id}/unread(id=${cv.post.id})},aria-label=#{web.action.toUnread}"
           th:title="#{web.action.toUnread}"
+          data-kbd-archive
           hx-target="closest .post-card"
           hx-swap="delete">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
@@ -135,9 +150,9 @@
   <th:block th:if="${viewMode == 'shelf'}">
     <a th:replace="~{fragments/post-card :: cover(${cv})}"></a>
     <a class="cell-title" th:href="${cv.post.url}" target="_blank" rel="noopener noreferrer"
-       th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</a>
+       ><th:block th:replace="~{fragments/post-card :: title(${cv})}">Title</th:block></a>
     <div class="cell-meta">
-      <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><a
+      <th:block th:replace="~{fragments/post-card :: when(${cv})}">01.01.2026</th:block><a
         th:each="label : ${cv.post.labels}" class="label-tag"
         th:href="@{/labels/{id}(id=${label.id})}"
         th:text="'#' + ${label.name}">#label</a>
@@ -154,10 +169,10 @@
     <span class="mini-cover" th:classappend="${cv.palette}" th:text="${cv.abbrev}" aria-hidden="true">Aa</span>
     <span style="min-width: 0;">
       <a class="row-title" th:href="${cv.post.url}" target="_blank" rel="noopener noreferrer"
-         th:text="${cv.post.title != null ? cv.post.title : cv.post.url}">Title</a>
+         ><th:block th:replace="~{fragments/post-card :: title(${cv})}">Title</th:block></a>
       <span class="row-sub">
         <span th:text="${cv.domain}">site.com</span> ·
-        <span th:text="${#temporals.format(cv.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><a
+        <th:block th:replace="~{fragments/post-card :: when(${cv})}">01.01.2026</th:block><a
           th:each="label : ${cv.post.labels}" class="label-tag"
           th:href="@{/labels/{id}(id=${label.id})}"
           th:text="'#' + ${label.name}">#label</a>

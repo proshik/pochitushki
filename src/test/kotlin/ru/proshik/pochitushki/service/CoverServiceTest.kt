@@ -142,4 +142,26 @@ class CoverServiceTest {
 
         assertTrue(coverService.decorate(posts, showOgCovers = false).none { it.comp == "co-og" })
     }
+
+    @Test
+    fun `a post without a title shows its url without scheme and trailing slash`() {
+        val cv = coverService.decorate(post(url = "https://martinfowler.com/articles/patterns-of-distributed-systems/", title = null))
+        assertEquals("martinfowler.com/articles/patterns-of-distributed-systems", cv.title)
+        // Pieces end after each slash, so the page can offer a line break there (<wbr>).
+        assertEquals(listOf("martinfowler.com/", "articles/", "patterns-of-distributed-systems"), cv.titleParts)
+        assertEquals("https://martinfowler.com/articles/patterns-of-distributed-systems/", cv.post.url)
+    }
+
+    @Test
+    fun `a blank title counts as none, a real title is one piece`() {
+        assertEquals("example.com", coverService.decorate(post(url = "http://example.com/", title = "  ")).title)
+        val titled = coverService.decorate(post(title = "A/B testing"))
+        assertEquals("A/B testing", titled.title)
+        assertEquals(listOf("A/B testing"), titled.titleParts)
+    }
+
+    @Test
+    fun `display url keeps the query`() {
+        assertEquals("example.com/a?b=c", displayUrl("https://example.com/a?b=c"))
+    }
 }
