@@ -1,7 +1,6 @@
 package ru.proshik.pochitushki.controller
 
-import java.time.LocalDate
-import java.time.temporal.ChronoUnit
+import java.util.Locale
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.CookieValue
@@ -10,12 +9,13 @@ import org.springframework.web.bind.annotation.RequestAttribute
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.dao.DataAccessException
 import ru.proshik.pochitushki.configuration.JwtAuthInterceptor
+import ru.proshik.pochitushki.model.FeedSort
 import ru.proshik.pochitushki.model.PostType
 import ru.proshik.pochitushki.model.UserData
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.server.ResponseStatusException
-import ru.proshik.pochitushki.service.CoverService
+import ru.proshik.pochitushki.service.PostViewService
 import ru.proshik.pochitushki.service.LabelService
 import ru.proshik.pochitushki.service.PostService
 import ru.proshik.pochitushki.service.UserService
@@ -24,25 +24,31 @@ import ru.proshik.pochitushki.service.UserService
 class WebController(
     private val postService: PostService,
     private val userService: UserService,
-    private val coverService: CoverService,
+    private val postViewService: PostViewService,
     private val labelService: LabelService,
 ) {
 
+    /**
+     * The feed. `?label=ID` narrows it to one label, taken as text like `/labels?page=`: a label
+     * that is not one of the filter's pills (someone else's, gone, empty here, garbage) is
+     * ignored rather than answered with a 400. With a label chosen the hero is hidden.
+     */
     @GetMapping("/")
     fun feed(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        @RequestAttribute(JwtAuthInterceptor.FEED_SORT) sort: FeedSort,
+        @RequestParam(required = false) label: String?,
+        locale: Locale,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.UNREAD, resolveViewMode(viewCookie, PostType.UNREAD), showOgCovers)
+        val filtered = addShelfModel(model, userId, PostType.UNREAD, viewCookie, showOgCovers, sort, label, locale)
 
-        val hero = postService.getOldestUnreadPost(userId)?.let { coverService.decorate(it, showOgCovers) }
+        // The hero is the oldest link whatever the order, and only over the whole shelf.
+        val hero = if (filtered) null else postService.getOldestUnreadPost(userId)
+            ?.let { postViewService.card(it, showOgCovers, locale) }
         model.addAttribute("hero", hero)
-        model.addAttribute(
-            "heroAgeDays",
-            hero?.let { ChronoUnit.DAYS.between(it.post.createdDate.toLocalDate(), LocalDate.now()) }
-        )
 
         addUserInfo(userId, model)
         return "feed"
@@ -53,9 +59,12 @@ class WebController(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        @RequestAttribute(JwtAuthInterceptor.FEED_SORT) sort: FeedSort,
+        @RequestParam(required = false) label: String?,
+        locale: Locale,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.ALL, resolveViewMode(viewCookie, PostType.ALL), showOgCovers)
+        addShelfModel(model, userId, PostType.ALL, viewCookie, showOgCovers, sort, label, locale)
         addUserInfo(userId, model)
         return "all"
     }
@@ -65,9 +74,10 @@ class WebController(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.ARCHIVE, resolveViewMode(viewCookie, PostType.ARCHIVE), showOgCovers)
+        addListModel(model, userId, PostType.ARCHIVE, resolveViewMode(viewCookie, PostType.ARCHIVE), showOgCovers, locale)
         addUserInfo(userId, model)
         return "archive"
     }
@@ -77,9 +87,10 @@ class WebController(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
-        addListModel(model, userId, PostType.FAVORITES, resolveViewMode(viewCookie, PostType.FAVORITES), showOgCovers)
+        addListModel(model, userId, PostType.FAVORITES, resolveViewMode(viewCookie, PostType.FAVORITES), showOgCovers, locale)
         addUserInfo(userId, model)
         return "favorites"
     }
@@ -89,11 +100,12 @@ class WebController(
         @RequestAttribute("userId") userId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
         // Cards are unread posts, so they carry the unread page's actions and defaults.
         val posts = postService.getRandomPosts(userId, PostApiController.RANDOM_SIZE)
-        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        model.addAttribute("covers", postViewService.cards(posts, showOgCovers, locale))
         model.addAttribute("pageType", PostType.UNREAD.value)
         model.addAttribute("moreUrl", null)
         model.addAttribute("hasMore", false)
@@ -131,6 +143,7 @@ class WebController(
         @PathVariable labelId: Long,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
+        locale: Locale,
         model: Model
     ): String {
         val label = labelService.findLabel(labelId, userId)
@@ -138,7 +151,7 @@ class WebController(
 
         val posts = postService.getPostsByLabel(userId, labelId, PAGE_SIZE, 0)
         model.addAttribute("label", label)
-        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        model.addAttribute("covers", postViewService.cards(posts, showOgCovers, locale))
         // Both shelves are mixed here, so the cards carry the "all" page's status chips.
         model.addAttribute("pageType", PostType.ALL.value)
         model.addAttribute("moreUrl", labelFragmentUrl(labelId, posts.size))
@@ -168,14 +181,46 @@ class WebController(
         postType: PostType,
         viewMode: String,
         showOgCovers: Boolean,
+        locale: Locale,
     ) {
         val posts = postService.getPosts(userId, postType, PAGE_SIZE, 0)
-        model.addAttribute("covers", coverService.decorate(posts, showOgCovers))
+        model.addAttribute("covers", postViewService.cards(posts, showOgCovers, locale))
         model.addAttribute("pageType", postType.value)
         model.addAttribute("moreUrl", fragmentUrl(postType, posts.size))
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
         model.addAttribute("viewMode", viewMode)
         model.addAttribute("pageCount", postService.getPostCount(userId, postType))
+    }
+
+    /**
+     * The feed and "all": the chosen order, date groups, and the label filter row.
+     * Returns whether a label filter is in effect.
+     */
+    private fun addShelfModel(
+        model: Model,
+        userId: Long,
+        postType: PostType,
+        viewCookie: String?,
+        showOgCovers: Boolean,
+        sort: FeedSort,
+        rawLabel: String?,
+        locale: Locale,
+    ): Boolean {
+        val pills = labelService.shelfLabels(userId, withArchive = postType == PostType.ALL)
+        val active = rawLabel?.toLongOrNull()?.let { id -> pills.firstOrNull { it.id == id } }
+
+        val posts = postService.getPosts(userId, postType, PAGE_SIZE, 0, sort, active?.id)
+        model.addAttribute("covers", postViewService.groupedCards(posts, previous = null, showOgCovers, locale))
+        model.addAttribute("pageType", postType.value)
+        model.addAttribute("moreUrl", fragmentUrl(postType, posts.size, active?.id))
+        model.addAttribute("hasMore", posts.size == PAGE_SIZE)
+        model.addAttribute("viewMode", resolveViewMode(viewCookie, postType))
+        model.addAttribute("pageCount", postService.getPostCount(userId, postType))
+        model.addAttribute("feedSort", sort.value)
+        model.addAttribute("filterLabels", pills)
+        model.addAttribute("filterLabelId", active?.id)
+        model.addAttribute("filterBase", if (postType == PostType.ALL) "/all" else "/")
+        return active != null
     }
 
     private fun addUserInfo(userId: Long, model: Model, resolved: UserData? = null) {
@@ -193,8 +238,9 @@ class WebController(
         val PAGE_SIZE get() = PostApiController.PAGE_SIZE
 
         /** Next-page URL for the infinite-scroll sentinel; values are enum/ints, never user text. */
-        fun fragmentUrl(postType: PostType, nextOffset: Int): String =
-            "/api/v1/posts/fragment?type=${postType.value}&offset=$nextOffset"
+        fun fragmentUrl(postType: PostType, nextOffset: Int, labelId: Long? = null): String =
+            "/api/v1/posts/fragment?type=${postType.value}&offset=$nextOffset" +
+                (labelId?.let { "&label=$it" } ?: "")
 
         fun labelFragmentUrl(labelId: Long, nextOffset: Int): String =
             "/api/v1/posts?labelId=$labelId&offset=$nextOffset"

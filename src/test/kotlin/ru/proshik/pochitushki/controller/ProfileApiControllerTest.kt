@@ -147,4 +147,35 @@ class ProfileApiControllerTest : BaseIntegrationTest() {
                 .content("""{"languageCode":"en"}""")
         ).andExpect(status().isUnauthorized)
     }
+
+    @Test
+    fun `POST settings saves the feed order and keeps the other keys`() {
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"feedSort":"oldest"}""")
+        ).andExpect(status().isOk)
+
+        val (sort, lang) = jdbcTemplate.queryForList(
+            "SELECT settings->>'feedSort' AS s, settings->>'languageCode' AS l FROM users WHERE id = ?", userId,
+        ).single().let { it["s"] to it["l"] }
+        assertEquals("oldest", sort)
+        assertEquals("ru", lang)
+    }
+
+    @Test
+    fun `POST settings rejects an unknown feed order`() {
+        mockMvc.perform(
+            post("/api/v1/profile/settings")
+                .with(withAuth(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"feedSort":"random"}""")
+        ).andExpect(status().isBadRequest)
+
+        val sort = jdbcTemplate.queryForObject(
+            "SELECT settings->>'feedSort' FROM users WHERE id = ?", String::class.java, userId,
+        )
+        assertEquals(null, sort)
+    }
 }

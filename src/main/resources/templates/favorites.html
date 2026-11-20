@@ -6,7 +6,10 @@
 <main class="page-main">
   <div class="page-head">
     <h1 class="eyebrow" th:text="#{web.head.favorites(${pageCount})}">Избранное · 0</h1>
-    <div th:replace="~{layout :: viewtoggle}"></div>
+    <div class="page-head-tools">
+      <div th:replace="~{layout :: viewtoggle}"></div>
+      <th:block th:replace="~{layout :: kbdhelp}"></th:block>
+    </div>
   </div>
   <!-- The favorites showcase: larger covers, four per row -->
   <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf vitrine' : 'list-rows'">

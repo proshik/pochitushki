@@ -20,8 +20,10 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
 :root {
   --bg: #FAF8F3;
   --ink: #232220;
-  --muted: #8A857C;
+  --muted: #6F6A61;
   --hair: #E7E3DA;
+  /* Edges of text fields: 3:1 against what is around them, which --hair is not. */
+  --field-edge: #938E84;
   --surface: #F1EEE6;
   --btn: #232220;
   --btn-ink: #FAF8F3;
@@ -36,6 +38,7 @@ html.dark {
   --ink: #ECE8E0;
   --muted: #97918A;
   --hair: #2E2C28;
+  --field-edge: #6F6A63;
   --surface: #232120;
   --btn: #ECE8E0;
   --btn-ink: #1A1917;
@@ -87,10 +90,12 @@ a { color: inherit; }
 .add-form {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
-  background: var(--surface); border: 1px solid var(--hair);
+  background: var(--surface); border: 1px solid var(--field-edge);
   border-radius: 999px; padding: 4px 4px 4px 16px;
   flex: 1 1 340px; max-width: 560px; min-width: 0;
 }
+/* The input itself has no outline: the whole pill shows the focus. */
+.add-form:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
 .add-form input {
   flex: 1; min-width: 0; border: none; background: none; outline: none;
   font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px;
@@ -216,6 +221,7 @@ html:not(.dark) .icon-moon { display: none; }
   font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
   color: var(--ink); padding: 4px 8px;
 }
+.label-panel-add input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 
 /* ── /labels page ── */
 /* The profile's link to /labels sits in one column with .stats and .settings-box: the same
@@ -244,7 +250,7 @@ html:not(.dark) .icon-moon { display: none; }
 .labels-rename { flex: 1; }
 .labels-rename input {
   width: 100%; background: var(--bg); color: var(--ink);
-  border: 1px solid var(--hair); border-radius: 7px; padding: 6px 10px; font-size: 13.5px;
+  border: 1px solid var(--field-edge); border-radius: 7px; padding: 6px 10px; font-size: 13.5px;
 }
 /* Its own line: the row is a flex strip and the input eats every spare pixel,
    so an inline message would be squeezed to nothing. */
@@ -259,9 +265,11 @@ html:not(.dark) .icon-moon { display: none; }
 }
 .labels-add input {
   flex: 1; background: var(--bg); color: var(--ink);
-  border: 1px solid var(--hair); border-radius: 999px; padding: 8px 14px;
+  border: 1px solid var(--field-edge); border-radius: 999px; padding: 8px 14px;
   font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; outline: none;
 }
+.labels-add input:focus-visible,
+.labels-rename input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 .labels-add button[type="submit"] {
   background: var(--btn); color: var(--btn-ink); border-radius: 999px;
   font-size: 12.5px; font-weight: 600; padding: 8px 16px; white-space: nowrap;
@@ -284,10 +292,70 @@ a.pager-num:hover, a.pager-step:hover { color: var(--ink); border-color: var(--h
 .crumb { color: var(--muted); text-decoration: none; }
 .crumb:hover { color: var(--ink); }
 
-/* Page-head cluster for pages that carry an action next to the view toggle (/random). */
-.page-head-tools { display: flex; align-items: center; gap: 10px; }
+/* Page-head cluster: the view toggle plus what sits next to it — sort order (feed, all),
+   reshuffle (/random), the keyboard help. Positioned: the help panel hangs off it. */
+.page-head-tools { display: flex; align-items: center; gap: 12px; position: relative; }
 .reshuffle-btn { padding: 6px 14px; font-size: 12.5px; border-color: var(--hair); }
 .reshuffle-btn svg { width: 15px; height: 15px; }
+
+/* Sort order: newest / oldest. */
+.sort-toggle { display: flex; gap: 4px; }
+.sort-btn {
+  height: 34px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid transparent; color: var(--muted); font-size: 12.5px;
+}
+.sort-btn:hover { background: var(--surface); color: var(--ink); }
+.sort-btn.active { border-color: var(--hair); background: var(--surface); color: var(--ink); font-weight: 600; }
+
+/* Label filter over the feed and "all": plain links, the chosen one inverted. */
+.label-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 28px; }
+.label-filter .pill { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.pill-n { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11.5px; }
+.pill:not(.on) .pill-n { color: var(--muted); }
+
+/* Date groups (feed and "all"). On the shelf a heading spans the row, so every group
+   starts a row of its own; a short last row stays short. */
+.date-group {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 13.5px; font-weight: 600; color: var(--ink);
+  margin: 12px 0 -12px;
+}
+.date-group::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+.date-group.first { margin-top: 0; }
+.list-rows .date-group { margin: 28px 0 6px; }
+.list-rows .date-group.first { margin-top: 4px; }
+
+/* Age of an unread link; one that has waited a month reads in ink. */
+.age.old { color: var(--ink); font-weight: 600; }
+
+/* Keyboard shortcuts (app.js): the help panel, and the card J/K is on. */
+.kbd-btn.active { border-color: var(--hair); background: var(--surface); color: var(--ink); }
+.kbd-help {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 25;
+  width: 300px; padding: 14px 16px;
+  background: var(--bg); border: 1px solid var(--hair); border-radius: 10px;
+  box-shadow: var(--shadow-s); font-size: 13px;
+}
+.kbd-help-title { font-weight: 600; margin-bottom: 8px; }
+.kbd-help dl { margin: 0; display: grid; gap: 6px; }
+.kbd-help dl > div { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; }
+.kbd-help dt { display: flex; gap: 4px; }
+.kbd-help dd { margin: 0; color: var(--muted); }
+.kbd-help kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11.5px;
+  min-width: 24px; text-align: center; padding: 1px 6px;
+  border: 1px solid var(--hair); border-bottom-width: 2px; border-radius: 5px; background: var(--surface);
+}
+.kbd-help-note { margin-top: 10px; color: var(--muted); font-size: 12px; }
+/* scrollIntoView stops short of the sticky top bar. */
+.post-card { scroll-margin-top: 80px; scroll-margin-bottom: 16px; }
+.shelf .post-card.kbd-current { outline: 2px solid var(--ink); outline-offset: 8px; border-radius: 6px; }
+.list-rows .post-card.kbd-current { background: var(--surface); outline: 2px solid var(--ink); outline-offset: -2px; }
+/* Not under an open label picker: there the buttons step aside for the panel. */
+.post-card.kbd-current:not(.labelling) .card-actions { opacity: 1; }
+.list-rows .post-card.kbd-current .row-side > .status-chip { opacity: 0; }
+@media (hover: none), (max-width: 767px) { .kbd-btn, .kbd-help { display: none; } }
 
 /* ── Covers ──
    The book feel is two background-image layers over the palette colour:
@@ -311,14 +379,14 @@ a.pager-num:hover, a.pager-step:hover { color: var(--ink); border-color: var(--h
 a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
 .cover-dom {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
   line-height: 1.35;
   /* one line, ellipsised — never wrap; keep clear of the favourite badge */
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   padding-right: 24px;
 }
 .cover-cap {
-  font-size: 10.5px; line-height: 1.4; opacity: 0.86; margin-top: auto;
+  font-size: 11.5px; line-height: 1.4; opacity: 0.86; margin-top: auto;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 
@@ -341,9 +409,11 @@ a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
   font-weight: 600; letter-spacing: -0.02em; line-height: 0.98;
   font-size: 2.3rem; margin: auto 0; overflow-wrap: anywhere;
 }
-/* Composition: band — an inverted stripe carries the title. */
+/* Composition: band — an inverted stripe carries the title. The stripe's top and bottom are
+   borders of its own colour, not padding: overflow clips at the padding edge, so a clamped
+   fourth line used to show through padding. */
 .co-band .cover-band {
-  margin: auto -14px; padding: 8px 14px;
+  margin: auto -14px; padding: 0 14px; border-block: 8px solid var(--cv-fg);
   background: var(--cv-fg); color: var(--cv-bg);
   font-weight: 600; font-size: 0.95rem; line-height: 1.25; letter-spacing: -0.01em;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -402,7 +472,7 @@ a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
 .cell-title:hover { text-decoration: underline; }
 .cell-meta {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px; color: var(--muted); margin-top: 4px;
+  font-size: 11.5px; color: var(--muted); margin-top: 4px;
   /* Date and label tags follow each other with no space to break at: let each tag wrap as
      a whole, or a narrow cell pushes them past the page edge (horizontal scroll on phones). */
   display: flex; flex-wrap: wrap; min-width: 0;
@@ -480,7 +550,7 @@ a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
 .row-side .delete-confirm { left: auto; min-width: 100%; }
 .status-chip {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   border: 1px solid var(--hair); border-radius: 999px; padding: 6px 10px;
   color: var(--muted); white-space: nowrap;
 }
@@ -639,7 +709,7 @@ a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
 }
 .bottom-tabs a {
   flex: 1; text-align: center; padding: 8px 0 12px;
-  font-size: 10px; color: var(--muted); text-decoration: none;
+  font-size: 11px; color: var(--muted); text-decoration: none;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 .bottom-tabs a svg { width: 18px; height: 18px; }
@@ -660,13 +730,14 @@ a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
   .hero-stack::before { transform: translate(7px, 5px) rotate(1.4deg); }
   .hero-stack::after { transform: translate(3.5px, 2.5px) rotate(0.7deg); }
   .hero .cover { padding: 8px 8px 8px 11px; }
-  .hero .cover-dom { font-size: 7px; }
+  /* The domain is already in the meta line next to it. */
+  .hero .cover-dom { display: none; }
   .hero .co-frame .cover-mid { font-size: 0.62rem; -webkit-line-clamp: 4; }
   .hero .co-mono .cover-big { font-size: 1.3rem; }
-  .hero .co-band .cover-band { font-size: 0.62rem; margin: auto -8px; padding: 6px 8px; }
+  .hero .co-band .cover-band { font-size: 0.62rem; margin: auto -8px; padding: 0 8px; border-block-width: 6px; }
   .hero .cover-cap, .hero .co-og .cover-strip { display: none; }
   .hero-title { font-size: 18px; margin-top: 4px; }
-  .hero-meta { font-size: 10.5px; margin-top: 6px; }
+  .hero-meta { font-size: 11.5px; margin-top: 6px; }
   .hero-actions { margin-top: 10px; gap: 8px; }
   .hero-actions .btn { padding: 8px 14px; font-size: 12px; }
   .stats { grid-template-columns: 1fr 1fr; }
@@ -676,6 +747,13 @@ a.cover:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
   /* The dice alone carries the meaning once the head runs out of room. */
   .reshuffle-btn { padding: 8px 10px; }
   .reshuffle-btn span { display: none; }
+  /* The filter row scrolls sideways instead of growing into several lines. */
+  .label-filter {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    margin: -2px -14px 20px; padding: 0 14px;
+  }
+  .label-filter .pill { white-space: nowrap; }
+  .sort-btn { padding: 0 8px; }
   /* Clear the bottom tab bar. */
   .toast, .add-error { bottom: 72px; left: 14px; right: 14px; transform: none; }
   .toast { justify-content: space-between; }

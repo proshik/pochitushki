@@ -82,6 +82,56 @@
   </button>
 </div>
 
+<!-- ══ Sort order (feed and "all") ══
+     Saved in the user's settings by app.js (data-feed-sort), then the page reloads. -->
+<div th:fragment="sorttoggle(sort)" class="sort-toggle" role="group" th:attr="aria-label=#{web.sort.label}">
+  <button type="button" class="sort-btn" data-feed-sort="newest"
+          th:classappend="${sort == 'newest'} ? 'active'"
+          th:attr="aria-pressed=${sort == 'newest'}" th:title="#{web.sort.newest.title}"
+          th:text="#{web.sort.newest}">Новые</button>
+  <button type="button" class="sort-btn" data-feed-sort="oldest"
+          th:classappend="${sort == 'oldest'} ? 'active'"
+          th:attr="aria-pressed=${sort == 'oldest'}" th:title="#{web.sort.oldest.title}"
+          th:text="#{web.sort.oldest}">Старые</button>
+</div>
+
+<!-- ══ Keyboard shortcuts: button + panel (pages with a post list) ══
+     Toggled by app.js (data-kbd-toggle, "?"); hidden on touch and phone widths by CSS. -->
+<th:block th:fragment="kbdhelp">
+  <button type="button" class="view-btn kbd-btn" data-kbd-toggle aria-expanded="false" aria-controls="kbd-help"
+          th:attr="aria-label=#{web.kbd.button}" th:title="#{web.kbd.button.title}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h1M10.5 10h1M14.5 10h1M8 14h8"/>
+    </svg>
+  </button>
+  <div id="kbd-help" class="kbd-help" role="dialog" hidden th:attr="aria-label=#{web.kbd.title}">
+    <p class="kbd-help-title" th:text="#{web.kbd.title}">Клавиши</p>
+    <dl>
+      <div><dt><kbd>J</kbd> <kbd>K</kbd></dt><dd th:text="#{web.kbd.next}">следующая и предыдущая</dd></div>
+      <div><dt><kbd>Enter</kbd></dt><dd th:text="#{web.kbd.open}">открыть статью</dd></div>
+      <div><dt><kbd>A</kbd></dt><dd th:text="#{web.kbd.archive}">в архив или обратно</dd></div>
+      <div><dt><kbd>F</kbd></dt><dd th:text="#{web.kbd.favorite}">в избранное</dd></div>
+      <div><dt><kbd>L</kbd></dt><dd th:text="#{web.kbd.labels}">метки</dd></div>
+      <div><dt><kbd>?</kbd></dt><dd th:text="#{web.kbd.help}">эта подсказка</dd></div>
+    </dl>
+    <p class="kbd-help-note" th:text="#{web.kbd.note}">Работают и в русской раскладке.</p>
+  </div>
+</th:block>
+
+<!-- ══ Label filter (feed and "all") ══
+     Plain links, no script. labels: LabelWithCount with posts in this section; activeId: the
+     chosen label or null; base: "/" or "/all"; total: the section's count for "All". -->
+<nav th:fragment="labelfilter(base, labels, activeId, total)" th:if="${!labels.isEmpty()}"
+     class="label-filter" th:attr="aria-label=#{web.filter.label}">
+  <a class="pill" th:href="${base}" th:classappend="${activeId == null} ? 'on'"
+     th:attr="aria-current=${activeId == null} ? 'page' : null"><th:block th:text="#{web.filter.all}">Все</th:block>
+    <span class="pill-n" th:text="${total}">0</span></a>
+  <a th:each="l : ${labels}" class="pill" th:href="@{${base}(label=${l.id})}"
+     th:classappend="${l.id == activeId} ? 'on'"
+     th:attr="aria-current=${l.id == activeId} ? 'page' : null"><th:block th:text="'#' + ${l.name}">#label</th:block>
+    <span class="pill-n" th:text="${l.postCount}">0</span></a>
+</nav>
+
 <!-- ══ Bottom tabs: mobile-only navigation ══ -->
 <nav th:fragment="tabs(active)" class="bottom-tabs">
   <a href="/" th:classappend="${active == 'feed'} ? 'on'">

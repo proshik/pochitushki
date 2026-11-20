@@ -103,11 +103,13 @@ ru.proshik.pochitushki/
 
 - Таблица `post` — непрочитанные ссылки, `archive_post` — архив (та же структура)
 - Флаг `is_favorite` в обеих таблицах (миграция `3_add_favorites`)
-- JSONB-колонка `settings` в таблице `users` (`languageCode`, `showOgCovers` и legacy
+- JSONB-колонка `settings` в таблице `users` (`languageCode`, `showOgCovers`, `feedSort` и legacy
   `tgFeedEntriesNumber` — его больше никто не читает: бот показывает одну карточку; поле
   оставлено в `UserSettingsData` с дефолтом, чтобы старые строки читались и не теряли значение). Миграции под новые ключи нет и не нужно: Jackson KotlinModule
   подставляет дефолт из конструктора, поэтому старые строки без ключа читаются как
-  `showOgCovers = true`. Новый ключ обязан иметь дефолт, иначе чтение старых строк упадёт
+  `showOgCovers = true`. Новый ключ обязан иметь дефолт, иначе чтение старых строк упадёт.
+  `feedSort` — строка `newest`|`oldest` (дефолт `newest`), а не enum: незнакомое значение
+  не должно ломать чтение строки; разбирает `FeedSort.from` с откатом на `newest`
 - `PostType`: `UNREAD` / `ARCHIVE` / `FAVORITES` / `ALL`. Маппинг из строки
   двоякий: контроллеры ищут по `value` (`"unread"`), а `PostType.from`/`stringToType`
   — по имени enum (`"UNREAD"`); не перепутать при добавлении новых lookup'ов
@@ -149,10 +151,16 @@ ru.proshik.pochitushki/
   ради тоста «Вернуть»; не менять на пустой ответ
 - `GET/POST /labels`, `DELETE /labels/{id}`
 - `POST/DELETE /posts/{id}/labels/{labelId}` (`?type=unread|archive`)
+- `GET /posts/fragment?type=unread|all&offset=N[&label=ID]` — следующая страница ленты и
+  «Всех»: порядок берётся из `feedSort` (атрибут `JwtAuthInterceptor.FEED_SORT`), `label`
+  несёт сентинел фильтра. Страница после первой читает на один пост больше (с `offset-1`),
+  чтобы не повторить заголовок группы дат на стыке — отдельного параметра для этого нет.
+  Для `archive`/`favorites` `label` и порядок игнорируются
 - `GET /posts?labelId=N&offset=M` — карточки по метке; отдаёт HTML-фрагмент, но
   **без сентинела** (`hasMore=false`): сентинел в `post-list` всегда ведёт на
   `/fragment?type=…` и дотянул бы посты без метки. Листать — явным `offset`
-- `POST /profile/settings`
+- `POST /profile/settings` — `languageCode`, `showOgCovers`, `feedSort` (`newest`|`oldest`,
+  иное → 400). Переключатель «Новые / Старые» шлёт его из `app.js` и перезагружает страницу
 
 Экспорт/импорт (Pocket CSV) по HTTP **не выставлен** — доступен только через бота
 (`TelegramService` инжектит `ExportService`/`ImportService`).
@@ -181,7 +189,8 @@ webhook). Бин `Bot` объявлен с `destroyMethod = ""` — иначе S
 1. Никаких инлайновых `<script>` и атрибутов `on*=""`. Вешать `data-*`-хук и
    обрабатывать его в делегированных слушателях в `static/js/app.js`
    (там уже есть `data-action`, `data-view-mode`, `data-fav-btn`,
-   `data-unfav-remove`, `data-reload-on-success`, `data-remove-on-success`).
+   `data-unfav-remove`, `data-reload-on-success`, `data-remove-on-success`,
+   `data-feed-sort`, `data-kbd-toggle`, `data-kbd-archive`).
 2. Никаких htmx `hx-on--*`, `hx-vals='js:…'` и фильтров событий в `hx-trigger`
    — htmx исполняет их через `new Function()`. Вместо них — слушатель
    `htmx:afterRequest` в `app.js`. `htmx.config.allowEval = false` выставлен
@@ -234,7 +243,28 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   Переключение = установка cookie + `location.reload()` — сервер рендерит
   только одну разметку на режим
 - Hero «следующая к чтению» на `/` — `PostDao.getOldestPost` (самый старый
-  unread); перенос unread↔archive сохраняет `created_date`, иначе hero врёт
+  unread); перенос unread↔archive сохраняет `created_date`, иначе hero врёт. От порядка
+  `feedSort` hero не зависит; при выбранном фильтре по метке hero не показывается.
+  Возраст в hero всегда в стиле `age old`
+- Пост без заголовка показывается как URL без схемы и завершающего `/` (`CoverView.title`,
+  `displayUrl`); `titleParts` — куски после каждого `/`, шаблон (`post-card :: title`)
+  ставит между ними `<wbr>`. Только отображение: в данных URL как был. Бот этим не пользуется
+- `PostViewService` поверх `CoverService` добавляет то, что зависит от локали и «сегодня»:
+  `CoverView.age` (только у непрочитанных: «сегодня» / «лежит N дней», `old` с 30 дней,
+  `title` «Сохранена DD.MM.YYYY») и `CoverView.group` — заголовок группы дат перед первой
+  карточкой группы, только на `/` и `/all` (`groupedCards`). «Сегодня» — `LocalDate.now()` в
+  поясе JVM, тем же, в котором читаются даты постов. Плюралы — `Plurals` + ключи
+  `*.one|few|many` (RU) и `*.one|other` (EN). Контроллеры кладут в модель карточки только
+  из `PostViewService`, а не из `CoverService` напрямую
+- Фильтр по меткам на `/` и `/all` — `?label=ID`, обычные ссылки. Пилюли —
+  `LabelDao.getShelfLabelCounts` (метки с постами в этом разделе: на `/` только `post_label`,
+  на `/all` обе связки). Фильтр применяется, только если ID есть среди пилюль: чужая,
+  пустая здесь метка или мусор — игнор без 400, как `/labels?page=`. В `PostDao.getPosts`
+  метка проверяется через связку своей таблицы (`EXISTS` по паре таблица+id)
+- Горячие клавиши (`initKeyboard` в `app.js`) — на всех страницах с `#post-list`, по
+  `event.code`. `Enter`/`A`/`F`/`L` нажимают уже существующие ссылку и кнопки карточки
+  (поэтому работает и `openLink` Mini App). Удаления с клавиатуры нет намеренно. Кнопка
+  `.kbd-btn` и панель — `layout :: kbdhelp`, на тач-устройствах и узком экране скрыты
 - `/random` — тасовка `PostApiController.RANDOM_SIZE` (8) непрочитанных
   (`PostDao.getRandomPosts`, `ORDER BY RANDOM()`). Кнопка «Ещё 8» бьёт в
   `GET /api/v1/posts/random-fragment` и **заменяет** список (`hx-swap="innerHTML"`),

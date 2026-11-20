@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
+import ru.proshik.pochitushki.model.FeedSort
 import ru.proshik.pochitushki.model.PostData
 import ru.proshik.pochitushki.model.PostStoreData
 import ru.proshik.pochitushki.model.PostStoreDataWithId
@@ -59,64 +60,45 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         return DataAccessUtils.singleResult(namedParameterJdbcTemplate.query(sql, params, postRowMapper))
     }
 
-    fun getPosts(userId: Long, postType: PostType, limit: Int, offset: Int): List<PostData> {
-        if (postType == PostType.ALL) {
-            val sql = """
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, og_image_url, created_date, updated_date
-                FROM post
-                WHERE user_id = :user_id
-                UNION ALL
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, og_image_url, created_date, updated_date
-                FROM archive_post
-                WHERE user_id = :user_id
-                ORDER BY created_date DESC OFFSET :offset LIMIT :limit
+    /**
+     * One page of a shelf. [sort] orders by saved date (id breaks ties, so a page boundary never
+     * lands between two rows of the same instant in a different order on the next request).
+     * [labelId] keeps only posts carrying that label; each table is checked against its own
+     * join table, because ids of `post` and `archive_post` come from different sequences and
+     * routinely coincide.
+     */
+    fun getPosts(
+        userId: Long,
+        postType: PostType,
+        limit: Int,
+        offset: Int,
+        sort: FeedSort = FeedSort.NEWEST,
+        labelId: Long? = null,
+    ): List<PostData> {
+        val tables = when (postType) {
+            PostType.UNREAD -> listOf(UNREAD_TABLE)
+            PostType.ARCHIVE -> listOf(ARCHIVE_TABLE)
+            PostType.ALL, PostType.FAVORITES -> listOf(UNREAD_TABLE, ARCHIVE_TABLE)
+        }
+        val favoriteOnly = if (postType == PostType.FAVORITES) " AND p.is_favorite = true" else ""
+        val selects = tables.map { t ->
+            val labelled = if (labelId == null) "" else
+                " AND EXISTS (SELECT 1 FROM ${t.labelTable} pl WHERE pl.post_id = p.id AND pl.label_id = :label_id)"
+            """
+            SELECT p.id, p.title, p.url, p.user_id, p.tags::TEXT[], p.is_favorite, ${t.archived} as is_archived, p.og_image_url, p.created_date, p.updated_date
+            FROM ${t.table} p
+            WHERE p.user_id = :user_id$favoriteOnly$labelled
             """.trimIndent()
-
-            val params = MapSqlParameterSource()
-                .addValue("user_id", userId)
-                .addValue("offset", offset)
-                .addValue("limit", limit)
-
-            return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
         }
-
-        if (postType == PostType.FAVORITES) {
-            val sql = """
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, false as is_archived, og_image_url, created_date, updated_date
-                FROM post
-                WHERE user_id = :user_id AND is_favorite = true
-                UNION ALL
-                SELECT id, title, url, user_id, tags::TEXT[], is_favorite, true as is_archived, og_image_url, created_date, updated_date
-                FROM archive_post
-                WHERE user_id = :user_id AND is_favorite = true
-                ORDER BY created_date DESC OFFSET :offset LIMIT :limit
-            """.trimIndent()
-
-            val params = MapSqlParameterSource()
-                .addValue("user_id", userId)
-                .addValue("offset", offset)
-                .addValue("limit", limit)
-
-            return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
-        }
-
-        val (tableName, isArchived) = when (postType) {
-            PostType.UNREAD -> Pair("post", false)
-            PostType.ARCHIVE -> Pair("archive_post", true)
-            PostType.FAVORITES, PostType.ALL -> error("unreachable")
-        }
-
-        val sql = """
-            SELECT id, title, url, user_id, tags::TEXT[], is_favorite, $isArchived as is_archived, og_image_url, created_date, updated_date
-            FROM $tableName
-            WHERE user_id = :user_id
-            ORDER BY created_date DESC OFFSET :offset LIMIT :limit
-        """.trimIndent()
+        val direction = if (sort == FeedSort.OLDEST) "ASC" else "DESC"
+        val sql = selects.joinToString("\nUNION ALL\n") +
+            "\nORDER BY created_date $direction, id $direction OFFSET :offset LIMIT :limit"
 
         val params = MapSqlParameterSource()
             .addValue("user_id", userId)
             .addValue("offset", offset)
             .addValue("limit", limit)
+            .addValue("label_id", labelId)
 
         return namedParameterJdbcTemplate.query(sql, params, postRowMapper)
     }
@@ -434,5 +416,12 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
             .addValue("user_id", userId)
 
         return namedParameterJdbcTemplate.queryForObject(sql, params, Int::class.java) ?: 0
+    }
+
+    private data class PostTable(val table: String, val labelTable: String, val archived: Boolean)
+
+    companion object {
+        private val UNREAD_TABLE = PostTable("post", "post_label", archived = false)
+        private val ARCHIVE_TABLE = PostTable("archive_post", "archive_post_label", archived = true)
     }
 }

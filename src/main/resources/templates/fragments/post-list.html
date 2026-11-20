@@ -14,11 +14,16 @@
 
 <div th:fragment="posts(covers, pageType, hasMore, viewMode, moreUrl)">
 
-  <!-- Card type is derived from post.isArchived, never "favorites"/"all" -->
-  <div th:each="cv, iter : ${covers}"
-       th:style="'--card-index: ' + ${iter.index}">
-    <div th:replace="~{fragments/post-card :: card(${cv}, ${cv.post.isArchived ? 'archive' : 'unread'}, ${viewMode}, ${pageType})}"></div>
-  </div>
+  <!-- Card type is derived from post.isArchived, never "favorites"/"all".
+       cv.group: a date heading before the first card of its group (feed and "all" only,
+       PostViewService); on the shelf it spans the row, so a group starts a new row. -->
+  <th:block th:each="cv, iter : ${covers}">
+    <h2 th:if="${cv.group != null}" class="date-group" th:classappend="${cv.group.first} ? 'first'"
+        th:attr="data-group=${cv.group.key}" th:text="${cv.group.title}">Сегодня</h2>
+    <div th:style="'--card-index: ' + ${iter.index}">
+      <div th:replace="~{fragments/post-card :: card(${cv}, ${cv.post.isArchived ? 'archive' : 'unread'}, ${viewMode}, ${pageType})}"></div>
+    </div>
+  </th:block>
 
   <!-- Infinite scroll sentinel — observer managed by initScrollSentinel() in /js/app.js;
        htmx fires on custom 'loadMore' event so IntersectionObserver controls timing -->

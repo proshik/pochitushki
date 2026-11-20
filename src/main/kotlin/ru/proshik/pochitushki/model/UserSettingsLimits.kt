@@ -13,4 +13,6 @@ object UserSettingsLimits {
     const val LANGUAGE_EN = "en"
 
     val SUPPORTED_LANGUAGES = listOf(LANGUAGE_EN, LANGUAGE_RU)
+
+    val FEED_SORTS = FeedSort.entries.map { it.value }
 }

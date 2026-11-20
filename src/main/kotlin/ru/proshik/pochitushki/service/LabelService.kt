@@ -35,6 +35,10 @@ class LabelService(private val labelDao: LabelDao) {
 
     fun getLabelsWithCounts(userId: Long): List<LabelWithCount> = labelDao.getLabelsWithCounts(userId)
 
+    /** Labels for the filter row over `/` ([withArchive] = false) or `/all` (true); see LabelDao. */
+    fun shelfLabels(userId: Long, withArchive: Boolean): List<LabelWithCount> =
+        labelDao.getShelfLabelCounts(userId, withArchive)
+
     /** A /labels page; [rawPage] is the query parameter as typed (see LabelPaging.resolve). */
     fun labelsPage(userId: Long, rawPage: String?): LabelsPage {
         val total = labelDao.countLabels(userId)

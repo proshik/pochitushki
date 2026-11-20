@@ -38,6 +38,32 @@ class LabelDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplat
      */
     fun getLabelsWithCounts(userId: Long): List<LabelWithCount> = labelsWithCounts(userId, limit = null, offset = 0)
 
+    /**
+     * The label filter over the feed (`/`, [withArchive] = false) and "all" (`/all`, true): labels
+     * carrying at least one post in that section, with that section's count. Busiest first,
+     * then by name. Join tables only ever link the owner's posts (see [attachLabel]), so the
+     * owner check on `label` covers both.
+     */
+    fun getShelfLabelCounts(userId: Long, withArchive: Boolean): List<LabelWithCount> {
+        val links = if (withArchive) {
+            "SELECT label_id FROM post_label UNION ALL SELECT label_id FROM archive_post_label"
+        } else {
+            "SELECT label_id FROM post_label"
+        }
+        val sql = """
+            SELECT l.id, l.name, count(*) AS post_count
+            FROM label l
+            JOIN ($links) x ON x.label_id = l.id
+            WHERE l.user_id = :user_id
+            GROUP BY l.id, l.name
+            ORDER BY post_count DESC, l.name
+        """.trimIndent()
+
+        return namedParameterJdbcTemplate.query(sql, MapSqlParameterSource().addValue("user_id", userId)) { rs, _ ->
+            LabelWithCount(id = rs.getLong("id"), name = rs.getString("name"), postCount = rs.getInt("post_count"))
+        }
+    }
+
     /** One page of [getLabelsWithCounts], same order (name; names are unique per user). */
     fun getLabelsWithCountsPage(userId: Long, limit: Int, offset: Int): List<LabelWithCount> =
         labelsWithCounts(userId, limit, offset)

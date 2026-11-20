@@ -12,15 +12,14 @@
     </div>
     <div>
       <div class="eyebrow">
-        <span th:text="#{web.hero.next}">Следующая к чтению</span><span
-          th:if="${heroAgeDays != null and heroAgeDays > 0}"
-          th:text="' · ' + #{web.hero.age(${heroAgeDays})}"></span>
+        <span th:text="#{web.hero.next}">Следующая к чтению</span>
       </div>
       <a class="hero-title" th:href="${hero.post.url}" target="_blank" rel="noopener noreferrer"
-         th:text="${hero.post.title != null ? hero.post.title : hero.post.url}">Title</a>
+         ><th:block th:replace="~{fragments/post-card :: title(${hero})}">Title</th:block></a>
+      <!-- The hero is the oldest link, so its age always reads as old. -->
       <div class="hero-meta">
-        <span th:text="${hero.domain}">site.com</span> ·
-        <span th:text="${#temporals.format(hero.post.createdDate, 'dd.MM.yyyy')}">01.01.2026</span><a
+        <span th:text="${hero.domain}">site.com</span> · <span class="age old"
+          th:title="${hero.age.title}" th:text="${hero.age.text}">лежит 42 дня</span><a
           th:each="label : ${hero.post.labels}" class="label-tag"
           th:href="@{/labels/{id}(id=${label.id})}"
           th:text="'#' + ${label.name}">#label</a>
@@ -40,8 +39,13 @@
 
   <div class="page-head">
     <h1 class="eyebrow" th:text="#{web.head.feed(${pageCount})}">На полке · 0</h1>
-    <div th:replace="~{layout :: viewtoggle}"></div>
+    <div class="page-head-tools">
+      <div th:replace="~{layout :: sorttoggle(${feedSort})}"></div>
+      <div th:replace="~{layout :: viewtoggle}"></div>
+      <th:block th:replace="~{layout :: kbdhelp}"></th:block>
+    </div>
   </div>
+  <nav th:replace="~{layout :: labelfilter(${filterBase}, ${filterLabels}, ${filterLabelId}, ${pageCount})}"></nav>
   <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf' : 'list-rows'">
     <div th:replace="~{fragments/post-list :: posts(${covers}, ${pageType}, ${hasMore}, ${viewMode}, ${moreUrl})}"></div>
   </div>
