@@ -40,8 +40,7 @@ data class CoverView(
 
 data class AgeView(val days: Long, val text: String, val title: String, val old: Boolean)
 
-/** [key]: `today` | `week` | `month` | `YYYY-MM` — app.js puts a new link under `today`. */
-data class DateGroupView(val key: String, val title: String, val first: Boolean)
+data class DateGroupView(val title: String, val first: Boolean)
 
 /** `https://site.com/a/b/` → `site.com/a/b`: what a post without a title shows. */
 fun displayUrl(url: String): String =

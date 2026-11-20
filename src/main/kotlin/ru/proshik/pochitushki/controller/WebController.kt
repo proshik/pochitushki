@@ -212,7 +212,7 @@ class WebController(
         val posts = postService.getPosts(userId, postType, PAGE_SIZE, 0, sort, active?.id)
         model.addAttribute("covers", postViewService.groupedCards(posts, previous = null, showOgCovers, locale))
         model.addAttribute("pageType", postType.value)
-        model.addAttribute("moreUrl", fragmentUrl(postType, posts.size, active?.id))
+        model.addAttribute("moreUrl", fragmentUrl(postType, posts.size, active?.id, sort))
         model.addAttribute("hasMore", posts.size == PAGE_SIZE)
         model.addAttribute("viewMode", resolveViewMode(viewCookie, postType))
         model.addAttribute("pageCount", postService.getPostCount(userId, postType))
@@ -237,9 +237,14 @@ class WebController(
         // Delegate to PostApiController so both controllers use the same page size
         val PAGE_SIZE get() = PostApiController.PAGE_SIZE
 
-        /** Next-page URL for the infinite-scroll sentinel; values are enum/ints, never user text. */
-        fun fragmentUrl(postType: PostType, nextOffset: Int, labelId: Long? = null): String =
+        /**
+         * Next-page URL for the infinite-scroll sentinel; values are enum/ints, never user text.
+         * The feed and "all" carry the order of the page they continue: the setting may change in
+         * another tab meanwhile, and an offset into the other order would repeat and skip posts.
+         */
+        fun fragmentUrl(postType: PostType, nextOffset: Int, labelId: Long? = null, sort: FeedSort? = null): String =
             "/api/v1/posts/fragment?type=${postType.value}&offset=$nextOffset" +
+                (sort?.let { "&sort=${it.value}" } ?: "") +
                 (labelId?.let { "&label=$it" } ?: "")
 
         fun labelFragmentUrl(labelId: Long, nextOffset: Int): String =

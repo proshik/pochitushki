@@ -18,8 +18,7 @@
        cv.group: a date heading before the first card of its group (feed and "all" only,
        PostViewService); on the shelf it spans the row, so a group starts a new row. -->
   <th:block th:each="cv, iter : ${covers}">
-    <h2 th:if="${cv.group != null}" class="date-group" th:classappend="${cv.group.first} ? 'first'"
-        th:attr="data-group=${cv.group.key}" th:text="${cv.group.title}">Сегодня</h2>
+    <h2 th:if="${cv.group != null}" class="date-group" th:classappend="${cv.group.first} ? 'first'" th:text="${cv.group.title}">Сегодня</h2>
     <div th:style="'--card-index: ' + ${iter.index}">
       <div th:replace="~{fragments/post-card :: card(${cv}, ${cv.post.isArchived ? 'archive' : 'unread'}, ${viewMode}, ${pageType})}"></div>
     </div>

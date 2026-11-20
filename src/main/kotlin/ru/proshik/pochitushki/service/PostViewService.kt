@@ -53,7 +53,7 @@ class PostViewService(
                 cv
             } else {
                 last = group
-                cv.copy(group = DateGroupView(group.key, groupTitle(group, today, locale), first = firstOnPage))
+                cv.copy(group = DateGroupView(groupTitle(group, today, locale), first = firstOnPage))
                     .also { firstOnPage = false }
             }
         }
@@ -96,14 +96,10 @@ class PostViewService(
  * earlier this month, or a calendar month. A date after today (clock skew) counts as today.
  */
 sealed interface DateGroup {
-    val key: String
-
-    data object Today : DateGroup { override val key = "today" }
-    data object ThisWeek : DateGroup { override val key = "week" }
-    data object EarlierThisMonth : DateGroup { override val key = "month" }
-    data class Month(val year: Int, val month: Int) : DateGroup {
-        override val key get() = "%04d-%02d".format(year, month)
-    }
+    data object Today : DateGroup
+    data object ThisWeek : DateGroup
+    data object EarlierThisMonth : DateGroup
+    data class Month(val year: Int, val month: Int) : DateGroup
 
     companion object {
         fun of(date: LocalDate, today: LocalDate): DateGroup {

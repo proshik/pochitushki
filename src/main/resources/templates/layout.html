@@ -96,8 +96,9 @@
 </div>
 
 <!-- ══ Keyboard shortcuts: button + panel (pages with a post list) ══
-     Toggled by app.js (data-kbd-toggle, "?"); hidden on touch and phone widths by CSS. -->
-<th:block th:fragment="kbdhelp">
+     Toggled by app.js (data-kbd-toggle, "?"); hidden on touch and phone widths by CSS.
+     moves: whether the cards carry the archive/unread button that A presses (not on favorites). -->
+<th:block th:fragment="kbdhelp(moves)">
   <button type="button" class="view-btn kbd-btn" data-kbd-toggle aria-expanded="false" aria-controls="kbd-help"
           th:attr="aria-label=#{web.kbd.button}" th:title="#{web.kbd.button.title}">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -109,7 +110,7 @@
     <dl>
       <div><dt><kbd>J</kbd> <kbd>K</kbd></dt><dd th:text="#{web.kbd.next}">следующая и предыдущая</dd></div>
       <div><dt><kbd>Enter</kbd></dt><dd th:text="#{web.kbd.open}">открыть статью</dd></div>
-      <div><dt><kbd>A</kbd></dt><dd th:text="#{web.kbd.archive}">в архив или обратно</dd></div>
+      <div th:if="${moves}"><dt><kbd>A</kbd></dt><dd th:text="#{web.kbd.archive}">в архив или обратно</dd></div>
       <div><dt><kbd>F</kbd></dt><dd th:text="#{web.kbd.favorite}">в избранное</dd></div>
       <div><dt><kbd>L</kbd></dt><dd th:text="#{web.kbd.labels}">метки</dd></div>
       <div><dt><kbd>?</kbd></dt><dd th:text="#{web.kbd.help}">эта подсказка</dd></div>

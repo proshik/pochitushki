@@ -45,17 +45,19 @@ class PostApiController(
 ) {
 
     /**
-     * The next page of a list. The feed (`unread`) and "all" keep the reader's order
-     * ([FeedSort]), an optional `label` (the filter's sentinel carries it), and their date
-     * headings: a page after the first also reads the post just before it, so the heading of a
-     * group that continues across the seam is not printed again.
+     * The next page of a list. The feed (`unread`) and "all" keep the order of the page they
+     * continue (`sort` from the sentinel; the reader's [FeedSort] without it), an optional `label`
+     * (the filter's sentinel carries it), and their date headings: a page after the first also
+     * reads the post just before it, so the heading of a group that continues across the seam
+     * is not printed again. `label` and `sort` are text and ignored where they do not apply.
      */
     @GetMapping("/fragment")
     fun fragment(
         @RequestAttribute("userId") userId: Long,
         @RequestParam type: String,
         @RequestParam offset: Int,
-        @RequestParam(required = false) label: Long?,
+        @RequestParam(required = false) label: String?,
+        @RequestParam(required = false) sort: String?,
         @CookieValue(value = "pochitushki-view", required = false) viewCookie: String?,
         @RequestAttribute(JwtAuthInterceptor.SHOW_OG_COVERS) showOgCovers: Boolean,
         @RequestAttribute(JwtAuthInterceptor.FEED_SORT) feedSort: FeedSort,
@@ -70,14 +72,14 @@ class PostApiController(
         val shelf = postType in SHELVES
         // Only the feed and "all" are filtered and sorted; the label cannot reach another
         // user's posts either way — the query is scoped to the caller's rows.
-        val sort = if (shelf) feedSort else FeedSort.NEWEST
-        val labelId = if (shelf) label else null
+        val order = if (shelf) sort?.let(FeedSort::from) ?: feedSort else FeedSort.NEWEST
+        val labelId = if (shelf) label?.toLongOrNull() else null
 
         val covers: List<CoverView>
         val pageSize: Int
         if (shelf) {
             val from = if (offset > 0) offset - 1 else 0
-            val fetched = postService.getPosts(userId, postType, PAGE_SIZE + (offset - from), from, sort, labelId)
+            val fetched = postService.getPosts(userId, postType, PAGE_SIZE + (offset - from), from, order, labelId)
             val previous = if (offset > 0) fetched.firstOrNull() else null
             val posts = if (offset > 0) fetched.drop(1) else fetched
             covers = postViewService.groupedCards(posts, previous, showOgCovers, locale)
@@ -89,7 +91,10 @@ class PostApiController(
         }
         model.addAttribute("covers", covers)
         model.addAttribute("pageType", type)
-        model.addAttribute("moreUrl", WebController.fragmentUrl(postType, offset + pageSize, labelId))
+        model.addAttribute(
+            "moreUrl",
+            WebController.fragmentUrl(postType, offset + pageSize, labelId, order.takeIf { shelf }),
+        )
         model.addAttribute("hasMore", pageSize == PAGE_SIZE)
         model.addAttribute("viewMode", WebController.resolveViewMode(viewCookie, postType))
         return "fragments/post-list :: posts"

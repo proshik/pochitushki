@@ -8,7 +8,7 @@
     <h1 class="eyebrow" th:text="#{web.head.favorites(${pageCount})}">Избранное · 0</h1>
     <div class="page-head-tools">
       <div th:replace="~{layout :: viewtoggle}"></div>
-      <th:block th:replace="~{layout :: kbdhelp}"></th:block>
+      <th:block th:replace="~{layout :: kbdhelp(false)}"></th:block>
     </div>
   </div>
   <!-- The favorites showcase: larger covers, four per row -->

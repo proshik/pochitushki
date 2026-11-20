@@ -66,13 +66,7 @@ function initAddPostForm() {
         '</span>' +
         '<span></span>';
 
-    /* A new link is today's: under the "Today" heading when the list opens with one. */
-    var todayHead = postList && postList.querySelector('h2.date-group');
-    if (todayHead && todayHead.dataset.group === 'today') {
-      todayHead.parentNode.insertBefore(tempCard, todayHead.nextSibling);
-    } else if (postList) {
-      postList.insertBefore(tempCard, postList.firstChild);
-    }
+    if (postList) postList.insertBefore(tempCard, postList.firstChild);
 
     fetch('/api/v1/posts', {
       method: 'POST',
@@ -84,6 +78,12 @@ function initAddPostForm() {
       return r.text();
     })
     .then(function (html) {
+      /* The feed and "all" are ordered, grouped by date and maybe filtered by a label: where
+         the new link belongs (if anywhere) is the server's call, so the page is drawn again. */
+      if (postList && postList.matches('[data-reload-on-add]')) {
+        location.reload();
+        return;
+      }
       var temp = document.getElementById(tempId);
       if (!temp) return;
       var wrapper = document.createElement('div');
@@ -520,6 +520,9 @@ function initKeyboard() {
     currentIndex = index;
     if (!card) return;
     card.classList.add('kbd-current');
+    /* A link or button focused by Tab elsewhere would take the next Enter for itself. */
+    var focused = document.activeElement;
+    if (focused && focused !== document.body && !card.contains(focused) && focused.blur) focused.blur();
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     card.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
   }
@@ -596,6 +599,8 @@ function initKeyboard() {
       return;
     }
     if (e.shiftKey) return;
+    /* Held down, only moving repeats: a held A or F would act on card after card. */
+    if (e.repeat && e.code !== 'KeyJ' && e.code !== 'KeyK') return;
 
     switch (e.code) {
       case 'KeyJ': move(1); break;

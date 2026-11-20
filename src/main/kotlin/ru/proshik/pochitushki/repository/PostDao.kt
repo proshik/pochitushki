@@ -61,8 +61,9 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
     }
 
     /**
-     * One page of a shelf. [sort] orders by saved date (id breaks ties, so a page boundary never
-     * lands between two rows of the same instant in a different order on the next request).
+     * One page of a shelf. [sort] orders by saved date; id and then the table break ties (ids of
+     * the two tables can coincide, imports can share a second), so a page boundary never falls
+     * between two rows that swap places on the next request.
      * [labelId] keeps only posts carrying that label; each table is checked against its own
      * join table, because ids of `post` and `archive_post` come from different sequences and
      * routinely coincide.
@@ -92,7 +93,7 @@ class PostDao(private val namedParameterJdbcTemplate: NamedParameterJdbcTemplate
         }
         val direction = if (sort == FeedSort.OLDEST) "ASC" else "DESC"
         val sql = selects.joinToString("\nUNION ALL\n") +
-            "\nORDER BY created_date $direction, id $direction OFFSET :offset LIMIT :limit"
+            "\nORDER BY created_date $direction, id $direction, is_archived $direction OFFSET :offset LIMIT :limit"
 
         val params = MapSqlParameterSource()
             .addValue("user_id", userId)

@@ -151,11 +151,15 @@ ru.proshik.pochitushki/
   ради тоста «Вернуть»; не менять на пустой ответ
 - `GET/POST /labels`, `DELETE /labels/{id}`
 - `POST/DELETE /posts/{id}/labels/{labelId}` (`?type=unread|archive`)
-- `GET /posts/fragment?type=unread|all&offset=N[&label=ID]` — следующая страница ленты и
-  «Всех»: порядок берётся из `feedSort` (атрибут `JwtAuthInterceptor.FEED_SORT`), `label`
-  несёт сентинел фильтра. Страница после первой читает на один пост больше (с `offset-1`),
-  чтобы не повторить заголовок группы дат на стыке — отдельного параметра для этого нет.
-  Для `archive`/`favorites` `label` и порядок игнорируются
+- `GET /posts/fragment?type=unread|all&offset=N&sort=newest|oldest[&label=ID]` — следующая
+  страница ленты и «Всех». `sort` несёт сентинел: порядок страницы, которую он продолжает
+  (настройку могли сменить в другой вкладке); без него — `feedSort` из атрибута
+  `JwtAuthInterceptor.FEED_SORT`. `label` — фильтр. Оба текстом, мусор игнорируется.
+  Страница после первой читает на один пост больше (с `offset-1`), чтобы не повторить
+  заголовок группы дат на стыке — отдельного параметра для этого нет. Для
+  `archive`/`favorites` `label` и `sort` игнорируются. Добавление ссылки формой на `/` и
+  `/all` перезагружает страницу (`data-reload-on-add`): место новой ссылки в порядке, группах
+  и фильтре решает сервер
 - `GET /posts?labelId=N&offset=M` — карточки по метке; отдаёт HTML-фрагмент, но
   **без сентинела** (`hasMore=false`): сентинел в `post-list` всегда ведёт на
   `/fragment?type=…` и дотянул бы посты без метки. Листать — явным `offset`
@@ -190,7 +194,7 @@ webhook). Бин `Bot` объявлен с `destroyMethod = ""` — иначе S
    обрабатывать его в делегированных слушателях в `static/js/app.js`
    (там уже есть `data-action`, `data-view-mode`, `data-fav-btn`,
    `data-unfav-remove`, `data-reload-on-success`, `data-remove-on-success`,
-   `data-feed-sort`, `data-kbd-toggle`, `data-kbd-archive`).
+   `data-feed-sort`, `data-kbd-toggle`, `data-kbd-archive`, `data-reload-on-add`).
 2. Никаких htmx `hx-on--*`, `hx-vals='js:…'` и фильтров событий в `hx-trigger`
    — htmx исполняет их через `new Function()`. Вместо них — слушатель
    `htmx:afterRequest` в `app.js`. `htmx.config.allowEval = false` выставлен
@@ -263,8 +267,9 @@ User-Agent, вытащить URL'ы woff2, положить в `static/fonts/` �
   метка проверяется через связку своей таблицы (`EXISTS` по паре таблица+id)
 - Горячие клавиши (`initKeyboard` в `app.js`) — на всех страницах с `#post-list`, по
   `event.code`. `Enter`/`A`/`F`/`L` нажимают уже существующие ссылку и кнопки карточки
-  (поэтому работает и `openLink` Mini App). Удаления с клавиатуры нет намеренно. Кнопка
-  `.kbd-btn` и панель — `layout :: kbdhelp`, на тач-устройствах и узком экране скрыты
+  (поэтому работает и `openLink` Mini App). Удаления с клавиатуры нет намеренно; автоповтор
+  только у J/K. Кнопка `.kbd-btn` и панель — `layout :: kbdhelp(moves)` (`false` на
+  избранном: там нет кнопки переноса), на тач-устройствах и узком экране скрыты
 - `/random` — тасовка `PostApiController.RANDOM_SIZE` (8) непрочитанных
   (`PostDao.getRandomPosts`, `ORDER BY RANDOM()`). Кнопка «Ещё 8» бьёт в
   `GET /api/v1/posts/random-fragment` и **заменяет** список (`hx-swap="innerHTML"`),

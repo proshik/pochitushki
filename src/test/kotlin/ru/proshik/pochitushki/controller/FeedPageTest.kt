@@ -130,6 +130,33 @@ class FeedPageTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `the next page keeps the order of the page it continues`() {
+        (1..25).forEach { post("https://e.com/p$it/", daysAgo = 100 - it) } // p25 is the newest
+        val firstPage = page("/all") // newest first: p25..p6
+        assertTrue(firstPage.contains("offset=20&amp;sort=newest"))
+
+        setSort("oldest") // changed in another tab before scrolling
+        val next = page("/api/v1/posts/fragment", "type" to "all", "offset" to "20", "sort" to "newest")
+
+        assertTrue(next.contains("https://e.com/p5/") && next.contains("https://e.com/p1/"))
+        assertFalse(next.contains("https://e.com/p21/"))
+    }
+
+    @Test
+    fun `garbage label and sort on the next page are ignored, not a 400`() {
+        post("https://e.com/a", archived = true)
+        page("/api/v1/posts/fragment", "type" to "archive", "offset" to "0", "label" to "abc", "sort" to "x")
+        val html = page("/api/v1/posts/fragment", "type" to "unread", "offset" to "0", "label" to "abc", "sort" to "x")
+        assertFalse(html.contains("&amp;label="))
+    }
+
+    @Test
+    fun `keyboard help offers A only where cards can be moved`() {
+        assertTrue(page("/").contains("<kbd>A</kbd>"))
+        assertFalse(page("/favorites").contains("<kbd>A</kbd>"))
+    }
+
+    @Test
     fun `the hero stays the oldest link whatever the order`() {
         post("https://e.com/oldest", daysAgo = 50)
         post("https://e.com/newest", daysAgo = 1)
@@ -198,7 +225,7 @@ class FeedPageTest : BaseIntegrationTest() {
         assertFalse(html.contains("id=\"hero\""))
         assertFalse(html.contains("https://e.com/untagged"))
         assertTrue(Regex("class=\"pill on\" href=\"/\\?label=$kotlin\"\\s+aria-current=\"page\"").containsMatchIn(html))
-        assertTrue(html.contains("hx-get=\"/api/v1/posts/fragment?type=unread&amp;offset=20&amp;label=$kotlin\""))
+        assertTrue(html.contains("hx-get=\"/api/v1/posts/fragment?type=unread&amp;offset=20&amp;sort=newest&amp;label=$kotlin\""))
 
         val next = page("/api/v1/posts/fragment", "type" to "unread", "offset" to "20", "label" to "$kotlin")
         assertTrue(next.contains("https://e.com/k21/"))
@@ -245,19 +272,25 @@ class FeedPageTest : BaseIntegrationTest() {
 
         val html = page("/")
 
-        assertTrue(html.contains("class=\"date-group first\" data-group=\"today\">Today</h2>"))
+        assertTrue(html.contains("<h2 class=\"date-group first\">Today</h2>"))
         assertEquals(2, Regex("<h2 class=\"date-group").findAll(html).count())
     }
 
     @Test
     fun `the next page does not repeat the heading of a group it continues`() {
-        (1..25).forEach { post("https://e.com/t$it/") } // all saved today
+        // All saved today, minutes apart so the order is known: t1 is the newest.
+        (1..25).forEach { i ->
+            val id = post("https://e.com/t$i/")
+            jdbcTemplate.update("UPDATE post SET created_date = now() - make_interval(mins => ?) WHERE id = ?", i, id)
+        }
 
         val first = page("/")
         val next = page("/api/v1/posts/fragment", "type" to "unread", "offset" to "20")
 
         assertEquals(1, Regex("<h2 class=\"date-group").findAll(first).count())
         assertFalse(next.contains("date-group"))
+        val cards = Regex("class=\"cell-title\" href=\"(https://e\\.com/t\\d+/)\"").findAll(next).map { it.groupValues[1] }.toList()
+        assertEquals((21..25).map { "https://e.com/t$it/" }, cards)
     }
 
     @Test
@@ -267,7 +300,7 @@ class FeedPageTest : BaseIntegrationTest() {
 
         val next = page("/api/v1/posts/fragment", "type" to "unread", "offset" to "20")
 
-        assertTrue(Regex("<h2 class=\"date-group\" data-group=\"\\d{4}-\\d{2}\">").containsMatchIn(next))
+        assertTrue(Regex("<h2 class=\"date-group\">[A-Z][a-z]+ \\d{4}</h2>").containsMatchIn(next))
         assertFalse(next.contains("date-group first"))
     }
 

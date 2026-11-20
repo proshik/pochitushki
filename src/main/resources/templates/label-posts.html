@@ -11,7 +11,7 @@
     </h1>
     <div class="page-head-tools">
       <div th:replace="~{layout :: viewtoggle}"></div>
-      <th:block th:replace="~{layout :: kbdhelp}"></th:block>
+      <th:block th:replace="~{layout :: kbdhelp(true)}"></th:block>
     </div>
   </div>
   <div id="post-list" th:classappend="${viewMode == 'shelf'} ? 'shelf' : 'list-rows'">
