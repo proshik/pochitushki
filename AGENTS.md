@@ -198,7 +198,10 @@ webhook). Бин `Bot` объявлен с `destroyMethod = ""` — иначе S
 2. Никаких htmx `hx-on--*`, `hx-vals='js:…'` и фильтров событий в `hx-trigger`
    — htmx исполняет их через `new Function()`. Вместо них — слушатель
    `htmx:afterRequest` в `app.js`. `htmx.config.allowEval = false` выставлен
-   там же, чтобы такое падало заметно.
+   там же, чтобы такое падало заметно. Если запрос удаляет свой же элемент
+   (`hx-swap="delete"` по `closest .post-card`), `htmx:afterRequest` приходит от ближайшего
+   оставшегося предка, а не от кнопки. Поэтому тост «Вернуть» читается на
+   `htmx:beforeOnLoad`: это событие приходит от кнопки ещё до замены содержимого
 3. Ассеты только свои: `static/js/` (htmx 2.0.4, json-enc, app.js, theme-init.js),
    `static/css/app.css` (вся дизайн-система, инлайновых стилей в шаблонах
    почти нет) + `fonts.css` + `static/fonts/*.woff2`.

@@ -695,22 +695,29 @@ document.addEventListener('click', function (e) {
   }
 });
 
+/* ── Undo toast after an archive request ──
+   Read on beforeOnLoad, not afterRequest: a card's archive button goes away with its card
+   (hx-swap="delete"), and htmx then raises afterRequest on the nearest ancestor still on the
+   page, so the button could no longer be recognised. beforeOnLoad comes from the button
+   itself, before the swap. The hero button reloads the page afterwards (afterRequest below),
+   so its id is parked across the reload. */
+document.addEventListener('htmx:beforeOnLoad', function (e) {
+  var el = e.detail.elt;
+  var xhr = e.detail.xhr;
+  if (!el || !el.matches || !el.matches('[data-archive-undo]')) return;
+  if (!xhr || xhr.status < 200 || xhr.status >= 300) return;
+  var archivedId = archivedIdFrom(xhr);
+  if (!archivedId) return;
+  if (el.matches('[data-reload-on-success]')) stashUndo(archivedId);
+  else showUndoToast(archivedId);
+});
+
 /* ── Delegated htmx completions ──
    Replaces hx-on--after-request, which htmx evaluates via new Function(). */
 document.addEventListener('htmx:afterRequest', function (e) {
   if (!e.detail.successful) return;
   var el = e.detail.elt;
   if (!el || !el.matches) return;
-
-  /* Deliberately not part of the chain below: the hero button is both an
-     archive trigger and a reload trigger, and needs both to run. */
-  if (el.matches('[data-archive-undo]')) {
-    var archivedId = archivedIdFrom(e.detail.xhr);
-    if (archivedId) {
-      if (el.matches('[data-reload-on-success]')) stashUndo(archivedId);
-      else showUndoToast(archivedId);
-    }
-  }
 
   if (el.matches('[data-unfav-remove]')) {
     /* Favorites showcase: removing the star removes the card right away. */
