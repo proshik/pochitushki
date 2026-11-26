@@ -16,6 +16,21 @@
 и читать двумя способами: через **Telegram-бота** и через **веб-интерфейс** со
 входом по Telegram-аккаунту. Оба интерфейса работают с одними и теми же данными.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/feed-dark.png">
+  <img alt="Лента непрочитанного: «следующая к чтению», фильтр по меткам и обложки ссылок, сгруппированные по датам" src="docs/images/feed-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/all-links-dark.png">
+  <img alt="Раздел «Все» в режиме списка: ссылки с доменом, возрастом и метками" src="docs/images/all-links-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/login-dark.png">
+  <img alt="Страница входа с кнопкой «Войти через Telegram»" src="docs/images/login-light.png">
+</picture>
+
 ## Основные возможности
 
 - **Сохранение ссылок**: отправьте ссылку боту или добавьте её на веб-странице.
